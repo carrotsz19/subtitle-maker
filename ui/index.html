@@ -419,6 +419,21 @@ const ICON = {
   folder: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.6l2 2h7.4A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z"/></svg>',
 };
 
+/* The clipboard API needs focus and a secure page; the old way works everywhere */
+function copyText(text) {
+  const done = () => toast("Copied. Paste it wherever you're asking for help.");
+  const fallback = () => {
+    const t = document.createElement("textarea");
+    t.value = text; t.style.position = "fixed"; t.style.opacity = "0";
+    document.body.appendChild(t); t.select();
+    const ok = document.execCommand("copy");
+    t.remove();
+    ok ? done() : toast("Couldn't copy. Use Open the error details instead.", true);
+  };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback);
+  else fallback();
+}
+
 function toast(text, bad) {
   const t = document.createElement("div");
   t.className = "toast" + (bad ? " bad" : "");
@@ -473,7 +488,7 @@ function viewMake() {
     <div class="topbar"><h1>Make subtitles</h1>
       <p>Drop a video and get a .srt you can import into DaVinci Resolve.</p></div>
     <div class="stack">
-      ${S.update.state === "available" && !busy && S.update.data.kind !== "improvement" ? updateBanner(S.update.data.kind) : ""}
+      ${S.update.state === "available" && !busy && !S.update.data.switch && S.update.data.kind !== "improvement" ? updateBanner(S.update.data.kind) : ""}
       ${busy && S.review ? viewReview() : busy ? viewRunning() : showResult ? viewResults(last) : ""}
       ${S.review ? "" : busy || showResult ? dropZone(true) : dropZone(false)}
       ${S.queue.some(q => q.status === "waiting") ? queueList() : ""}
@@ -494,12 +509,14 @@ function dropZone(compact) {
     ? `<div class="drop compact" data-act="choose" role="button" tabindex="0">
         <div class="big-icon">${ICON.film}</div>
         <div class="grow"><b>Drop more videos here</b><div class="sm dim">They'll wait their turn.</div></div>
-        <span class="btn sec sm">Choose files…</span></div>`
+        <span class="btn sec sm">Choose files…</span>
+        <button class="btn ghost sm" data-act="choose-folder">Folder…</button></div>`
     : `<div class="drop" data-act="choose" role="button" tabindex="0">
         <div class="big-icon">${ICON.film}</div>
         <b>Drop videos or audio here</b>
         <div class="sm dim">.mp4, .mov, .mkv, .wav, .mp3 and more. Several at once is fine.</div>
-        <span class="btn sec sm" style="margin-top:6px">Choose files…</span></div>`;
+        <div class="row" style="margin-top:6px;justify-content:center"><span class="btn sec sm">Choose files…</span>
+          <button class="btn ghost sm" data-act="choose-folder">Choose a folder…</button></div></div>`;
 }
 
 function queueList() {
@@ -507,6 +524,7 @@ function queueList() {
     <div class="grp-row has-icon">
       <div class="tile-icon">${ICON.file}</div>
       <div class="grow"><div class="row-title trunc">${esc(q.name)}</div><div class="row-sub trunc">${esc(q.path)}</div></div>
+      ${q.has_srt ? '<span class="pill" title="Nothing is overwritten: the new ones are saved as a separate (2) file.">Has subtitles</span>' : ""}
       <span class="pill">Waiting</span>
       <button class="iconbtn" data-act="remove" data-path="${esc(q.path)}" title="Remove">${ICON.x}</button>
     </div>`).join("");
@@ -666,10 +684,13 @@ function viewResults(items) {
       <div class="grp-row has-icon tap" data-act="reveal" data-path="${esc(f.path)}" role="button" tabindex="0" title="Show in folder">
         <div class="tile-icon ${f.name || f.kind ? "" : "t-accent"}">${f.name ? ICON.person : f.kind ? ICON.file : ICON.srt}</div>
         <div class="grow"><div class="row-title trunc">${esc(baseName(f.path))}</div>
-          <div class="row-sub">${f.kind === "transcript" ? "Transcript of everything said" : `${f.count} subtitles${f.name ? ` · only ${esc(f.name)}'s lines` : ""}`}</div></div>
+          <div class="row-sub">${f.kind === "transcript" ? "Transcript of everything said" : f.kind === "vtt" ? "WebVTT, for YouTube and the web" : `${f.count} subtitles${f.name ? ` · only ${esc(f.name)}'s lines` : ""}`}</div></div>
         <span class="faint">${ICON.folder}</span></div>`).join("")}</div>` : ""}
     ${bad.map(q => `<div class="banner bad"><b>${esc(q.name)}</b><br><span class="selectable">${esc(q.error || "It stopped unexpectedly.")}</span>
-        ${q.log ? `<br><button class="linkbtn" data-act="error-log" style="margin-top:6px">Open the error details</button>` : ""}</div>`).join("")}
+        <div class="row" style="margin-top:8px;gap:8px">
+          <button class="btn sec sm" data-act="retry" data-path="${esc(q.path)}">Try again</button>
+          <button class="btn ghost sm" data-act="copy-error" data-path="${esc(q.path)}">Copy details</button>
+          ${q.log ? `<button class="linkbtn" data-act="error-log">Open the error details</button>` : ""}</div></div>`).join("")}
     <div class="row"><div class="grow"></div><button class="btn ghost sm" data-act="clear">Clear</button></div>
   </div>`;
 }
@@ -767,9 +788,32 @@ function viewSettings() {
         : `<button class="btn big" data-act="save" ${changed || !S.info.configured ? "" : "disabled"}>${S.info.configured ? "Save" : "Save and download"}</button>`}
     </div>
     ${prefsBlocks()}
+    ${modelsBlock()}
     ${updatesBlock()}
     <div class="block"><div class="grp"><div class="grp-row tap danger" role="button" tabindex="0" data-act="uninstall">Uninstall Subtitle Maker…</div></div>
       <p class="foot">Removes it from this PC. Your videos and subtitles are never touched.</p></div>`;
+}
+
+/* Downloaded speech models, to free space. Loaded when Settings opens (it measures folders). */
+function modelsBlock() {
+  if (!S.models) {
+    if (!S.modelsLoading) {
+      S.modelsLoading = true;
+      api().models_list().then(m => { S.models = m; S.modelsLoading = false; if (S.view === "settings" && !S.run) render(); });
+    }
+    return "";
+  }
+  if (!S.models.length) return "";
+  const busy = !!S.run;
+  const rows = S.models.map(m => {
+    const name = S.info.levels[m.level].name;
+    return prefRow(esc(name), `${m.gb} GB${m.current ? " · the quality you use now" : ""}`,
+      m.current ? '<span class="pill">In use</span>'
+        : `<button class="btn ghost sm" data-act="delete-model" data-model="${esc(m.model)}" data-name="${esc(name)}" data-gb="${m.gb}" ${busy ? "disabled" : ""}>Delete</button>`);
+  }).join("");
+  const total = S.models.reduce((a, m) => a + m.gb, 0);
+  return `<div class="block"><h2>Downloaded models</h2><div class="grp">${rows}</div>
+    <p class="foot">${total.toFixed(2)} GB in all. A deleted model downloads again if you switch back to it.</p></div>`;
 }
 
 /* Settings that save the moment they change */
@@ -864,6 +908,7 @@ function prefsBlocks() {
         ${prefRow("Play a sound", "", switchPref("done_sound"))}
         ${prefRow("Open the folder", "Shows the subtitles once everything in the queue is done.", switchPref("open_folder"))}
         ${prefRow("Also save a transcript", "A plain .txt of everything said, next to the .srt.", switchPref("transcript"))}
+        ${prefRow("Also save a .vtt", "The same subtitles for YouTube and web players.", switchPref("vtt"))}
       </div></div>
     <div class="block"><h2>Appearance</h2><div class="grp">
         ${prefRow("Colours", "", segPref("theme"))}
@@ -880,7 +925,21 @@ function applyTheme() {
 
 function versionText(v) {
   if (!v) return "Unknown (not set up by the installer yet)";
-  return v.sha.slice(0, 7) + (v.date ? " · " + new Date(v.date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "");
+  return v.sha.slice(0, 7) + (v.date ? " · " + new Date(v.date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "")
+    + (v.branch === "experimental" ? " · Experimental" : "");
+}
+
+/* Stable is the main branch everybody gets; Experimental has new things first, less tested */
+const CHANNELS = [["main", "Stable"], ["experimental", "Experimental"]];
+function updateTitle(d) {
+  if (d.switch === "experimental") return "Switch to the experimental version";
+  if (d.switch === "main") return "Go back to the stable version";
+  return (UPDATE_KINDS[d.kind] || UPDATE_KINDS.improvement).title;
+}
+function switchNote(d) {
+  if (d.switch === "experimental") return "New features before they're fully tested, so expect the odd bug. You can go back to Stable any time in Settings.";
+  if (d.switch === "main") return "Puts back the stable version, the one everybody gets. Anything only the experimental version had goes away.";
+  return "";
 }
 
 function updatesBlock() {
@@ -890,18 +949,22 @@ function updatesBlock() {
     case "checking": body = `<div class="row dim"><div class="bar indeterminate grow"><i></i></div><span class="sm">Checking GitHub…</span></div>`; break;
     case "ok": body = `<div class="between"><span class="row"><span class="pill ok">Up to date</span><span class="sm dim">You have the latest version.</span></span>
         <button class="btn sec sm" data-act="check-update">Check again</button></div>`; break;
-    case "available": body = `<div class="between"><b>${(UPDATE_KINDS[d.kind] || UPDATE_KINDS.improvement).title}</b><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
-        ${newsList(d.news)}
-        ${S.run ? `<button class="btn" disabled>Install update</button><p class="sm dim">You can update once the current video is finished.</p>`
-          : `<div><button class="btn" data-act="install-update">Install update</button></div>`}`; break;
+    case "available": body = `<div class="between"><b>${updateTitle(d)}</b><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
+        ${d.switch ? `<p class="sm dim">${switchNote(d)}</p>` : newsList(d.news)}
+        ${S.run ? `<button class="btn" disabled>${d.switch ? "Switch" : "Install update"}</button><p class="sm dim">You can update once the current video is finished.</p>`
+          : `<div><button class="btn" data-act="install-update">${d.switch ? "Switch now" : "Install update"}</button></div>`}`; break;
     case "error": body = `<div class="banner bad selectable">${esc(u.error)}</div><div><button class="btn sec sm" data-act="check-update">Try again</button></div>`; break;
     case "installing": body = `<div class="row"><div class="bar indeterminate grow"><i></i></div><button class="btn sec sm" data-act="open-update">Show progress</button></div>`; break;
     case "installed": body = `<div class="between"><span class="row"><span class="pill ok">Updated</span><span class="sm dim">Restart the window to use the new version.</span></span>
         <button class="btn" data-act="restart">Restart now</button></div>`; break;
     default: body = `<div><button class="btn sec sm" data-act="check-update">Check for updates</button></div>`;
   }
+  const ch = S.info.settings.channel || "main", locked = !!S.run || u.state === "installing" || u.state === "checking";
   return `<div class="block" id="updates"><h2>Updates</h2><div class="card stack">
       <div class="between"><span class="row-title">Installed version</span><span class="sm dim mono">${esc(versionText(S.info.version))}</span></div>
+      <div class="between"><div><div class="row-title">Version to follow</div>
+          <div class="row-sub">Experimental gets new features first, before they're fully tested.</div></div>
+        <div class="seg">${CHANNELS.map(([v, l]) => `<button data-act="channel" data-v="${v}" aria-selected="${ch === v}" ${locked ? "disabled" : ""}>${l}</button>`).join("")}</div></div>
       ${body}</div></div>`;
 }
 
@@ -1099,11 +1162,12 @@ function renderUpdateSheet() {
       body = `<div class="row"><span class="pill ok">Up to date</span><span class="sm dim">You have the latest version (${esc(versionText(S.info.version))}).</span></div>`;
       actions = `<div class="grow"></div><button class="btn" data-up="close">Done</button>`; break;
     case "available":
-      body = `<div class="between"><span class="sm dim">New version</span><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
-        <div><h2 style="margin-left:0">What's new</h2>${newsList(d.news)}</div>
+      body = `<div class="between"><span class="sm dim">${d.switch ? "Version" : "New version"}</span><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
+        ${d.switch ? `<p>${switchNote(d)}</p>` : ""}
+        ${d.switch === "main" ? "" : `<div><h2 style="margin-left:0">What's new</h2>${newsList(d.news)}</div>`}
         <p class="sm dim">Takes about a minute. Your voice clips, settings, models and history are kept.</p>`;
       actions = S.run ? `<span class="sm dim grow">You can update once the current video is finished.</span><button class="btn sec" data-up="close">Later</button>`
-        : `<button class="btn sec" data-up="close">Later</button><div class="grow"></div><button class="btn" data-up="install">Update now</button>`; break;
+        : `<button class="btn sec" data-up="close">Later</button><div class="grow"></div><button class="btn" data-up="install">${d.switch ? "Switch now" : "Update now"}</button>`; break;
     case "installing": case "installed": {
       const dl = p.download || {}, ins = p.install || {};
       body = `<div class="steplist">
@@ -1124,7 +1188,7 @@ function renderUpdateSheet() {
   root.innerHTML = `<div class="scrim" id="update-sheet" ${fresh ? "" : 'style="animation:none"'}><div class="dialog stack" role="dialog" aria-modal="true" aria-labelledby="up-title" ${fresh ? "" : 'style="animation:none"'}>
       <div class="row"><div class="tile-icon t-accent">${ICON.again}</div><h3 id="up-title">${
         { checking: "Checking for updates", ok: "Subtitle Maker is up to date",
-          available: (UPDATE_KINDS[d.kind] || UPDATE_KINDS.improvement).title, installing: "Updating Subtitle Maker",
+          available: updateTitle(d), installing: "Updating Subtitle Maker",
           installed: "Update installed" }[u.state] || "The update didn't work"}</h3></div>
       ${body}<div class="row">${actions}</div></div></div>`;
   root.querySelectorAll("[data-up]").forEach(b => b.onclick = () => UPDATE_ACTIONS[b.dataset.up]());
@@ -1312,11 +1376,18 @@ const ACTIONS = {
   "reveal-dir": el => api().reveal(el.dataset.path),
   "goto-make": () => go("make"),
   again: el => app.addFiles([el.dataset.path]),
+  retry: el => { app.addFiles([el.dataset.path]); next(); },
   forget: async el => { S.history = await api().remove_history(el.dataset.id); render(); },
   "clear-history": () => confirmBox("Clear the whole history?", "Only the list is cleared. Your subtitle files stay where they are.",
     "Clear history", async () => { S.history = await api().clear_history(); render(); }),
   "open-update": () => openUpdate(),
   "check-update": () => checkUpdate(false),
+  channel: async el => {
+    if (el.dataset.v === (S.info.settings.channel || "main")) return;
+    S.info.settings = await api().set_channel(el.dataset.v);
+    S.update.sheet = true;  // straight to what switching means, with a button to do it
+    checkUpdate(false);
+  },
   "install-update": () => openUpdate(),
   restart: () => api().restart(),
   "wiz-next": () => {
@@ -1336,9 +1407,25 @@ const ACTIONS = {
     showUninstall(await api().uninstall_plan());
   },
   choose: async () => app.addFiles(await api().choose_files()),
+  "choose-folder": async () => {
+    const found = await api().choose_video_folder();
+    if (found && !found.length) toast("No videos or audio in that folder.", true);
+    app.addFiles(found);
+  },
+  "copy-error": async el => {
+    const q = S.queue.find(x => x.path === el.dataset.path);
+    copyText(await api().error_details(q.path, q.error || "It stopped unexpectedly."));
+  },
+  "delete-model": el => confirmBox(`Delete the ${el.dataset.name} model?`, `Frees ${el.dataset.gb} GB. It downloads again if you pick that quality later.`, "Delete",
+    async () => {
+      const left = await api().delete_model(el.dataset.model);
+      if (!left) return toast("Can't delete it while it's in use.", true);
+      S.models = left; S.info.models = await api().models_status(); render(); toast("Deleted.");
+    }),
   remove: el => { S.queue = S.queue.filter(q => !(q.path === el.dataset.path && q.status === "waiting")); render(); },
-  multi: el => { S.multi = el.dataset.v === "1"; render(); },
-  people: el => { S.people = +el.dataset.v; render(); },
+  // Remembered for next time: most people make the same kind of video again
+  multi: el => { S.multi = el.dataset.v === "1"; render(); api().save_prefs({ multi: S.multi }); },
+  people: el => { S.people = +el.dataset.v; render(); api().save_prefs({ people: S.people }); },
   voices: async () => { S.info.voices = await api().open_voices(); },
   "goto-settings": () => go("settings"),
   start: () => next(),
@@ -1397,6 +1484,12 @@ const app = {
       added++;
     }
     if (!added) return;
+    // Mark the ones that already have subtitles (the new file won't replace them)
+    const fresh = S.queue.filter(q => q.status === "waiting" && q.has_srt === undefined);
+    api().queue_info(fresh.map(q => q.path)).then(info => {
+      fresh.forEach(q => { q.has_srt = !!(info[q.path] && info[q.path].has_srt); });
+      if (S.view === "make" && !S.review && fresh.some(q => q.has_srt)) render();
+    });
     // A finished batch makes way for the new one
     if (!S.run) S.queue = S.queue.filter(q => q.status === "waiting");
     // Start loading the speech model while you pick the options, so the first video starts sooner
@@ -1464,6 +1557,7 @@ const app = {
         if (r.item && r.item.status === "working") r.item.status = ev.cancelled ? "cancelled" : "failed";
         if (r.kind === "prepare") {
           S.run = null;
+          S.models = null;
           api().models_status().then(m => { S.info.models = m; if (r.after) r.after(!ev.code, r.error); else render(); });
           return;
         }
@@ -1575,6 +1669,8 @@ async function boot() {
 
 async function startApp() {
   applyTheme();
+  S.multi = !!S.info.settings.multi;
+  S.people = S.info.settings.people || 0;
   if (S.info.mode === "setup" || !S.info.configured) startSetup();
   go("make");
   requestAnimationFrame(() => api().page_ready());  // for startup.log

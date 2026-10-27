@@ -421,6 +421,16 @@ def write_srt(path, cues, names=None, style="name"):
             f.write(f"{i}\n{timestamp(start)} --> {timestamp(end)}\n{wrap(text)}\n\n")
 
 
+def write_vtt(path, cues, names=None, style="name"):
+    """The same subtitles as WebVTT (.vtt), for YouTube and web players."""
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("WEBVTT\n\n")
+        for start, end, text, speaker in cues:
+            if names:
+                text = label(text, names[speaker], style)
+            f.write(f"{timestamp(start).replace(',', '.')} --> {timestamp(end).replace(',', '.')}\n{wrap(text)}\n\n")
+
+
 def write_transcript(path, cues, names=None):
     """A plain-text transcript: one paragraph per speaker turn, or after a long pause."""
     paragraphs, last = [], None
@@ -444,6 +454,22 @@ def set_title(text):
     else:
         sys.stdout.write(f"\33]0;{text}\a")
         sys.stdout.flush()
+
+
+@contextlib.contextmanager
+def keep_awake():
+    """Stop Windows going to sleep while subtitles are being made (a long video on a laptop)."""
+    if sys.platform != "win32":
+        yield
+        return
+    import ctypes
+
+    ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+    try:
+        yield
+    finally:
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
 
 def announce_done(path, sound=True, reveal=True):
@@ -607,6 +633,21 @@ def name_speakers(detector, audio, turns, cues, voices_dir):
     return names
 
 
+def check_space(model_name, potato):
+    """Say so before downloading if the disk is too full, rather than failing halfway through."""
+    need_mb = 0 if models.whisper_path(model_name) else models.download_mb(model_name)
+    if not potato and not models.speakers_ready():
+        need_mb += models.SPEAKER_MB
+    if not need_mb:
+        return
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    free_mb = shutil.disk_usage(MODELS_DIR).free / 2**20
+    if free_mb < need_mb * 1.2 + 200:  # room to unpack, and to spare
+        raise FriendlyError(f"Not enough free disk space: this needs about {need_mb / 1024:.1f} GB, and "
+                            f"{free_mb / 1024:.1f} GB is free on the drive with {MODELS_DIR}.\n"
+                            "Free some space (Settings > Downloaded models can delete ones you don't use), then try again.")
+
+
 def get_whisper(model_name, device, potato, quality=""):
     """The speech model, loading it unless --serve already has it loaded from the last video."""
     key = (model_name, device)
@@ -659,6 +700,7 @@ def make_subtitles(args, level):
     if args.prepare:
         # Only what's missing is downloaded; nothing is loaded into memory
         print(f"Models live in {MODELS_DIR}")
+        check_space(model_name, potato)
         try:
             if models.whisper_path(model_name):
                 print(f"The '{model_name}' speech model is already downloaded.")
@@ -792,6 +834,11 @@ def make_subtitles(args, level):
             print(f"  {name}: {len(spk_cues)} subtitles -> {path.name}")
             files.append({"path": str(path), "name": name, "count": len(spk_cues)})
     files += save_transcript(st, out, cues, names)
+    if st["vtt"]:
+        vtt = unique_path(out.with_suffix(".vtt"))
+        write_vtt(vtt, cues, names, style)
+        print(f"  Web subtitles -> {vtt.name}")
+        files.append({"path": str(vtt), "name": None, "count": len(cues), "kind": "vtt"})
     remember(args, "done", files=files, length=round(total, 1), language=language,
              speakers=list(names.values()) if names else [])
     emit("done", files=files)
@@ -933,7 +980,8 @@ def main(argv=None):
         return serve()
 
     try:
-        out = make_subtitles(args, args.level)
+        with keep_awake():
+            out = make_subtitles(args, args.level)
     except KeyboardInterrupt:
         sys.exit("\nStopped.")
     except FriendlyError as e:

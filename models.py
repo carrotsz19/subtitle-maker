@@ -139,3 +139,18 @@ def download_speakers(progress=None):
         fetch(EMB_URL, EMB_MODEL)
     if progress:
         progress(SPEAKER_MB, SPEAKER_MB)
+
+
+def download_mb(model):
+    """Roughly how big a Whisper model's download is, in MB (from the LEVELS table)."""
+    level = next((lv for lv in LEVELS.values() if lv["model"] == model), None)
+    return float(level["download"].split()[0]) * 1024 if level else 1600
+
+
+def downloaded():
+    """Each Whisper model on this PC, with its size: [{"model", "gb"}]."""
+    found = []
+    for key, lv in LEVELS.items():
+        if whisper_path(lv["model"]) and lv["model"] not in [f["model"] for f in found]:
+            found.append({"model": lv["model"], "level": key, "gb": round(folder_bytes(cache_folder(lv["model"])) / 2**30, 2)})
+    return found

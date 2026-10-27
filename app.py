@@ -11,6 +11,7 @@ STARTED = time.perf_counter()  # for the startup timings in startup.log
 
 import json  # noqa: E402
 import os  # noqa: E402
+import platform  # noqa: E402
 import subprocess  # noqa: E402
 import sys  # noqa: E402
 import threading  # noqa: E402
@@ -32,6 +33,19 @@ HERE = Path(__file__).parent
 VOICES_DIR = HERE / "Voices"
 EVENT_PREFIX = "@@"  # matches make_subtitles.EVENT_PREFIX
 AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".mov"}  # matches speakers.AUDIO_EXTS
+# What a dropped or chosen folder is searched for
+MEDIA_EXTS = AUDIO_EXTS | {".mkv", ".avi", ".m4v", ".webm", ".wmv", ".mts", ".m2ts", ".mpg", ".mpeg", ".3gp", ".opus", ".wma"}
+
+
+def media_in(paths):
+    """The paths, with each folder replaced by the videos and audio inside it (and its subfolders)."""
+    found = []
+    for p in map(Path, paths):
+        if p.is_dir():
+            found += sorted(str(f) for f in p.rglob("*") if f.is_file() and f.suffix.lower() in MEDIA_EXTS)
+        elif p.is_file():
+            found.append(str(p))
+    return found
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 STARTUP_LOG = data_dir() / "startup.log"
 
@@ -162,7 +176,7 @@ class Api:
 
     def on_drop(self, event):
         files = event.get("dataTransfer", {}).get("files", [])
-        paths = [f["pywebviewFullPath"] for f in files if f.get("pywebviewFullPath")]
+        paths = media_in(f["pywebviewFullPath"] for f in files if f.get("pywebviewFullPath"))
         if paths:
             self._window.evaluate_js(f"app.addFiles({json.dumps(paths)})")
 
@@ -221,6 +235,36 @@ class Api:
         picked = self._window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=True, file_types=kinds)
         return list(picked or [])
 
+    def choose_video_folder(self):
+        """Every video and audio file in a folder (and its subfolders)."""
+        picked = self._window.create_file_dialog(webview.FileDialog.FOLDER)
+        return media_in(picked) if picked else []
+
+    def queue_info(self, paths):
+        """For each queued file: does it already have subtitles where the new ones would go?"""
+        out_dir = load_settings()["output_dir"]
+        info = {}
+        for p in paths:
+            video = Path(p)
+            srt = (Path(out_dir) / f"{video.stem}.srt") if out_dir and Path(out_dir).is_dir() else video.with_suffix(".srt")
+            info[p] = {"has_srt": srt.exists(), "exists": video.is_file()}
+        return info
+
+    # ---- downloaded models ------------------------------------------------------------------
+
+    def models_list(self):
+        current = LEVELS[load_settings()["level"]]["model"]
+        return [dict(m, current=m["model"] == current) for m in models.downloaded()]
+
+    def delete_model(self, model):
+        """Free the space a downloaded speech model takes (not the one the current level uses)."""
+        if model == LEVELS[load_settings()["level"]]["model"] or self._busy():
+            return False
+        self.stop_worker()  # it may have this one loaded
+        import shutil
+
+        shutil.rmtree(models.cache_folder(model), ignore_errors=True)
+        return self.models_list()
     # ---- running make_subtitles.py ------------------------------------------------------------
 
     def start(self, path, speakers=None):
@@ -381,9 +425,13 @@ class Api:
             self._process.kill()
 
     def shutdown(self):
-        """The window is closing: stop everything still running."""
+        """The window is closing: stop everything still running, and remember where the window was."""
         self.cancel()
         self.stop_worker()
+        if GEOMETRY:
+            settings = load_settings()
+            settings["window"] = dict(GEOMETRY)
+            save_settings(settings)
 
     # ---- settings and folders ---------------------------------------------------------------
 
@@ -403,7 +451,7 @@ class Api:
     # they can mean a download)
     _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
                "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "review", "done_sound",
-               "open_folder", "theme", "auto_update")
+               "open_folder", "theme", "auto_update", "vtt", "multi", "people")
 
     def save_prefs(self, changes):
         """Save some instant settings; anything not allowed falls back to its default."""
@@ -415,6 +463,13 @@ class Api:
     def reset_prefs(self):
         settings = load_settings()
         settings.update({k: DEFAULT_SETTINGS[k] for k in self._INSTANT})
+        save_settings(settings)
+        return settings
+
+    def set_channel(self, branch):
+        """Follow the stable or the experimental version (the page then offers the switch)."""
+        settings = load_settings()
+        settings["channel"] = branch if branch in update.CHANNELS else "main"
         save_settings(settings)
         return settings
 
@@ -500,9 +555,47 @@ class Api:
         open_in_file_manager(VOICES_DIR)
         return self.voices()
 
+    def error_details(self, path, message):
+        """What to paste when asking for help with a failed video: the error, this PC and the log."""
+        settings, version = load_settings(), update.installed()
+        hw = self._probe["hardware"]
+        lines = [f"Subtitle Maker {version['sha'][:7] if version else '(version unknown)'} on {platform.platform()}",
+                 f"Video: {Path(path).name}", f"Error: {message}",
+                 f"Quality: {settings['level']}, run on: {settings['device']}, language: {settings['language'] or 'auto'}",
+                 f"PC: {hw.get('gpu') or 'no NVIDIA GPU'}, {hw.get('ram_gb')} GB RAM, {hw.get('cores')} cores"]
+        try:
+            log = ERROR_LOG.read_text(encoding="utf-8", errors="replace")
+            lines += ["", "Last error log:", log[-4000:]]
+        except OSError:
+            pass
+        return "\n".join(lines)
+
     def open_error_log(self):
         if ERROR_LOG.exists():
             open_in_file_manager(ERROR_LOG)
+
+
+GEOMETRY = {}  # the window's size and place as it's moved and resized, saved when it closes
+
+
+def saved_geometry():
+    """Where the window was last time, if that's still a sensible place on a screen that's there."""
+    g = load_settings().get("window")
+    try:
+        width, height, x, y = (int(g[k]) for k in ("width", "height", "x", "y"))
+    except (TypeError, KeyError, ValueError):
+        return {}
+    if not (760 <= width <= 6000 and 560 <= height <= 4000):
+        return {}
+    place = {"width": width, "height": height}
+    try:
+        # Only reuse the position if it's on a screen (a second monitor may have been unplugged)
+        screens = webview.screens() if callable(webview.screens) else webview.screens  # a function in pywebview 6
+        if any(s.x <= x + 100 < s.x + s.width and s.y <= y + 20 < s.y + s.height for s in screens):
+            place.update(x=x, y=y)
+    except Exception:
+        pass
+    return place
 
 
 def main():
@@ -511,11 +604,14 @@ def main():
     api = Api()
     window = webview.create_window(
         "Subtitle Maker", str(HERE / "ui" / "index.html"), js_api=api,
-        width=1040, height=720, min_size=(760, 560), background_color="#15140f" if dark_mode() else "#f3f1ec",
+        **{"width": 1040, "height": 720, **saved_geometry()},
+        min_size=(760, 560), background_color="#15140f" if dark_mode() else "#f3f1ec",
     )
+    window.events.resized += lambda width, height: GEOMETRY.update(width=width, height=height)
+    window.events.moved += lambda x, y: GEOMETRY.update(x=x, y=y)
     api._window = window
     # Videos dropped onto the "Subtitle Maker.bat" icon arrive as arguments
-    opened_with = [str(Path(a).absolute()) for a in sys.argv[1:] if Path(a).is_file()]
+    opened_with = [str(Path(a).absolute()) for a in sys.argv[1:] if not a.startswith("--") and Path(a).exists()]
 
     window.events.shown += lambda: TIMINGS.mark("window shown (web view started)")
 
@@ -525,7 +621,7 @@ def main():
         window.dom.document.events.dragover += DOMEventHandler(lambda e: None, prevent_default=True)
         window.dom.document.events.drop += DOMEventHandler(api.on_drop, prevent_default=True, stop_propagation=True)
         if opened_with:
-            window.evaluate_js(f"app.addFiles({json.dumps(opened_with)})")
+            window.evaluate_js(f"app.addFiles({json.dumps(media_in(opened_with))})")
 
     window.events.loaded += on_loaded
     window.events.closing += api.shutdown

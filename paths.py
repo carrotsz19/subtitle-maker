@@ -52,15 +52,20 @@ DEFAULT_SETTINGS = {
     # Accuracy: words to spell right (names, places), drop um/uh, skip music and silence, device
     "hotwords": "", "remove_fillers": False, "vad": True, "device": "auto",
     # When a video is done, and the app itself
-    "transcript": False, "review": True, "done_sound": True, "open_folder": True, "theme": "system", "auto_update": True,
+    "transcript": False, "vtt": False, "review": True, "done_sound": True, "open_folder": True, "theme": "system",
+    "auto_update": True, "channel": "main",
+    # Remembered from the Make subtitles page: "Several people", and how many (0 = guess)
+    "multi": False, "people": 0,
 }
 # The values each setting may take; anything else (a hand-edited file, an old version) goes back to the default
 SETTING_CHOICES = {
     "max_chars": (32, 37, 42, 50), "max_lines": (1, 2), "min_seconds": (0.7, 1.0, 1.5),
     "max_seconds": (4.0, 6.0, 8.0), "pause_split": (0.4, 0.7, 1.2), "speaker_labels": ("name", "dash", "none"),
     "speaker_files": (True, False), "remove_fillers": (True, False), "vad": (True, False),
-    "device": ("auto", "cuda", "cpu"), "transcript": (True, False), "review": (True, False), "done_sound": (True, False),
+    "device": ("auto", "cuda", "cpu"), "transcript": (True, False), "vtt": (True, False), "review": (True, False),
+    "done_sound": (True, False), "multi": (True, False), "people": (0, 2, 3, 4, 5, 6),
     "open_folder": (True, False), "theme": ("system", "light", "dark"), "auto_update": (True, False),
+    "channel": ("main", "experimental"),
 }
 
 
