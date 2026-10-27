@@ -88,6 +88,12 @@ def script(p, keep_voices, wait_pid):
 
     for d in DATA_DIRS:
         lines.append(rmtree.format(q(data / d)))
+        # A file still in use (antivirus scanning, a program just closing) stops the first try
+        # partway, which once left a half-deleted Python behind; wait a moment and try again
+        if win:
+            lines.append(f"if exist {q(data / d)} (timeout /t 3 /nobreak >nul & {rmtree.format(q(data / d))})")
+        else:
+            lines.append(f"[ -e {q(data / d)} ] && sleep 3 && {rmtree.format(q(data / d))}")
     for f in DATA_FILES:
         lines.append(rm.format(q(data / f)))
     if program:
@@ -114,6 +120,12 @@ def script(p, keep_voices, wait_pid):
         lines.append(rm.format(q(p["shortcut"])))
     lines.append(rmdir.format(q(data)))  # only if nothing else of yours is in it
 
+    # Say so if something couldn't be removed, rather than leaving it behind silently
+    if win:
+        lines += [f"if exist {q(data / 'venv')} (echo. & echo Some files were in use and couldn't be removed: {data}"
+                  " & echo Restart the PC and delete that folder by hand. & pause)"]
+    else:
+        lines += [f"[ -e {q(data / 'venv')} ] && echo \"Some files were in use and couldn't be removed: {data}\""]
     if win:
         lines += ["echo.", "echo Subtitle Maker has been removed. Your videos and subtitles were not touched.",
                   "timeout /t 6 >nul", '(goto) 2>nul & del "%~f0"']

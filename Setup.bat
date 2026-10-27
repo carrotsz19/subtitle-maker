@@ -22,9 +22,13 @@ if not defined PY (
 echo Using Python: %PY%
 echo.
 
-if not exist "%VENV_PY%" (
-    echo Creating private Python environment...
-    %PY% -m venv "%HOME_DIR%\venv" || goto :failed
+rem Make the private Python environment, or remake it if it's broken (say, half-deleted by an
+rem earlier uninstall): python.exe can be there while pip is missing
+set "VENV_OK="
+if exist "%VENV_PY%" "%VENV_PY%" -c "import pip" >nul 2>&1 && set "VENV_OK=1"
+if not defined VENV_OK (
+    if exist "%VENV_PY%" (echo The Python environment is incomplete, so making it again...) else (echo Creating private Python environment...)
+    %PY% -m venv --clear "%HOME_DIR%\venv" || goto :failed
 )
 rem pip's own progress bars show the downloads, so a slow connection never looks frozen
 set "PIP=-m pip install --disable-pip-version-check --no-input --progress-bar on"

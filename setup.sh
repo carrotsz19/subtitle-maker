@@ -22,7 +22,11 @@ if [ -z "$PY" ]; then
 fi
 echo "Using $PY"
 
-[ -x "$HOME_DIR/venv/bin/python" ] || "$PY" -m venv "$HOME_DIR/venv"
+# Make the private Python environment, or remake it if it's broken (python there, pip missing)
+if ! "$HOME_DIR/venv/bin/python" -c "import pip" >/dev/null 2>&1; then
+    [ -e "$HOME_DIR/venv" ] && echo "The Python environment is incomplete, so making it again..."
+    "$PY" -m venv --clear "$HOME_DIR/venv"
+fi
 VPY="$HOME_DIR/venv/bin/python"
 # pip's own progress bars show the downloads, so a slow connection never looks frozen
 PIP=(-m pip install --disable-pip-version-check --no-input --progress-bar on)
