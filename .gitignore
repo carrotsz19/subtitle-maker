@@ -1,0 +1,11 @@
+# People's own voice clips stay on their PC (only the folder's README is shared)
+Voices/*
+!Voices/README.txt
+
+# Made by the tool, or by Python
+*.srt
+__pycache__/
+*.pyc
+venv/
+.venv/
+models/

@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subtitle Maker</title>
+<style>
+/* =====================================================================
+   SUBTITLE MAKER — WINDOW
+   Same look as IronLog desktop (veyra/live/desktop.html and
+   ui-standard.md): the warm palette, its semantic colour layer, the
+   radius scale, the sidebar shell, grouped rows and spring motion.
+   No CDNs: system fonts and inline SVG, so it works offline.
+===================================================================== */
+:root{
+  --bg-grouped:#f3f1ec; --bg-elevated:#fff; --fill-secondary:#eceae5;
+  --fill-tertiary:rgba(27,26,24,.05); --separator:#dcd8cf;
+  --label-primary:#1b1a18; --label-secondary:#6d6961; --label-tertiary:rgba(27,26,24,.42);
+  --tint:#b3492b; --tint-soft:#f1ddd4;
+  --positive:#3f6b4a; --positive-soft:#e0ece2;
+  --negative:#b3492b; --negative-soft:#f4ddd4;
+  --on-tint:#fff;
+  --elev-1:0 1px 2px rgba(27,26,24,.04), 0 4px 12px rgba(27,26,24,.05);
+  --elev-2:0 2px 8px rgba(27,26,24,.05), 0 12px 28px rgba(27,26,24,.09);
+  --elev-3:0 0 0 1px rgba(27,26,24,.04), 0 8px 16px rgba(27,26,24,.07), 0 24px 64px rgba(27,26,24,.16);
+  --hairline:rgba(27,26,24,.09);
+
+  --bg:var(--bg-grouped); --panel:var(--bg-elevated); --panel-2:var(--fill-secondary);
+  --line:var(--separator); --ink:var(--label-primary); --dim:var(--label-secondary); --faint:var(--label-tertiary);
+  --accent:var(--tint); --accent-soft:var(--tint-soft);
+  --ok:var(--positive); --ok-soft:var(--positive-soft); --bad:var(--negative); --bad-soft:var(--negative-soft);
+
+  --r-control:10px; --r-card:14px; --r-sheet:20px;
+  --sidebar:220px;
+  --ease-out:cubic-bezier(.16,1,.3,1); --ease-standard:cubic-bezier(.25,.1,.25,1);
+  --spring-snappy:cubic-bezier(.32,.72,0,1); --spring-default:cubic-bezier(.32,.72,0,1);
+  --spring-snappy-ms:369ms; --spring-default-ms:585ms;
+  color-scheme:light;
+}
+@supports (transition-timing-function:linear(0,1)){
+  :root{
+    --spring-snappy:linear(0,0.0089,0.033,0.0689,0.1139,0.1653,0.221,0.2792,0.3385,0.3977,0.4557,0.5117,0.5653,0.6159,0.6633,0.7073,0.7477,0.7847,0.8181,0.8482,0.8751,0.8989,0.9198,0.938,0.9538,0.9673,0.9788,0.9884,0.9963,1.0027,1.0079,1.0119,1.015,1.0172,1.0187,1.0195,1.0199,1.0199,1.0195,1.0188,1.018,1.017,1.0159,1.0148,1.0136,1.0124,1.0113,1.0101,1.0091,1.008,1.0071,1.0062,1.0053,1.0046,1.0039,1.0032,1.0027,1.0022,1.0017,1.0014,1);
+    --spring-default:linear(0,0.0098,0.036,0.0745,0.1218,0.1752,0.2322,0.2909,0.35,0.4081,0.4645,0.5184,0.5694,0.6172,0.6616,0.7024,0.7398,0.7738,0.8045,0.8321,0.8567,0.8785,0.8978,0.9147,0.9294,0.9422,0.9533,0.9628,0.9709,0.9777,0.9834,0.9882,0.9921,0.9953,0.9979,1,1.0016,1.0028,1.0037,1.0043,1.0047,1.0049,1.005,1.005,1.0049,1.0047,1.0045,1.0042,1.0039,1.0036,1.0033,1.003,1.0027,1.0025,1.0022,1.002,1.0017,1.0015,1.0013,1.0012,1);
+  }
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg-grouped:#15140f; --bg-elevated:#1e1c17; --fill-secondary:#272420;
+    --fill-tertiary:rgba(236,239,231,.06); --separator:#37342c;
+    --label-primary:#f2efe8; --label-secondary:#a29c8f; --label-tertiary:rgba(236,239,231,.42);
+    --tint:#d9633e; --tint-soft:#3a2a22;
+    --positive:#7fae87; --positive-soft:#22302a;
+    --negative:#d9633e; --negative-soft:#382720;
+    --on-tint:#161310;
+    --elev-1:inset 0 1px 0 rgba(255,255,255,.045), 0 1px 2px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.30);
+    --elev-2:inset 0 1px 0 rgba(255,255,255,.055), 0 2px 8px rgba(0,0,0,.30), 0 12px 28px rgba(0,0,0,.40);
+    --elev-3:inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px rgba(0,0,0,.40), 0 8px 16px rgba(0,0,0,.35), 0 24px 64px rgba(0,0,0,.55);
+    --hairline:rgba(255,255,255,.07);
+    color-scheme:dark;
+  }
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{ animation-duration:1ms !important; transition-duration:1ms !important; }
+}
+
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; height:100%; }
+body{
+  background:var(--bg); color:var(--ink); overflow:hidden;
+  font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-user-select:none; user-select:none;
+}
+input, .selectable{ -webkit-user-select:text; user-select:text; }
+.mono{ font-variant-numeric:tabular-nums; }
+.code{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; }
+.hide{ display:none !important; }
+.dim{ color:var(--dim); } .faint{ color:var(--faint); }
+.sm{ font-size:12.5px; } .xs{ font-size:11.5px; }
+.trunc{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.row{ display:flex; align-items:center; gap:10px; }
+.between{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.grow{ flex:1; min-width:0; }
+.right{ text-align:right; }
+h1{ font-size:24px; font-weight:800; letter-spacing:-.02em; margin:0; }
+h2{ font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); margin:0 0 7px 16px; }
+h3{ font-size:17px; font-weight:700; letter-spacing:-.01em; margin:0; }
+p{ margin:0; }
+::-webkit-scrollbar{ width:10px; height:10px; }
+::-webkit-scrollbar-thumb{ background:var(--line); border-radius:99px; border:2px solid var(--bg); }
+
+/* ---------- shell ---------- */
+.shell{ display:grid; grid-template-columns:var(--sidebar) 1fr; height:100vh; }
+aside.side{ background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; padding:16px 12px; }
+.brand{ display:flex; align-items:center; gap:9px; padding:4px 8px 18px; }
+.brand .mark{ width:30px; height:30px; border-radius:var(--r-control); background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; }
+.brand b{ font-size:15px; letter-spacing:-.01em; }
+.nav{ position:relative; }
+.navbtn{ position:relative; z-index:1; display:flex; align-items:center; gap:10px; width:100%; text-align:left; border:0; background:transparent; color:var(--ink); font:inherit; font-weight:600; padding:9px 10px; border-radius:var(--r-control); cursor:pointer; margin-bottom:2px; }
+.navbtn:hover{ background:var(--fill-tertiary); }
+.navbtn[aria-current="true"]{ color:var(--accent); }
+.navbtn[aria-current="true"]:hover{ background:transparent; }
+.navbtn svg{ opacity:.8; flex-shrink:0; }
+.nav-pill{ position:absolute; left:0; right:0; height:40px; border-radius:var(--r-control); background:var(--accent-soft); transition:transform var(--spring-default-ms) var(--spring-default); }
+.navbtn .count{ margin-left:auto; font-size:11px; font-weight:800; min-width:20px; height:20px; padding:0 6px; border-radius:99px; background:var(--accent); color:var(--on-tint); display:flex; align-items:center; justify-content:center; }
+.side .spacer{ flex:1; }
+.sidecard{ border-radius:var(--r-card); padding:12px; background:var(--panel-2); font-size:12.5px; cursor:pointer; text-align:left; border:0; color:var(--ink); font-family:inherit; width:100%; }
+.sidecard:hover{ background:var(--fill-tertiary); box-shadow:inset 0 0 0 1px var(--line); }
+.sidecard b{ display:block; font-size:13px; margin-bottom:2px; }
+main.main{ overflow-y:auto; padding:26px 30px 48px; }
+.inner{ max-width:760px; margin:0 auto; }
+.topbar{ margin-bottom:20px; }
+.topbar p{ color:var(--dim); margin-top:3px; }
+.view{ animation:viewIn var(--spring-default-ms) var(--spring-default) both; }
+@keyframes viewIn{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+
+/* ---------- surfaces ---------- */
+.card{ background:var(--panel); border-radius:var(--r-card); padding:18px; box-shadow:var(--elev-1); }
+.stack > * + *{ margin-top:16px; }
+.block + .block{ margin-top:22px; }
+.foot{ font-size:12.5px; color:var(--dim); margin:7px 16px 0; }
+.grp{ background:var(--panel); border-radius:var(--r-card); box-shadow:var(--elev-1); overflow:hidden; }
+.grp-row{ display:flex; align-items:center; gap:12px; min-height:52px; padding:9px 16px; position:relative; }
+.grp-row + .grp-row::before{ content:""; position:absolute; top:0; right:0; left:16px; height:1px; background:var(--hairline); }
+.grp-row.has-icon + .grp-row.has-icon::before{ left:58px; }
+.grp-row.tap{ cursor:pointer; transition:background-color .12s var(--ease-standard); }
+.grp-row.tap:hover{ background:var(--fill-tertiary); }
+.grp-row.danger{ color:var(--bad); font-weight:600; justify-content:center; }
+.btn.dan{ background:var(--bad); color:var(--on-tint); }
+.checkrow{ display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:14px; }
+.checkrow input{ width:18px; height:18px; margin:2px 0 0; accent-color:var(--accent); flex-shrink:0; }
+.list{ margin:0; padding-left:18px; } .list li + li{ margin-top:4px; }
+.row-title{ font-size:15px; font-weight:500; }
+.row-sub{ font-size:12.5px; color:var(--dim); }
+.tile-icon{ width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:var(--panel-2); color:var(--dim); }
+.grp.inset .tile-icon{ background:var(--panel); }
+.tile-icon.t-accent{ background:var(--accent-soft); color:var(--accent); }
+.tile-icon.t-ok{ background:var(--ok-soft); color:var(--ok); }
+.tile-icon.t-bad{ background:var(--bad-soft); color:var(--bad); }
+.pill{ font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:99px; background:var(--panel-2); color:var(--dim); white-space:nowrap; letter-spacing:.02em; }
+.pill.accent{ background:var(--accent-soft); color:var(--accent); }
+.pill.ok{ background:var(--ok-soft); color:var(--ok); }
+.pill.bad{ background:var(--bad-soft); color:var(--bad); }
+.banner{ background:var(--accent-soft); color:var(--accent); border-radius:var(--r-control); padding:11px 14px; font-size:13px; font-weight:600; }
+.banner.bad{ background:var(--bad-soft); color:var(--bad); font-weight:500; }
+
+/* ---------- controls ---------- */
+button{ font:inherit; cursor:pointer; }
+.btn{ border:0; border-radius:var(--r-control); padding:10px 18px; min-height:40px; background:var(--accent); color:var(--on-tint); font-weight:700; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+.btn:hover{ filter:brightness(1.06); }
+.btn[disabled]{ opacity:.45; cursor:default; }
+.btn.sec{ background:var(--panel-2); color:var(--ink); }
+.btn.ghost{ background:transparent; color:var(--dim); box-shadow:inset 0 0 0 1px var(--line); }
+.btn.sec:hover, .btn.ghost:hover{ filter:none; background:var(--fill-tertiary); }
+.btn.sm{ padding:6px 12px; min-height:32px; font-size:12.5px; }
+.btn.big{ min-height:50px; width:100%; font-size:15px; border-radius:var(--r-card); }
+.iconbtn{ border:0; background:transparent; color:var(--dim); width:32px; height:32px; border-radius:99px; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
+.iconbtn:hover{ color:var(--ink); background:var(--fill-tertiary); }
+.linkbtn{ border:0; background:none; padding:0; color:var(--accent); font-weight:600; }
+.linkbtn:hover{ text-decoration:underline; }
+input[type=text]{ font:inherit; font-size:15px; width:100%; padding:10px 12px; border-radius:var(--r-control); border:1px solid var(--line); background:var(--panel); color:var(--ink); transition:border-color .16s var(--ease-standard), box-shadow .16s var(--ease-standard); }
+input[type=text]:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+:where(button, [tabindex], input):focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.seg{ display:inline-flex; gap:3px; background:var(--panel-2); padding:3px; border-radius:var(--r-control); }
+.seg button{ border:0; background:transparent; color:var(--dim); font-weight:600; padding:6px 14px; min-height:32px; border-radius:7px; font-size:13px; }
+.seg button[aria-selected="true"]{ background:var(--bg-elevated); color:var(--ink); box-shadow:var(--elev-1); }
+@media (prefers-color-scheme:dark){ .seg button[aria-selected="true"]{ background:var(--separator); } }
+.radio{ width:20px; height:20px; border-radius:99px; box-shadow:inset 0 0 0 2px var(--line); flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:box-shadow .16s var(--ease-standard); }
+[aria-checked="true"] .radio{ box-shadow:inset 0 0 0 6px var(--accent); }
+
+.btn, .iconbtn, .seg button, .navbtn, .sidecard, .grp-row.tap, .drop{
+  transition:transform var(--spring-snappy-ms) var(--spring-snappy), filter .16s var(--ease-standard),
+             background-color .16s var(--ease-standard), color .16s var(--ease-standard), box-shadow .2s var(--ease-standard);
+}
+.btn:active:not([disabled]), .iconbtn:active, .seg button:active{ transform:scale(.96); filter:brightness(.94); }
+.navbtn:active, .sidecard:active, .grp-row.tap:active{ transform:scale(.985); }
+
+/* ---------- drop zone ---------- */
+.drop{ display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:10px; padding:34px 20px; border-radius:var(--r-card); background:var(--panel); box-shadow:var(--elev-1); position:relative; cursor:pointer; }
+.drop::after{ content:""; position:absolute; inset:8px; border-radius:10px; border:1.5px dashed var(--line); pointer-events:none; transition:border-color .16s var(--ease-standard); }
+.drop:hover::after{ border-color:var(--faint); }
+.drop .big-icon{ width:52px; height:52px; border-radius:var(--r-card); background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; transition:transform var(--spring-default-ms) var(--spring-default); }
+.drop b{ font-size:16px; }
+body.dragging .drop{ background:var(--accent-soft); transform:scale(1.01); }
+body.dragging .drop::after{ border-color:var(--accent); }
+body.dragging .drop .big-icon{ transform:translateY(-4px) scale(1.06); }
+.drop.compact{ flex-direction:row; padding:14px 18px; gap:14px; text-align:left; justify-content:flex-start; }
+.drop.compact .big-icon{ width:36px; height:36px; border-radius:var(--r-control); }
+.drop.compact b{ font-size:14px; }
+
+/* ---------- progress ---------- */
+.bar{ height:10px; border-radius:99px; background:var(--panel-2); overflow:hidden; }
+.bar > i{ display:block; height:100%; width:0; border-radius:99px; background:var(--accent); transition:width .5s var(--ease-out); }
+.bar.thin{ height:5px; }
+.bar.ok > i{ background:var(--ok); }
+.bar.indeterminate > i{ width:35%; animation:slide 1.4s var(--ease-standard) infinite; }
+@keyframes slide{ from{ transform:translateX(-100%) } to{ transform:translateX(290%) } }
+.big-pct{ font-size:40px; font-weight:800; letter-spacing:-.03em; line-height:1; }
+.meters{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.meter{ background:var(--panel-2); border-radius:var(--r-control); padding:10px 12px; }
+.meter span{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); }
+.meter b{ display:block; font-size:16px; font-weight:700; margin:1px 0 6px; font-variant-numeric:tabular-nums; }
+.meter .bar > i{ background:var(--dim); }
+.meter.hot .bar > i{ background:var(--accent); }
+.log{ max-height:150px; overflow-y:auto; background:var(--panel-2); border-radius:var(--r-control); padding:10px 12px; white-space:pre-wrap; color:var(--dim); margin-top:10px; }
+details summary{ cursor:pointer; color:var(--dim); font-size:12.5px; font-weight:600; list-style:none; }
+details summary::-webkit-details-marker{ display:none; }
+details summary::before{ content:"›"; display:inline-block; width:14px; transition:transform .2s var(--ease-standard); }
+details[open] summary::before{ transform:rotate(90deg); }
+
+.success{ width:52px; height:52px; border-radius:99px; background:var(--ok-soft); color:var(--ok); display:flex; align-items:center; justify-content:center; animation:pop var(--spring-default-ms) cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes pop{ from{ transform:scale(.6); opacity:0 } to{ transform:none; opacity:1 } }
+
+/* ---------- dialog ---------- */
+.scrim{ position:fixed; inset:0; background:rgba(0,0,0,.42); display:flex; align-items:center; justify-content:center; z-index:60; padding:20px; animation:fadeIn var(--spring-default-ms) var(--ease-out) both; }
+.dialog{ background:var(--panel); border-radius:var(--r-sheet); padding:22px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; box-shadow:var(--elev-3); animation:dialogIn var(--spring-default-ms) var(--spring-default) both; }
+@keyframes fadeIn{ from{ opacity:0 } to{ opacity:1 } }
+@keyframes dialogIn{ from{ opacity:0; transform:translateY(12px) scale(.985) } to{ opacity:1; transform:none } }
+.player{ display:flex; align-items:center; gap:12px; background:var(--panel-2); border-radius:var(--r-card); padding:10px 14px 10px 10px; }
+.playbtn{ width:44px; height:44px; border-radius:99px; border:0; background:var(--accent); color:var(--on-tint); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.wave{ display:flex; align-items:center; gap:2px; height:32px; flex:1; }
+.wave i{ flex:1; border-radius:2px; background:var(--line); min-height:3px; transition:background-color .1s; }
+.wave i.on{ background:var(--accent); }
+.quote{ display:flex; gap:10px; padding:8px 0; font-size:14px; }
+.quote + .quote{ border-top:1px solid var(--hairline); }
+.quote .t{ color:var(--faint); font-variant-numeric:tabular-nums; font-size:12.5px; padding-top:1px; min-width:38px; }
+.chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.chip{ border:0; background:var(--panel-2); color:var(--ink); border-radius:99px; padding:5px 12px; font-size:12.5px; font-weight:600; }
+.chip:hover{ background:var(--accent-soft); color:var(--accent); }
+
+#toast-root{ position:fixed; right:20px; bottom:20px; z-index:80; display:flex; flex-direction:column; align-items:flex-end; gap:8px; pointer-events:none; }
+.toast{ background:var(--ink); color:var(--bg); padding:11px 15px; border-radius:var(--r-card); font-size:13px; font-weight:600; max-width:360px; box-shadow:var(--elev-2); animation:dialogIn var(--spring-snappy-ms) var(--spring-snappy) both; }
+.toast.bad{ background:var(--bad); color:#fff; }
+
+.steps{ margin:0; padding-left:20px; } .steps li + li{ margin-top:6px; }
+kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px; padding:1px 6px; font-size:12.5px; }
+
+@media (max-width:860px){ .meters{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand">
+      <div class="mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M10 10.5a2 2 0 1 0 0 3M16.5 10.5a2 2 0 1 0 0 3"/></svg></div>
+      <b>Subtitle Maker</b>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-pill" id="nav-pill"></div>
+      <button class="navbtn" data-view="make" aria-current="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M7 15h4M13 15h4M7 11h10"/></svg>
+        Make subtitles <span class="count hide" id="queue-count"></span>
+      </button>
+      <button class="navbtn" data-view="history">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 4.5V8H7M12 7.5V12l3 2"/></svg>
+        History
+      </button>
+      <button class="navbtn" data-view="settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+        Settings
+      </button>
+      <button class="navbtn" data-view="help">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17.2v.1"/></svg>
+        Using it in Resolve
+      </button>
+    </nav>
+    <div class="spacer"></div>
+    <button class="sidecard" id="pc-card" title="Change quality or language">
+      <b id="pc-level">…</b>
+      <span class="dim" id="pc-detail">Checking this PC…</span>
+    </button>
+  </aside>
+
+  <main class="main" id="main"><div class="inner" id="view"></div></main>
+</div>
+<div id="dialog-root"></div>
+<div id="toast-root" aria-live="polite"></div>
+
+<script>
+/* ---------------------------------------------------------------------
+   State. The Python side (app.py) pushes events in with app.onEvent();
+   everything the page asks for goes through window.pywebview.api.
+--------------------------------------------------------------------- */
+const LANGS = [["en", "English"], [null, "Auto-detect"], ["other", "Other"]];
+const S = {
+  view: "make",
+  info: null,                 // from api.init(): settings, levels, hardware, voices
+  queue: [],                  // {path, name, status: waiting|working|done|failed|cancelled, files, error}
+  multi: false, people: 0,    // who's talking; people 0 = guess
+  run: null,                  // the job in progress: {kind, item, done, total, stage, speakers, res, log, started}
+  ask: null,                  // the speaker question being shown
+  draft: null,                // unsaved settings
+  update: { state: "idle" },
+  history: null,              // past runs, loaded when the History page opens  // idle|checking|ok|available|error|installing|installed
+};
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const baseName = p => String(p).split(/[\\/]/).pop();
+const clock = sec => { sec = Math.max(0, Math.round(sec)); const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, s = sec % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`; };
+const gb = mb => (mb / 1024).toFixed(1);
+const api = () => window.pywebview.api;
+
+const ICON = {
+  film: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/></svg>',
+  file: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/></svg>',
+  srt: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M7 15h4M13 15h4M7 11h10"/></svg>',
+  person: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.5 3.8-5 7-5s6 1.5 7 5"/></svg>',
+  x: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  check: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+  play: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>',
+  pause: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/></svg>',
+  again: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4.5h-4.5"/></svg>',
+  folder: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.6l2 2h7.4A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z"/></svg>',
+};
+
+function toast(text, bad) {
+  const t = document.createElement("div");
+  t.className = "toast" + (bad ? " bad" : "");
+  t.textContent = text;
+  $("#toast-root").append(t);
+  setTimeout(() => { t.style.transition = "opacity .3s"; t.style.opacity = 0; setTimeout(() => t.remove(), 320); }, 3200);
+}
+
+/* ---------------------------------------------------------------------
+   Navigation
+--------------------------------------------------------------------- */
+function go(view) {
+  if (S.view === "settings" && view !== "settings") S.draft = null;
+  S.view = view;
+  document.querySelectorAll(".navbtn").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
+  const btn = $(`.navbtn[data-view="${view}"]`);
+  $("#nav-pill").style.transform = `translateY(${btn.offsetTop}px)`;
+  render(true);
+  if (view === "history") loadHistory();
+}
+document.querySelectorAll(".navbtn").forEach(b => b.onclick = () => go(b.dataset.view));
+$("#pc-card").onclick = () => go("settings");
+
+function render(animate) {
+  const el = $("#view");
+  el.innerHTML = { make: viewMake, history: viewHistory, settings: viewSettings, help: viewHelp }[S.view]();
+  if (animate) { el.classList.remove("view"); void el.offsetWidth; el.classList.add("view"); }
+  bind(el);
+  renderSide();
+}
+
+function renderSide() {
+  const waiting = S.queue.filter(q => q.status === "waiting" || q.status === "working").length;
+  const c = $("#queue-count");
+  c.textContent = waiting; c.classList.toggle("hide", !waiting);
+  if (!S.info) return;
+  const { settings, levels, hardware: hw } = S.info;
+  const lang = settings.language === "en" ? "English" : settings.language ? settings.language : "Auto-detect";
+  $("#pc-level").textContent = `${levels[settings.level].name} quality · ${lang}`;
+  $("#pc-detail").textContent = hw.gpu ? `${hw.gpu} · ${gb(hw.vram_mb)} GB` : `No NVIDIA GPU · runs on the CPU`;
+}
+
+/* ---------------------------------------------------------------------
+   Make subtitles
+--------------------------------------------------------------------- */
+function viewMake() {
+  const busy = S.run && S.run.kind === "make";
+  const last = S.queue.filter(q => q.status === "done" || q.status === "failed");
+  const showResult = !busy && !S.queue.some(q => q.status === "waiting") && last.length;
+  return `
+    <div class="topbar"><h1>Make subtitles</h1>
+      <p>Drop a video and get a .srt you can import into DaVinci Resolve.</p></div>
+    <div class="stack">
+      ${S.update.state === "available" && !busy ? `<div class="banner between"><span>A new version of Subtitle Maker is ready.</span>
+          <button class="btn sm" data-act="goto-updates">See what's new</button></div>` : ""}
+      ${busy ? viewRunning() : showResult ? viewResults(last) : ""}
+      ${busy || showResult ? dropZone(true) : dropZone(false)}
+      ${S.queue.some(q => q.status === "waiting") ? queueList() : ""}
+      ${busy ? "" : talkCard()}
+      ${busy ? "" : whereCard()}
+      ${busy ? "" : `<button class="btn big" data-act="start" ${S.queue.some(q => q.status === "waiting") ? "" : "disabled"}>
+          ${startLabel()}</button>`}
+    </div>`;
+}
+
+function startLabel() {
+  const n = S.queue.filter(q => q.status === "waiting").length;
+  return n > 1 ? `Make subtitles for ${n} files` : "Make subtitles";
+}
+
+function dropZone(compact) {
+  return compact
+    ? `<div class="drop compact" data-act="choose" role="button" tabindex="0">
+        <div class="big-icon">${ICON.film}</div>
+        <div class="grow"><b>Drop more videos here</b><div class="sm dim">They'll wait their turn.</div></div>
+        <span class="btn sec sm">Choose files…</span></div>`
+    : `<div class="drop" data-act="choose" role="button" tabindex="0">
+        <div class="big-icon">${ICON.film}</div>
+        <b>Drop videos or audio here</b>
+        <div class="sm dim">.mp4, .mov, .mkv, .wav, .mp3 and more. Several at once is fine.</div>
+        <span class="btn sec sm" style="margin-top:6px">Choose files…</span></div>`;
+}
+
+function queueList() {
+  const rows = S.queue.filter(q => q.status === "waiting").map(q => `
+    <div class="grp-row has-icon">
+      <div class="tile-icon">${ICON.file}</div>
+      <div class="grow"><div class="row-title trunc">${esc(q.name)}</div><div class="row-sub trunc">${esc(q.path)}</div></div>
+      <span class="pill">Waiting</span>
+      <button class="iconbtn" data-act="remove" data-path="${esc(q.path)}" title="Remove">${ICON.x}</button>
+    </div>`).join("");
+  return `<div><h2>Up next</h2><div class="grp">${rows}</div></div>`;
+}
+
+function talkCard() {
+  const potato = S.info && S.info.settings.level === "potato";
+  const voices = S.info ? S.info.voices : [];
+  const people = [[0, "Guess"], [2, "2"], [3, "3"], [4, "4"], [5, "5"], [6, "6"]];
+  return `<div>
+    <h2>Who's talking</h2>
+    <div class="card stack">
+      <div class="between"><div><div class="row-title">People in the video</div>
+          <div class="row-sub">${S.multi ? "Each line gets the speaker's name." : "Plain subtitles, no names."}</div></div>
+        <div class="seg" role="tablist">
+          <button data-act="multi" data-v="0" aria-selected="${!S.multi}">One person</button>
+          <button data-act="multi" data-v="1" aria-selected="${S.multi}">Several people</button></div></div>
+      ${S.multi ? (potato
+        ? `<div class="banner">Potato quality doesn't detect speakers. <button class="linkbtn" data-act="goto-settings">Pick Fast or higher in Settings</button> to label who's talking.</div>`
+        : `<div class="between"><div><div class="row-title">How many</div>
+              <div class="row-sub">${voices.length ? `Guess uses your ${voices.length} voice clips.` : "Not sure? It can guess."}</div></div>
+            <div class="seg">${people.map(([v, l]) => `<button data-act="people" data-v="${v}" aria-selected="${S.people === v}">${l}</button>`).join("")}</div></div>
+          <div class="between"><div class="grow"><div class="row-title">Voice clips</div>
+              <div class="row-sub trunc">${voices.length ? "Names filled in automatically: " + voices.map(esc).join(", ")
+                : "Add 10–20 s of each person talking alone (Alex.wav) and names fill in by themselves."}</div></div>
+            <button class="btn sec sm" data-act="voices">${ICON.folder} Voices folder</button></div>`) : ""}
+    </div></div>`;
+}
+
+function whereCard() {
+  const dir = S.info && S.info.settings.output_dir;
+  return `<div>
+    <h2>Save subtitles to</h2>
+    <div class="card stack">
+      <div class="between"><div class="grow"><div class="row-title">${dir ? "A folder you picked" : "Next to each video"}</div>
+          <div class="row-sub trunc selectable">${dir ? esc(dir) : "Same folder and name as the video, ending in .srt."}</div></div>
+        <div class="seg">
+          <button data-act="out-here" aria-selected="${!dir}">Next to the video</button>
+          <button data-act="out-folder" aria-selected="${!!dir}">A folder…</button></div></div>
+      ${dir ? `<div class="row"><button class="btn sec sm" data-act="out-folder">${ICON.folder} Change folder</button>
+          <button class="btn ghost sm" data-act="reveal-dir" data-path="${esc(dir)}">Open it</button></div>` : ""}
+    </div></div>`;
+}
+
+function viewRunning() {
+  const r = S.run, pct = r.total ? Math.min(1, r.done / r.total) : 0;
+  const left = queueLeft();
+  let eta = "";
+  if (r.total && r.done > 0 && r.startedAt) {
+    const rate = r.done / ((Date.now() - r.startedAt) / 1000);
+    if (rate > 0 && pct < 1) eta = ` · about ${clock((r.total - r.done) / rate)} left`;
+  }
+  const res = r.res || {};
+  const meter = (label, value, frac, hot) => `<div class="meter${hot ? " hot" : ""}"><span>${label}</span><b>${value}</b>
+      <div class="bar thin"><i style="width:${Math.round(Math.min(1, frac || 0) * 100)}%"></i></div></div>`;
+  const meters = r.res ? `<div class="meters">
+      ${res.gpu != null ? meter("GPU", res.gpu + "%", res.gpu / 100, true) + meter("VRAM", `${gb(res.vram_used)} / ${gb(res.vram_total)} GB`, res.vram_used / res.vram_total, res.vram_used / res.vram_total > .9) : ""}
+      ${meter("CPU", Math.round(res.cpu) + "%", res.cpu / 100, res.gpu == null)}
+      ${meter("RAM", `${gb(res.ram_used)} / ${Math.round(res.ram_total / 1024)} GB`, res.ram_used / res.ram_total)}
+    </div>` : "";
+  return `<div class="card stack" id="running">
+    <div class="between"><div class="grow"><div class="sm dim">${left > 0 ? `${left} more after this` : "Working on"}</div>
+        <h3 class="trunc">${esc(r.item.name)}</h3></div>
+      <button class="btn ghost sm" data-act="cancel">Cancel</button></div>
+    <div><div class="between" style="align-items:flex-end;margin-bottom:8px">
+        <div><div class="big-pct mono" id="run-pct">${r.total ? Math.round(pct * 100) + "%" : "…"}</div></div>
+        <div class="sm dim right mono" id="run-stage">${esc(r.stage || "Starting")}${r.total ? ` · ${clock(r.done)} of ${clock(r.total)}${eta}` : ""}</div></div>
+      <div class="bar ${r.total ? "" : "indeterminate"}"><i style="width:${pct * 100}%"></i></div></div>
+    ${r.speakers != null ? `<div><div class="between sm"><span class="dim">Working out who's talking</span><span class="mono dim" id="run-spk">${Math.round(r.speakers * 100)}%</span></div>
+        <div class="bar thin ok" style="margin-top:6px"><i style="width:${r.speakers * 100}%"></i></div></div>` : ""}
+    ${meters}
+    <details ${r.logOpen ? "open" : ""} data-act="log"><summary>Details</summary><div class="log code selectable" id="run-log">${esc(r.log.slice(-40).join("\n"))}</div></details>
+  </div>`;
+}
+
+function queueLeft() { return S.queue.filter(q => q.status === "waiting").length; }
+
+function viewResults(items) {
+  const ok = items.filter(q => q.status === "done"), bad = items.filter(q => q.status === "failed");
+  const files = ok.flatMap(q => q.files || []);
+  const first = files[0];
+  return `<div class="card stack">
+    ${ok.length ? `<div class="row" style="gap:14px"><div class="success">${ICON.check}</div>
+      <div class="grow"><h3>${ok.length > 1 ? `Subtitles ready for ${ok.length} videos` : "Subtitles ready"}</h3>
+        <div class="sm dim">${S.info.settings.output_dir ? `Saved in ${esc(baseName(S.info.settings.output_dir))}` : `Saved next to ${ok.length > 1 ? "each video" : "your video"}`}. In Resolve: File › Import › Subtitle.</div></div>
+      ${first ? `<button class="btn" data-act="reveal" data-path="${esc(first.path)}">${ICON.folder} Show in folder</button>` : ""}</div>` : ""}
+    ${files.length ? `<div class="grp inset" style="box-shadow:none;background:var(--panel-2)">${files.map(f => `
+      <div class="grp-row has-icon tap" data-act="reveal" data-path="${esc(f.path)}" role="button" tabindex="0" title="Show in folder">
+        <div class="tile-icon ${f.name ? "" : "t-accent"}">${f.name ? ICON.person : ICON.srt}</div>
+        <div class="grow"><div class="row-title trunc">${esc(baseName(f.path))}</div>
+          <div class="row-sub">${f.count} subtitles${f.name ? ` · only ${esc(f.name)}'s lines` : ""}</div></div>
+        <span class="faint">${ICON.folder}</span></div>`).join("")}</div>` : ""}
+    ${bad.map(q => `<div class="banner bad"><b>${esc(q.name)}</b><br><span class="selectable">${esc(q.error || "It stopped unexpectedly.")}</span>
+        ${q.log ? `<br><button class="linkbtn" data-act="error-log" style="margin-top:6px">Open the error details</button>` : ""}</div>`).join("")}
+    <div class="row"><div class="grow"></div><button class="btn ghost sm" data-act="clear">Clear</button></div>
+  </div>`;
+}
+
+/* ---------------------------------------------------------------------
+   History
+--------------------------------------------------------------------- */
+async function loadHistory() {
+  S.history = await api().history();
+  if (S.view === "history") render();
+}
+
+function dayLabel(d) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const day = new Date(d); day.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - day) / 864e5);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  return day.toLocaleDateString(undefined, { weekday: diff < 7 ? "long" : undefined, day: "numeric", month: "long",
+    year: day.getFullYear() === today.getFullYear() ? undefined : "numeric" });
+}
+
+function viewHistory() {
+  const items = S.history;
+  const top = `<div class="topbar between" style="align-items:flex-start"><div><h1>History</h1>
+      <p>Everything you've made subtitles for on this PC, newest first.</p></div>
+      ${items && items.length ? `<button class="btn ghost sm" data-act="clear-history">Clear history</button>` : ""}</div>`;
+  if (!items) return top + `<div class="card"><div class="bar indeterminate"><i></i></div></div>`;
+  if (!items.length) return top + `<div class="card empty" style="text-align:center;padding:42px 20px">
+      <div class="big-icon" style="margin:0 auto 12px;width:52px;height:52px;border-radius:14px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center">${ICON.srt}</div>
+      <b>Nothing yet</b><div class="sm dim" style="margin-top:4px">Subtitles you make will show up here.</div>
+      <button class="btn sec sm" data-act="goto-make" style="margin-top:14px">Make subtitles</button></div>`;
+  const groups = [];
+  for (const it of items) {
+    const label = dayLabel(it.time);
+    if (!groups.length || groups[groups.length - 1].label !== label) groups.push({ label, items: [] });
+    groups[groups.length - 1].items.push(it);
+  }
+  const levelName = k => (S.info && S.info.levels[k] ? S.info.levels[k].name : k);
+  const row = it => {
+    const ok = it.status === "done", main = (it.files || [])[0];
+    const time = new Date(it.time).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    const parts = ok ? [`${main ? main.count : 0} subtitles`, it.length ? clock(it.length) : null,
+        it.speakers && it.speakers.length ? it.speakers.map(esc).join(", ") : null, levelName(it.level) + " quality"].filter(Boolean)
+      : [esc(it.error || "Didn't finish")];
+    const gone = ok && main && !main.exists;
+    return `<div class="grp-row has-icon">
+      <div class="tile-icon ${ok ? "t-ok" : "t-bad"}">${ok ? ICON.srt : ICON.x}</div>
+      <div class="grow"><div class="row"><span class="row-title trunc">${esc(baseName(it.input))}</span>
+          ${gone ? '<span class="pill">Moved or deleted</span>' : ""}${ok && it.files.length > 1 ? `<span class="pill">${it.files.length} files</span>` : ""}</div>
+        <div class="row-sub trunc">${time} · ${parts.join(" · ")}</div></div>
+      ${ok && main && main.exists ? `<button class="iconbtn" data-act="reveal" data-path="${esc(main.path)}" title="Show in folder">${ICON.folder}</button>` : ""}
+      ${it.input_exists ? `<button class="iconbtn" data-act="again" data-path="${esc(it.input)}" title="Make again">${ICON.again}</button>` : ""}
+      <button class="iconbtn" data-act="forget" data-id="${esc(it.id)}" title="Remove from history">${ICON.x}</button>
+    </div>`;
+  };
+  return top + groups.map(g => `<div class="block"><h2>${esc(g.label)}</h2><div class="grp">${g.items.map(row).join("")}</div></div>`).join("");
+}
+
+/* ---------------------------------------------------------------------
+   Settings
+--------------------------------------------------------------------- */
+function viewSettings() {
+  if (!S.info) return "";
+  const { levels, recommended, hardware: hw } = S.info;
+  const d = S.draft || (S.draft = { level: S.info.settings.level, language: S.info.settings.language });
+  const langKey = d.language === "en" || d.language === null ? d.language : "other";
+  const changed = d.level !== S.info.settings.level || d.language !== S.info.settings.language;
+  const saving = S.run && S.run.kind === "prepare";
+  const rows = Object.entries(levels).map(([key, lv]) => `
+    <div class="grp-row tap" role="radio" tabindex="0" aria-checked="${d.level === key}" data-act="level" data-v="${key}">
+      <span class="radio"></span>
+      <div class="grow"><div class="row"><span class="row-title">${esc(lv.name)}</span>
+          ${key === recommended ? '<span class="pill accent">Recommended</span>' : ""}
+          ${key === S.info.settings.level && S.info.configured ? '<span class="pill">Current</span>' : ""}</div>
+        <div class="row-sub">${esc(lv.about[0].toUpperCase() + lv.about.slice(1))}</div></div>
+      <div class="right sm dim mono">${lv.download}<div class="xs faint">${hw.gpu ? `~${gb(lv.vram_mb)} GB GPU` : "download"}</div></div>
+    </div>`).join("");
+  return `
+    <div class="topbar"><h1>Settings</h1><p>Saved on this PC. Every video uses these until you change them.</p></div>
+    <div class="block"><h2>Quality</h2><div class="grp" role="radiogroup">${rows}</div>
+      <p class="foot">This PC: ${hw.gpu ? `${esc(hw.gpu)} (${gb(hw.vram_mb)} GB)` : "no NVIDIA GPU, so it runs on the CPU"} · ${hw.ram_gb} GB RAM · ${hw.cores} CPU cores.
+        ${d.level === "potato" ? " Potato turns off speaker names and the resource meters." : ""}</p></div>
+    <div class="block"><h2>Language spoken in your videos</h2>
+      <div class="card stack"><div class="seg">${LANGS.map(([v, l]) => `<button data-act="lang" data-v="${v}" aria-selected="${langKey === v}">${l}</button>`).join("")}</div>
+        ${langKey === "other" ? `<div><input type="text" id="lang-code" placeholder="Language code, e.g. zh, ms, ta, ja" value="${esc(d.language === "other" ? "" : d.language)}" maxlength="8" style="max-width:280px"></div>` : ""}
+      </div>
+      <p class="foot">Auto-detect works for most videos. Picking the language is a little more accurate.</p></div>
+    <div class="block">
+      ${saving ? `<div class="card stack"><div class="between"><b>Downloading the model…</b><span class="sm dim">First time only</span></div>
+          <div class="bar indeterminate"><i></i></div><div class="sm dim trunc" id="prep-log">${esc(S.run.log.slice(-1)[0] || "")}</div></div>`
+        : S.run ? `<button class="btn big" disabled>Save</button><p class="foot">You can save once the current video is finished.</p>`
+        : `<button class="btn big" data-act="save" ${changed || !S.info.configured ? "" : "disabled"}>${S.info.configured ? "Save" : "Save and download"}</button>`}
+    </div>
+    ${updatesBlock()}
+    <div class="block"><div class="grp"><div class="grp-row tap danger" role="button" tabindex="0" data-act="uninstall">Uninstall Subtitle Maker…</div></div>
+      <p class="foot">Removes it from this PC. Your videos and subtitles are never touched.</p></div>`;
+}
+
+function versionText(v) {
+  if (!v) return "Unknown (not set up by the installer yet)";
+  return v.sha.slice(0, 7) + (v.date ? " · " + new Date(v.date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "");
+}
+
+function updatesBlock() {
+  const u = S.update, d = u.data || {};
+  let body;
+  switch (u.state) {
+    case "checking": body = `<div class="row dim"><div class="bar indeterminate grow"><i></i></div><span class="sm">Checking GitHub…</span></div>`; break;
+    case "ok": body = `<div class="between"><span class="row"><span class="pill ok">Up to date</span><span class="sm dim">You have the latest version.</span></span>
+        <button class="btn sec sm" data-act="check-update">Check again</button></div>`; break;
+    case "available": body = `<div class="between"><b>A new version is ready</b><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
+        <ul class="steps sm">${(d.news || []).map(n => `<li>${esc(n)}</li>`).join("")}</ul>
+        ${S.run ? `<button class="btn" disabled>Install update</button><p class="sm dim">You can update once the current video is finished.</p>`
+          : `<div><button class="btn" data-act="install-update">Install update</button></div>`}`; break;
+    case "error": body = `<div class="banner bad selectable">${esc(u.error)}</div><div><button class="btn sec sm" data-act="check-update">Try again</button></div>`; break;
+    case "installing": body = `<div class="bar indeterminate"><i></i></div><div class="sm dim" id="update-log">${esc(u.log || "Starting…")}</div>`; break;
+    case "installed": body = `<div class="between"><span class="row"><span class="pill ok">Updated</span><span class="sm dim">Restart the window to use the new version.</span></span>
+        <button class="btn" data-act="restart">Restart now</button></div>`; break;
+    default: body = `<div><button class="btn sec sm" data-act="check-update">Check for updates</button></div>`;
+  }
+  return `<div class="block" id="updates"><h2>Updates</h2><div class="card stack">
+      <div class="between"><span class="row-title">Installed version</span><span class="sm dim mono">${esc(versionText(S.info.version))}</span></div>
+      ${body}</div></div>`;
+}
+
+async function checkUpdate(quiet) {
+  S.update = { state: "checking" };
+  if (S.view === "settings") render();
+  const r = await api().check_update();
+  if (r.error) S.update = { state: quiet ? "idle" : "error", error: r.error };
+  else S.update = { state: r.update ? "available" : "ok", data: r };
+  render();
+}
+
+/* ---------------------------------------------------------------------
+   Help
+--------------------------------------------------------------------- */
+function viewHelp() {
+  return `
+    <div class="topbar"><h1>Using it in Resolve</h1><p>DaVinci Resolve 21 (free) imports .srt files directly.</p></div>
+    <div class="block"><h2>Import</h2><div class="card"><ol class="steps">
+      <li><kbd>File</kbd> › <kbd>Import</kbd> › <kbd>Subtitle</kbd>, then pick the .srt.</li>
+      <li>Drag it from the Media Pool onto the timeline. It makes a subtitle track.</li>
+      <li>Line it up with the start of the timeline, if you used your exported video.</li>
+      <li>To style them, click any subtitle › Inspector › Track. Per line: Inspector › Caption › Customize Caption.</li>
+    </ol></div></div>
+    <div class="block"><h2>Two people on screen at once</h2><div class="card"><p>Resolve shows one subtitle track at a time, so use regions.
+      Put one person's .srt on the track (region R1), right-click <b>inside</b> the subtitle track (not its header) › Add Subtitle Region,
+      and drag the other person's .srt into R2. This works on the Edit page, not the Cut page.</p></div></div>
+    <div class="block"><h2>Better results</h2><div class="card"><ul class="steps">
+      <li>Use your exported video, so the timings match the whole timeline.</li>
+      <li>Speech under loud music gets missed. Export a version with the music muted.</li>
+      <li>Close Resolve and games while it runs, so it can use the graphics card.</li>
+      <li>Check speaker names on short lines like “yeah” or “okay”.</li>
+    </ul></div></div>`;
+}
+
+/* ---------------------------------------------------------------------
+   Who is Speaker N?
+--------------------------------------------------------------------- */
+function showAsk(ev) {
+  S.ask = ev;
+  const voices = (S.info ? S.info.voices : []);
+  const bars = Array.from({ length: 48 }, (_, i) => `<i style="height:${Math.round(20 + 80 * Math.abs(Math.sin(i * 1.7) * Math.cos(i * .45)))}%"></i>`).join("");
+  $("#dialog-root").innerHTML = `
+    <div class="scrim"><div class="dialog stack" role="dialog" aria-modal="true" aria-labelledby="ask-title">
+      <div><h3 id="ask-title">Who is ${esc(ev.label)}?</h3>
+        <div class="sm dim">They talk for ${clock(ev.talk)} in total. Listen, then type their name.</div></div>
+      <div class="player"><button class="playbtn" id="ask-play" aria-label="Play">${ICON.play}</button>
+        <div class="wave" id="ask-wave">${bars}</div><span class="sm dim mono" id="ask-time">0:00</span></div>
+      <audio id="ask-audio" src="${ev.clip}" preload="auto"></audio>
+      <div><h2 style="margin-left:0">Their longest lines</h2>
+        ${ev.lines.map(l => `<div class="quote"><span class="t">${clock(l.start)}</span><span class="selectable">“${esc(l.text)}”</span></div>`).join("")}</div>
+      <div><input type="text" id="ask-name" placeholder="Their name" autocomplete="off" maxlength="40">
+        ${voices.length ? `<div class="chips" style="margin-top:8px">${voices.map(v => `<button class="chip" data-name="${esc(v)}">${esc(v)}</button>`).join("")}</div>` : ""}</div>
+      <div class="row"><button class="btn ghost" id="ask-keep">Keep “${esc(ev.label)}”</button><div class="grow"></div>
+        <button class="btn" id="ask-save">Save name</button></div>
+    </div></div>`;
+  const audio = $("#ask-audio"), play = $("#ask-play"), bars_ = [...document.querySelectorAll("#ask-wave i")];
+  const sync = () => {
+    if (!audio.isConnected) return;  // a late pause/timeupdate after the dialog closed
+    play.innerHTML = audio.paused ? ICON.play : ICON.pause;
+    const f = audio.duration ? audio.currentTime / audio.duration : 0;
+    bars_.forEach((b, i) => b.classList.toggle("on", i / bars_.length < f));
+    $("#ask-time").textContent = clock(audio.currentTime);
+  };
+  ["play", "pause", "timeupdate", "ended"].forEach(e => audio.addEventListener(e, sync));
+  play.onclick = () => audio.paused ? audio.play() : audio.pause();
+  audio.play().catch(() => {});
+  const send = name => { audio.pause(); api().answer(name); $("#dialog-root").innerHTML = ""; S.ask = null; };
+  $("#ask-save").onclick = () => send($("#ask-name").value.trim());
+  $("#ask-keep").onclick = () => send("");
+  $("#ask-name").onkeydown = e => { if (e.key === "Enter") send(e.target.value.trim()); };
+  document.querySelectorAll("#dialog-root .chip").forEach(c => c.onclick = () => { $("#ask-name").value = c.dataset.name; $("#ask-name").focus(); });
+  setTimeout(() => $("#ask-name").focus(), 50);
+}
+
+function confirmBox(title, text, action, onYes) {
+  $("#dialog-root").innerHTML = `<div class="scrim"><div class="dialog stack" role="alertdialog" aria-modal="true" aria-labelledby="cf-title" style="max-width:400px">
+      <div><h3 id="cf-title">${esc(title)}</h3><div class="sm dim" style="margin-top:4px">${esc(text)}</div></div>
+      <div class="row"><button class="btn sec" id="cf-no">Cancel</button><div class="grow"></div><button class="btn dan" id="cf-yes">${esc(action)}</button></div>
+    </div></div>`;
+  const close = () => { $("#dialog-root").innerHTML = ""; };
+  $("#cf-no").onclick = close;
+  $("#cf-yes").onclick = () => { close(); onYes(); };
+  $("#cf-no").focus();
+}
+
+/* ---------------------------------------------------------------------
+   Uninstall: say exactly what goes and what stays, then hand over to app.py
+--------------------------------------------------------------------- */
+function showUninstall(p) {
+  const gone = [`Its Python packages and models (${p.data_gb} GB)`];
+  if (p.program) gone.push(`The program files in <span class="selectable">${esc(p.program)}</span>`);
+  if (p.shortcut) gone.push("The desktop shortcut");
+  gone.push("Your settings");
+  $("#dialog-root").innerHTML = `
+    <div class="scrim"><div class="dialog stack" role="alertdialog" aria-modal="true" aria-labelledby="un-title">
+      <div><h3 id="un-title">Uninstall Subtitle Maker?</h3>
+        <div class="sm dim">This removes from this PC:</div></div>
+      <ul class="list sm">${gone.map(g => `<li>${g}</li>`).join("")}</ul>
+      ${p.voices.length ? `<label class="checkrow"><input type="checkbox" id="un-keep" checked>
+          <span>Keep my ${p.voices.length} voice clip${p.voices.length > 1 ? "s" : ""}<br><span class="sm dim">Moved to <span class="selectable">${esc(p.voices_to)}</span></span></span></label>` : ""}
+      <p class="sm dim">Your videos and .srt files are not touched.${p.program ? "" : " This Tools folder stays too, since the installer didn't make it."}
+        The window closes and a small window finishes the removal.</p>
+      <div class="row"><button class="btn sec" id="un-cancel">Cancel</button><div class="grow"></div>
+        <button class="btn dan" id="un-go">Uninstall</button></div>
+    </div></div>`;
+  $("#un-cancel").onclick = () => { $("#dialog-root").innerHTML = ""; };
+  $("#un-go").onclick = async () => {
+    const keep = $("#un-keep") ? $("#un-keep").checked : true;
+    $("#un-go").disabled = true;
+    if (!await api().uninstall(keep)) { $("#dialog-root").innerHTML = ""; toast("Wait for the current video to finish first.", true); }
+  };
+  $("#un-cancel").focus();
+}
+
+/* ---------------------------------------------------------------------
+   Actions
+--------------------------------------------------------------------- */
+function bind(root) {
+  root.querySelectorAll("[data-act]").forEach(el => {
+    const handler = ACTIONS[el.dataset.act];
+    if (!handler) return;
+    if (el.tagName === "DETAILS") { el.addEventListener("toggle", () => handler(el)); return; }
+    el.onclick = e => { e.stopPropagation(); handler(el); };
+    if (el.getAttribute("role") === "button" || el.getAttribute("role") === "radio")
+      el.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handler(el); } };
+  });
+  const code = $("#lang-code", root);
+  if (code) code.oninput = () => { S.draft.language = code.value.trim().toLowerCase() || "other"; updateSave(); };
+}
+
+function updateSave() {
+  const b = $('[data-act="save"]');
+  if (b) b.disabled = S.info.configured && S.draft.level === S.info.settings.level && S.draft.language === S.info.settings.language;
+}
+
+const ACTIONS = {
+  "out-here": async () => { S.info.settings = await api().set_output_dir(null); render(); },
+  "out-folder": async () => {
+    const dir = await api().choose_folder();
+    if (dir) { S.info.settings = await api().set_output_dir(dir); render(); toast("New subtitles will be saved there."); }
+  },
+  "reveal-dir": el => api().reveal(el.dataset.path),
+  "goto-make": () => go("make"),
+  again: el => app.addFiles([el.dataset.path]),
+  forget: async el => { S.history = await api().remove_history(el.dataset.id); render(); },
+  "clear-history": () => confirmBox("Clear the whole history?", "Only the list is cleared. Your subtitle files stay where they are.",
+    "Clear history", async () => { S.history = await api().clear_history(); render(); }),
+  "goto-updates": () => { go("settings"); setTimeout(() => $("#updates") && $("#updates").scrollIntoView({ behavior: "smooth" }), 80); },
+  "check-update": () => checkUpdate(false),
+  "install-update": async () => {
+    const latest = S.update.data.latest;
+    if (!await api().install_update(latest)) return toast("Wait for the current video to finish.", true);
+    S.update = { state: "installing", data: S.update.data, log: "" }; render();
+  },
+  restart: () => api().restart(),
+  uninstall: async () => {
+    if (S.run) return toast("Wait for the current video to finish first.", true);
+    showUninstall(await api().uninstall_plan());
+  },
+  choose: async () => app.addFiles(await api().choose_files()),
+  remove: el => { S.queue = S.queue.filter(q => !(q.path === el.dataset.path && q.status === "waiting")); render(); },
+  multi: el => { S.multi = el.dataset.v === "1"; render(); },
+  people: el => { S.people = +el.dataset.v; render(); },
+  voices: async () => { S.info.voices = await api().open_voices(); },
+  "goto-settings": () => go("settings"),
+  start: () => next(),
+  cancel: () => { S.cancelAll = true; api().cancel(); },
+  reveal: el => api().reveal(el.dataset.path),
+  "error-log": () => api().open_error_log(),
+  clear: () => { S.queue = S.queue.filter(q => q.status === "waiting"); render(); },
+  log: el => { if (S.run) S.run.logOpen = el.open; },
+  level: el => { S.draft.level = el.dataset.v; render(); },
+  lang: el => { const v = el.dataset.v; S.draft.language = v === "null" ? null : v; render(); if (v === "other") $("#lang-code").focus(); },
+  save: async () => {
+    const lang = S.draft.language === "other" ? null : S.draft.language;
+    S.info.settings = await api().save_settings(S.draft.level, lang);
+    S.info.configured = true;
+    S.draft = null;
+    S.run = { kind: "prepare", log: [] };
+    api().prepare();
+    render();
+  },
+};
+
+/* Starts the next waiting file, if nothing is running. */
+function next() {
+  if (S.run) return;
+  const item = S.queue.find(q => q.status === "waiting");
+  if (!item) { render(); return; }
+  item.status = "working";
+  const potato = S.info.settings.level === "potato";
+  const speakers = S.multi && !potato ? S.people : null;
+  S.run = { kind: "make", item, done: 0, total: 0, stage: "Loading the model", speakers: null, res: null, log: [], startedAt: null };
+  api().start(item.path, speakers);
+  if (S.view === "make") render();
+  else renderSide();
+}
+
+/* ---------------------------------------------------------------------
+   Called from app.py
+--------------------------------------------------------------------- */
+const app = {
+  addFiles(paths) {
+    let added = 0;
+    for (const p of paths || []) {
+      if (S.queue.some(q => q.path === p && (q.status === "waiting" || q.status === "working"))) continue;
+      S.queue.push({ path: p, name: baseName(p), status: "waiting" });
+      added++;
+    }
+    if (!added) return;
+    // A finished batch makes way for the new one
+    if (!S.run) S.queue = S.queue.filter(q => q.status === "waiting");
+    if (S.view !== "make") go("make"); else render();
+  },
+
+  onEvent(ev) {
+    if (ev.type === "update_log") {
+      S.update.log = ev.text;
+      const l = $("#update-log"); if (l) l.textContent = ev.text;
+      return;
+    }
+    if (ev.type === "update_done") {
+      S.update = ev.error ? { state: "error", error: ev.error } : { state: "installed" };
+      if (!ev.error) toast("Updated. Restart the window to use it.");
+      if (S.view === "settings") render();
+      return;
+    }
+    const r = S.run;
+    if (!r) return;
+    switch (ev.type) {
+      case "progress":
+        if (ev.stage === "Transcribing" && !r.startedAt && ev.done === 0) r.startedAt = Date.now();
+        Object.assign(r, { done: ev.done, total: ev.total, stage: ev.stage, speakers: ev.speakers });
+        break;
+      case "resources": r.res = ev; break;
+      case "log":
+        r.log.push(ev.text);
+        if (/^Loading/.test(ev.text)) r.stage = "Loading the model";
+        if (/^Speaker detection on/.test(ev.text)) r.stage = "Starting speaker detection";
+        break;
+      case "ask_speaker": showAsk(ev); return;
+      case "done": if (r.item) { r.item.status = "done"; r.item.files = ev.files; } break;
+      case "error":
+        if (r.item) { r.item.status = "failed"; r.item.error = ev.message; r.item.log = ev.log; }
+        else toast(ev.message, true);
+        break;
+      case "exit": {
+        if (r.item && r.item.status === "working") r.item.status = ev.cancelled ? "cancelled" : "failed";
+        if (r.kind === "prepare" && !ev.code) toast("Saved. The next video uses the new settings.");
+        if (r.kind === "make") { S.history = null; if (S.view === "history") loadHistory(); }
+        S.run = null;
+        $("#dialog-root").innerHTML = "";
+        S.ask = null;
+        if (ev.cancelled || S.cancelAll) {
+          S.queue = S.queue.filter(q => q.status !== "cancelled");
+          S.cancelAll = false;
+          render();
+          toast("Stopped.");
+          return;
+        }
+        next();
+        return;
+      }
+    }
+    if (S.view === "make" && r.kind === "make") patchRunning();
+    else if (S.view === "settings" && r.kind === "prepare") { const l = $("#prep-log"); if (l) l.textContent = r.log.slice(-1)[0] || ""; }
+  },
+};
+
+/* Re-render the running card without re-binding the whole page. */
+function patchRunning() {
+  const card = $("#running");
+  if (!card) return render();
+  const tmp = document.createElement("div");
+  tmp.innerHTML = viewRunning();
+  const fresh = tmp.firstElementChild;
+  // Keep the log's open state and scroll, and animate bars from their current widths
+  card.querySelectorAll(".bar > i").forEach((old, i) => {
+    const nu = fresh.querySelectorAll(".bar > i")[i];
+    if (nu) old.style.width = nu.style.width;
+  });
+  ["#run-pct", "#run-stage", "#run-spk"].forEach(sel => { const a = $(sel, card), b = $(sel, fresh); if (a && b) a.innerHTML = b.innerHTML; });
+  const oldMeters = $(".meters", card), newMeters = $(".meters", fresh);
+  if (newMeters && !oldMeters) $("details", card).before(newMeters);
+  else if (oldMeters && newMeters) oldMeters.querySelectorAll(".meter").forEach((m, i) => {
+    const n = newMeters.querySelectorAll(".meter")[i]; if (!n) return;
+    m.querySelector("b").textContent = n.querySelector("b").textContent;
+    m.className = n.className;
+  });
+  const spk = S.run.speakers != null;
+  if (spk !== !!card.querySelector(".bar.ok")) return render();
+  const log = $("#run-log", card);
+  const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  log.textContent = S.run.log.slice(-40).join("\n");
+  if (stick) log.scrollTop = log.scrollHeight;
+}
+
+/* Drag highlighting. app.py receives the drop itself, because only it can see full file paths. */
+let dragDepth = 0;
+document.addEventListener("dragenter", e => { e.preventDefault(); dragDepth++; document.body.classList.add("dragging"); });
+document.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", () => { dragDepth = 0; document.body.classList.remove("dragging"); });
+
+async function boot() {
+  S.info = await api().init();
+  go(S.info.configured ? "make" : "settings");
+  if (!S.info.configured) toast("Pick a quality level to finish setting up.");
+  checkUpdate(true);  // quietly: only a ready update is shown, not "no internet"
+}
+if (window.pywebview && window.pywebview.api) boot();
+else window.addEventListener("pywebviewready", boot);
+</script>
+</body>
+</html>

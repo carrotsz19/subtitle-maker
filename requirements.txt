@@ -1,0 +1,9 @@
+faster-whisper==1.2.1
+# faster-whisper 1.2.1 breaks with PyAV 16+ (metadata_errors argument)
+av>=14,<16
+sherpa-onnx==2.0.1
+numpy
+psutil
+tqdm
+# The app window (uses Edge WebView2 on Windows, which Windows 10/11 already has)
+pywebview==6.2.1

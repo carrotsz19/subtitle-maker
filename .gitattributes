@@ -1,0 +1,4 @@
+# Windows batch files keep CRLF line endings in the repo itself, so every way of downloading them
+# (zip, raw file, the updater) gives cmd.exe the endings it needs for labels and goto
+*.bat -text
+*.sh text eol=lf
