@@ -295,8 +295,13 @@ def main():
 
     window.events.loaded += on_loaded
     window.events.closing += api.cancel
+    if sys.platform == "win32":
+        import ctypes
+
+        # Its own taskbar button and icon, not grouped under Python's
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Veyra.SubtitleMaker")
     # Keep the web view's profile between launches: a fresh private one each time is slow to make
-    webview.start(private_mode=False, storage_path=str(data_dir() / "webview"))
+    webview.start(private_mode=False, storage_path=str(data_dir() / "webview"), icon=str(HERE / "ui" / "icon.ico"))
 
 
 def report_crash(error):

@@ -30,11 +30,16 @@ jobs:
           prerelease=""
           case "$TAG" in v0.*|*-*) prerelease="--prerelease" ;; esac
           cat > notes.md <<'NOTES'
-          **To install on a Windows PC:** download `Install.Subtitle.Maker.bat` below and double-click it.
-          If Windows says "Windows protected your PC", click **More info**, then **Run anyway**.
-          It installs the latest version, sets everything up and puts a shortcut on the desktop.
+          **To install on a Windows PC** (no security warnings): open PowerShell or Terminal, paste this and press Enter:
 
-          Already installed? Use Settings > Updates in the window, or `Update.bat`.
+          ```powershell
+          irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1 | iex
+          ```
+
+          Or download `Install.Subtitle.Maker.bat` below and double-click it. Your browser and Windows warn about
+          downloaded .bat files: keep it, then click **More info**, **Run anyway**.
+
+          Already installed? It updates itself: Settings > Updates in the window.
           NOTES
           # A pushed tag already exists; a run from the Actions tab makes it on the commit it ran on
           verify=""

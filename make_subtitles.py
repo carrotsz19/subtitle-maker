@@ -24,6 +24,7 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -146,11 +147,14 @@ def gpu_stats():
         return None
 
 
-def resource_stats():
-    """CPU, RAM and (if there is an NVIDIA GPU) GPU use right now, RAM and VRAM in MB."""
+def resource_stats(gpu=True):
+    """CPU, RAM and (if there is an NVIDIA GPU) GPU use right now, RAM and VRAM in MB.
+
+    gpu=False skips asking nvidia-smi, the one slow part (Potato mode).
+    """
     ram = psutil.virtual_memory()
     stats = {"cpu": psutil.cpu_percent(), "ram_used": ram.used / 2**20, "ram_total": ram.total / 2**20}
-    gpu = gpu_stats()
+    gpu = gpu_stats() if gpu else None
     if gpu:
         stats.update(gpu=gpu[0], vram_used=gpu[1], vram_total=gpu[2])
     return stats
@@ -167,9 +171,10 @@ def resource_line(stats=None):
 class ResourceMonitor:
     """Refreshes the resource readout on the progress bar every second and tracks peaks."""
 
-    def __init__(self, bar, extra=None):
+    def __init__(self, bar, extra=None, gpu=True):
         self.bar = bar
         self.extra = extra  # optional callable adding more status, e.g. speaker detection progress
+        self.gpu = gpu  # False: CPU and RAM only, no nvidia-smi polling (Potato mode)
         self.stop_event = threading.Event()
         self.peak_vram = self.peak_ram = 0
         self.thread = threading.Thread(target=self.run, daemon=True)
@@ -177,7 +182,7 @@ class ResourceMonitor:
     def run(self):
         # Sample straight away, so even a run shorter than a second reports its peaks
         while True:
-            stats = resource_stats()
+            stats = resource_stats(self.gpu)
             self.peak_vram = max(self.peak_vram, stats.get("vram_used", 0))
             self.peak_ram = max(self.peak_ram, stats["ram_used"] * 2**20)
             if EVENTS:
@@ -251,6 +256,10 @@ def whisper_source(name):
 def load_model(name, device):
     """Returns (model, device actually used)."""
     name = whisper_source(name)
+    if device == "auto" and not shutil.which("nvidia-smi"):
+        # No NVIDIA card (or no driver): trying CUDA first would only waste a few seconds
+        print("No NVIDIA graphics card found, using the CPU.")
+        device = "cpu"
     if device in ("auto", "cuda"):
         try:
             # Older GPUs (e.g. GTX 10-series) have no fast float16, so pick the best they support
@@ -660,7 +669,8 @@ def make_subtitles(args, level):
                    bar_format="{desc}{percentage:3.0f}%|{bar}| {n:.0f}/{total:.0f}s [{elapsed}<{remaining}]{postfix}",
                    desc="Transcribing ")
     extra = (lambda: f"Speakers {detector.progress:.0%}") if detector else None
-    monitor = None if potato else ResourceMonitor(bar, extra)
+    # Potato still shows CPU and RAM (nearly free to read); only the GPU polling is skipped
+    monitor = ResourceMonitor(bar, extra, gpu=not potato)
     with monitor or contextlib.nullcontext():
         tokens, language = transcribe(whisper, model_name, audio, args.language, 1 if potato else 5, bar)
         bar.update(bar.total - bar.n)

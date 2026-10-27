@@ -123,11 +123,17 @@ Mac / Linux: open Terminal in this folder and run
 INSTALLING ON A NEW PC, AND UPDATES
 -----------------------------------
 Subtitle Maker lives on GitHub: github.com/carrotsz19/subtitle-maker
-On a new PC, download  Install Subtitle Maker.bat  from there and double-click it.
-It downloads the latest version into  C:\Users\<you>\Subtitle Maker , runs Setup,
-and puts a "Subtitle Maker" shortcut on the desktop. Run it again any time to repair.
-(Windows may say "Windows protected your PC" for a downloaded .bat: click
-"More info", then "Run anyway".)
+On a new PC, the quickest way (and the only one with no security warnings):
+   1. Right-click the Start button > Terminal (or open PowerShell).
+   2. Paste this and press Enter:
+        irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1 | iex
+Or download  Install Subtitle Maker.bat  from the repo and double-click it. That does the
+same, but your browser and Windows warn about downloaded .bat files first: keep the file,
+then click "More info" > "Run anyway" on "Windows protected your PC".
+
+Either way it downloads the latest version into  C:\Users\<you>\Subtitle Maker , installs
+what it needs, puts a "Subtitle Maker" shortcut on the desktop and opens the setup window.
+Run it again any time to repair.
 
 To update: Settings > Updates in the window, or double-click  Update.bat
 Your Voices clips, settings and models are kept.

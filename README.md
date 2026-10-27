@@ -3,10 +3,16 @@
 Turns the talking in a video into movie-style subtitles (.srt) for DaVinci Resolve,
 on your own PC. Optional speaker detection labels who is talking.
 
-**New PC:** download `Install Subtitle Maker.bat` from this repo and double-click it.
-It downloads the latest version to
-`%USERPROFILE%\Subtitle Maker`, installs Python and everything else, and puts a shortcut on
-the desktop.
+**New PC:** open PowerShell (right-click Start > Terminal), paste this and press Enter:
+
+```powershell
+irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1 | iex
+```
+
+It downloads the latest version to `%USERPROFILE%\Subtitle Maker`, installs Python and
+everything else, puts a shortcut on the desktop and opens the setup window. No security
+warnings, because nothing is downloaded through the browser. (Prefer double-clicking?
+`Install Subtitle Maker.bat` does the same, after the usual warnings for downloaded files.)
 
 **Updating:** Settings > Updates in the window, or `Update.bat`.
 **Uninstalling:** Settings > Uninstall in the window, or `Uninstall.bat`.
