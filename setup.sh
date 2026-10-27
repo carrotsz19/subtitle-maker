@@ -24,19 +24,23 @@ echo "Using $PY"
 
 [ -x "$HOME_DIR/venv/bin/python" ] || "$PY" -m venv "$HOME_DIR/venv"
 VPY="$HOME_DIR/venv/bin/python"
-echo "Installing packages (a few minutes the first time)..."
-"$VPY" -m pip install -q --upgrade pip
-"$VPY" -m pip install -q -r "$HERE/requirements.txt"
+# pip's own progress bars show the downloads, so a slow connection never looks frozen
+PIP=(-m pip install --disable-pip-version-check --no-input --progress-bar on)
+echo "Python packages (about 300 MB to download the first time, then a few minutes to install)..."
+"$VPY" "${PIP[@]}" -r "$HERE/requirements.txt"
 
 # NVIDIA GPU support (Linux only; Macs run on the CPU)
 if [ "$(uname)" = "Linux" ] && command -v nvidia-smi >/dev/null 2>&1; then
     echo "NVIDIA GPU found, installing GPU support (about 1 GB)..."
-    "$VPY" -m pip install -q -r "$HERE/requirements-gpu.txt"
+    "$VPY" "${PIP[@]}" -r "$HERE/requirements-gpu.txt"
 fi
 
+# The rest happens in the setup window; if this computer can't show one, ask here instead
 echo
-"$VPY" "$HERE/configure.py"
-"$VPY" "$HERE/make_subtitles.py" --prepare
+if ! "$VPY" "$HERE/app.py" --setup; then
+    "$VPY" "$HERE/configure.py"
+    "$VPY" "$HERE/make_subtitles.py" --prepare
+fi
 echo
 echo "All set. Open the window:  bash \"$HERE/app.sh\""
 echo "Or from the terminal:     bash \"$HERE/subtitles.sh\" \"your video.mp4\""

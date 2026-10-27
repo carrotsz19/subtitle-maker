@@ -39,6 +39,7 @@ import psutil
 from tqdm import tqdm
 
 
+import models  # noqa: E402
 from paths import ERROR_LOG, LEVELS, MODELS_DIR, add_history, level_for_model, load_settings  # noqa: E402
 
 
@@ -215,21 +216,54 @@ def preflight(model_name, device):
     return device
 
 
+def download_progress(item, label):
+    """A progress(done_mb, total_mb) callback: events for the window, a bar in a console."""
+    bar = {}
+
+    def progress(done, total):
+        if EVENTS:
+            emit("download", item=item, label=label, done=round(done, 1), total=round(total, 1) if total else None)
+            return
+        if "bar" not in bar:
+            bar["bar"] = tqdm(total=round(total) if total else None, unit="MB", desc=f"Downloading {label} ",
+                              bar_format="{desc}{percentage:3.0f}%|{bar}| {n:.0f}/{total:.0f} MB [{remaining}]"
+                              if total else "{desc}{n:.0f} MB")
+        bar["bar"].update(min(done, bar["bar"].total or done) - bar["bar"].n)
+        if total and done >= total:
+            bar["bar"].close()
+    return progress
+
+
+def whisper_source(name):
+    """The model's folder on this PC, downloading it first if it isn't here yet.
+
+    Loading from the folder means a run never checks the internet once the model is downloaded.
+    """
+    path = models.whisper_path(name)
+    if path:
+        return str(path)
+    level = level_for_model(name)
+    size = f", {level['download']}" if level else ""
+    print(f"Downloading the '{name}' speech model (first time only{size})...")
+    return str(models.download_whisper(name, download_progress("whisper", f"the '{name}' speech model")))
+
+
 def load_model(name, device):
     """Returns (model, device actually used)."""
+    name = whisper_source(name)
     if device in ("auto", "cuda"):
         try:
             # Older GPUs (e.g. GTX 10-series) have no fast float16, so pick the best they support
             supported = ctranslate2.get_supported_compute_types("cuda")
             compute = next(t for t in ("float16", "int8_float16", "int8", "float32") if t in supported)
-            model = WhisperModel(name, device="cuda", compute_type=compute, download_root=str(MODELS_DIR / "whisper"))
+            model = WhisperModel(name, device="cuda", compute_type=compute)
             print(f"Using GPU ({compute}).")
             return model, "cuda"
         except Exception as e:
             if device == "cuda":
                 raise
             print(f"GPU not available ({e.__class__.__name__}), using CPU (slower but fine).")
-    return WhisperModel(name, device="cpu", compute_type="int8", download_root=str(MODELS_DIR / "whisper")), "cpu"
+    return WhisperModel(name, device="cpu", compute_type="int8"), "cpu"
 
 
 def gpu_failed(error):
@@ -550,14 +584,23 @@ def make_subtitles(args, level):
     model_name = args.model or LEVELS[level]["model"]
 
     if args.prepare:
-        print(f"Downloading models to {MODELS_DIR} ...")
-        WhisperModel(model_name, device="cpu", compute_type="int8", download_root=str(MODELS_DIR / "whisper"))
-        if potato:
-            print("Potato mode: skipping the speaker detection models.")
-        else:
-            import speakers
-
-            speakers.ensure_models()
+        # Only what's missing is downloaded; nothing is loaded into memory
+        print(f"Models live in {MODELS_DIR}")
+        try:
+            if models.whisper_path(model_name):
+                print(f"The '{model_name}' speech model is already downloaded.")
+            else:
+                whisper_source(model_name)
+            if potato:
+                print("Potato mode: skipping the speaker detection models.")
+            elif models.speakers_ready():
+                print("The speaker detection models are already downloaded.")
+            else:
+                print("Downloading the speaker detection models (32 MB, first time only)...")
+                models.download_speakers(download_progress("speakers", "the speaker detection models"))
+        except Exception as e:  # no internet looks different from each library; the log has the details
+            raise FriendlyError("Couldn't finish downloading. Check your internet connection and try again; "
+                                "whatever already finished is kept.") from e
         print("Models ready.")
         emit("done", files=[])
         return
@@ -592,6 +635,9 @@ def make_subtitles(args, level):
 
         count = args.speakers or len(speakers.voice_samples(args.voices)) or -1
         print(f"Speaker detection on ({count if count > 0 else 'guessing how many'} people).")
+        if not models.speakers_ready():
+            print("Downloading the speaker detection models (32 MB, first time only)...")
+            models.download_speakers(download_progress("speakers", "the speaker detection models"))
         detector = speakers.SpeakerDetector(count)
 
         def detect():

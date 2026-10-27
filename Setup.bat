@@ -7,6 +7,7 @@ set "VENV_PY=%HOME_DIR%\venv\Scripts\python.exe"
 echo Setting up the subtitle maker in "%HOME_DIR%"
 echo.
 
+echo [1/3] Python
 rem Find Python 3.10 - 3.12
 set PY=
 for %%V in (3.12 3.11 3.10) do if not defined PY py -%%V -c "pass" >nul 2>&1 && set PY=py -%%V
@@ -19,19 +20,23 @@ if not defined PY (
     set PY="%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
 )
 echo Using Python: %PY%
+echo.
 
 if not exist "%VENV_PY%" (
     echo Creating private Python environment...
     %PY% -m venv "%HOME_DIR%\venv" || goto :failed
 )
-echo Installing packages (a few minutes the first time)...
-"%VENV_PY%" -m pip install --quiet --upgrade pip || goto :failed
-"%VENV_PY%" -m pip install --quiet -r "%~dp0requirements.txt" || goto :failed
+rem pip's own progress bars show the downloads, so a slow connection never looks frozen
+set "PIP=-m pip install --disable-pip-version-check --no-input --progress-bar on"
+echo [2/3] Python packages (about 300 MB to download the first time, then a few minutes to install)
+"%VENV_PY%" %PIP% -r "%~dp0requirements.txt" || goto :failed
+echo.
 
+echo [3/3] Graphics card support
 where nvidia-smi >nul 2>&1
 if not errorlevel 1 (
-    echo NVIDIA GPU found, installing GPU support (about 1 GB^)...
-    "%VENV_PY%" -m pip install --quiet -r "%~dp0requirements-gpu.txt" || goto :failed
+    echo NVIDIA GPU found: downloading GPU support ^(about 1 GB, the biggest step^)...
+    "%VENV_PY%" %PIP% -r "%~dp0requirements-gpu.txt" || goto :failed
 ) else (
     powershell -NoProfile -Command "if (Get-CimInstance Win32_VideoController | Where-Object Name -match 'NVIDIA') { exit 0 } else { exit 1 }" >nul 2>&1
     if not errorlevel 1 (
@@ -42,10 +47,20 @@ if not errorlevel 1 (
         echo or the NVIDIA App, restart, then run Setup.bat again.
         echo.
     ) else (
-        echo No NVIDIA GPU found, it will run on the CPU.
+        echo No NVIDIA GPU found, so nothing to download: it will run on the CPU.
     )
 )
 
+rem The installer opens the setup window itself once it has finished
+if /i "%~1"=="--no-window" exit /b 0
+
+rem The rest (quality, language, where subtitles go, downloading models) happens in the setup window
+echo.
+echo Opening the setup window...
+"%VENV_PY%" "%~dp0app.py" --setup
+if not errorlevel 1 exit /b 0
+
+rem No window on this PC (rare), so ask here instead
 echo.
 "%VENV_PY%" "%~dp0configure.py" || goto :failed
 "%VENV_PY%" "%~dp0make_subtitles.py" --prepare || goto :failed

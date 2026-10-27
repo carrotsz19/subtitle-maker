@@ -18,9 +18,11 @@ import webview
 from webview.dom import DOMEventHandler
 
 import configure
+import models
 import uninstall
 import update
-from paths import ERROR_LOG, LEVELS, SETTINGS_FILE, load_history, load_settings, save_history, save_settings
+from paths import (ERROR_LOG, LEVELS, SETTINGS_FILE, data_dir, load_history, load_settings, save_history,
+                   save_settings)
 
 HERE = Path(__file__).parent
 VOICES_DIR = HERE / "Voices"
@@ -88,7 +90,15 @@ class Api:
             "voices": self.voices(),
             "platform": sys.platform,
             "version": update.installed(),
+            "models": self.models_status(),
+            # Setup.bat opens the window with --setup; Update.bat with --update
+            "mode": "setup" if "--setup" in sys.argv else "update" if "--update" in sys.argv else None,
         }
+
+    def models_status(self):
+        """Which speech models are downloaded, per quality level, and whether the speaker models are."""
+        return {"whisper": {key: bool(models.whisper_path(lv["model"])) for key, lv in LEVELS.items()},
+                "speakers": models.speakers_ready()}
 
     def voices(self):
         if not VOICES_DIR.is_dir():
@@ -216,11 +226,15 @@ class Api:
             return {"error": str(e)}
 
     def install_update(self, latest):
-        """Install that version in the background; the page hears update_log, then update_done."""
+        """Install that version in the background; the page hears update_progress, then update_done."""
+        def report(step, done=None, total=None):
+            self.send({"type": "update_progress", "step": step, "done": done, "total": total})
+
         def work():
             try:
-                update.apply(latest, say=lambda text: self.send({"type": "update_log", "text": text}))
-                self.send({"type": "update_done"})
+                # Packages this window has loaded are locked on Windows; finish() installs them after it closes
+                self.pending_packages = update.apply(latest, report, packages=False)
+                self.send({"type": "update_done", "packages": bool(self.pending_packages)})
             except Exception as e:
                 self.send({"type": "update_done", "error": f"The update didn't finish: {e}"})
         if self.process and self.process.poll() is None:
@@ -229,11 +243,11 @@ class Api:
         return True
 
     def restart(self):
-        """Open a fresh window running the new version, and close this one."""
-        exe = Path(sys.executable)
-        pythonw = exe.with_name("pythonw.exe")
-        subprocess.Popen([str(pythonw if pythonw.exists() else exe), str(HERE / "app.py")], cwd=str(HERE),
-                         creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+        """Close this window and open the new version (after installing any new packages)."""
+        # A visible console only when there are packages to install, so the wait isn't a mystery
+        flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if getattr(self, "pending_packages", None) else NO_WINDOW
+        subprocess.Popen([console_python(), str(HERE / "update.py"), "--finish", str(os.getpid())],
+                         cwd=str(HERE), creationflags=flags)
         self.window.destroy()
 
     # ---- uninstalling ------------------------------------------------------------------------
@@ -281,7 +295,8 @@ def main():
 
     window.events.loaded += on_loaded
     window.events.closing += api.cancel
-    webview.start()
+    # Keep the web view's profile between launches: a fresh private one each time is slow to make
+    webview.start(private_mode=False, storage_path=str(data_dir() / "webview"))
 
 
 def report_crash(error):
@@ -307,5 +322,9 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        report_crash(e)
+        if "--setup" in sys.argv:
+            # Setup.bat falls back to asking its questions in the console, so no message box
+            print(f"The setup window couldn't open ({e.__class__.__name__}: {e}).", file=sys.stderr)
+        else:
+            report_crash(e)
         sys.exit(1)

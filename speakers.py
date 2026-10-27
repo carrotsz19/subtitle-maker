@@ -1,21 +1,13 @@
 """Speaker detection for make_subtitles.py: who spoke when, and which voice is whose name."""
 
-import tarfile
-import urllib.request
 from pathlib import Path
 
 import numpy as np
 import sherpa_onnx
 
-from paths import MODELS_DIR
+from models import EMB_MODEL, SEG_MODEL, download_speakers, speakers_ready
 
 SAMPLE_RATE = 16000
-SEG_URL = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/"
-           "speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2")
-SEG_MODEL = MODELS_DIR / "sherpa-onnx-pyannote-segmentation-3-0" / "model.onnx"
-EMB_URL = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/"
-           "speaker-recongition-models/wespeaker_en_voxceleb_resnet34_LM.onnx")
-EMB_MODEL = MODELS_DIR / "wespeaker_en_voxceleb_resnet34_LM.onnx"
 
 AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".mov"}
 MATCH_THRESHOLD = 0.35      # voice similarity needed to trust a name match
@@ -23,18 +15,10 @@ MAX_EMBED_SECONDS = 30      # how much of each speaker's audio to fingerprint
 THREADS = 4
 
 
-def ensure_models():
-    MODELS_DIR.mkdir(exist_ok=True)
-    if not SEG_MODEL.exists():
-        print("Downloading speaker segmentation model (7 MB, first time only)...")
-        archive = MODELS_DIR / "segmentation.tar.bz2"
-        urllib.request.urlretrieve(SEG_URL, archive)
-        with tarfile.open(archive, "r:bz2") as tar:
-            tar.extractall(MODELS_DIR, filter="data")
-        archive.unlink()
-    if not EMB_MODEL.exists():
-        print("Downloading speaker voice model (25 MB, first time only)...")
-        urllib.request.urlretrieve(EMB_URL, EMB_MODEL)
+def ensure_models(progress=None):
+    if not speakers_ready():
+        print("Downloading the speaker detection models (32 MB, first time only)...")
+        download_speakers(progress)
 
 
 def voice_samples(folder):

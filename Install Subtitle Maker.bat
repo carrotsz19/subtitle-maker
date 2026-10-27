@@ -17,15 +17,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-Expression (Get-C
 if errorlevel 1 goto :failed
 set /p SHA=<"%DATA%\install-sha.txt"
 
-rem Python, packages, quality level and models: the same Setup the Tools folder always had
-call "%DEST%\Setup.bat"
+rem Python and its packages, here in the console; the setup window takes it from there
+call "%DEST%\Setup.bat" --no-window
 if errorlevel 1 goto :failed
 "%DATA%\venv\Scripts\python.exe" "%DEST%\update.py" --record %SHA%
 
 powershell -NoProfile -Command "$s = (New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Desktop') + '\Subtitle Maker.lnk'); $s.TargetPath = $env:DEST + '\Subtitle Maker.bat'; $s.WorkingDirectory = $env:DEST; $s.IconLocation = $env:SystemRoot + '\System32\imageres.dll,18'; $s.WindowStyle = 7; $s.Save()"
 echo.
-echo Installed. There's a "Subtitle Maker" shortcut on your desktop. Opening it now...
-start "" "%DEST%\Subtitle Maker.bat"
+echo Installed. There's a "Subtitle Maker" shortcut on your desktop.
+echo Opening the setup window to choose the quality and download what it needs...
+start "" "%DATA%\venv\Scripts\pythonw.exe" "%DEST%\app.py" --setup
 timeout /t 5 >nul
 exit /b 0
 

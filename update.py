@@ -35,12 +35,20 @@ class UpdateError(Exception):
     """Something the user can act on, already worded for them."""
 
 
-def fetch(url, accept="application/vnd.github+json"):
+def fetch(url, accept="application/vnd.github+json", progress=None):
+    """The response body. progress(done_mb, total_mb or None) is called as it arrives."""
     request = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "subtitle-maker-updater",
                                                    "X-GitHub-Api-Version": "2022-11-28"})
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
-            return response.read()
+            if not progress:
+                return response.read()
+            size = int(response.headers.get("Content-Length") or 0) / 2**20 or None
+            chunks = []
+            while chunk := response.read(256 * 1024):
+                chunks.append(chunk)
+                progress(sum(map(len, chunks)) / 2**20, size)
+            return b"".join(chunks)
     except urllib.error.HTTPError as e:
         if e.code == 403 and e.headers.get("X-RateLimit-Remaining") == "0":
             raise UpdateError("GitHub says too many update checks from this network. Try again in an hour.") from e
@@ -122,10 +130,24 @@ def record(sha, date=None, files=None):
     FILES_LIST.unlink(missing_ok=True)
 
 
-def apply(latest, say=print):
-    """Download that version and put it in this folder."""
-    say("Downloading the new version...")
-    data = fetch(f"{API}/zipball/{latest['sha']}", accept="application/vnd.github+json")
+def print_step(step, done=None, total=None):
+    """The default way apply() reports progress: a line per step, in a console."""
+    if done is None:
+        print({"download": "Downloading the new version...", "install": "Installing it...",
+               "packages": "Updating Python packages (a minute or two)...", "done": "Updated."}[step])
+
+
+def apply(latest, report=print_step, packages=True):
+    """Download that version and put it in this folder.
+
+    report(step, done, total) hears each step: download (MB), install (files), packages, done.
+    With packages=False (the app window, whose own packages Windows keeps locked), changed
+    packages are left for finish() to install after the window has closed. Returns the
+    requirements files whose packages still need installing.
+    """
+    report("download")
+    data = fetch(f"{API}/zipball/{latest['sha']}", accept="application/vnd.github+json",
+                 progress=lambda done, total: report("download", done, total))
     old_requirements = {name: file_hash(HERE / name) for name in ("requirements.txt", "requirements-gpu.txt")}
     with tempfile.TemporaryDirectory() as tmp:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -135,11 +157,12 @@ def apply(latest, say=print):
             raise UpdateError("The download didn't look like Subtitle Maker. Nothing was changed.")
         new_root = roots[0]
         new_files = program_files(new_root)
-        say(f"Installing {len(new_files)} files...")
-        for rel in new_files:
+        report("install", 0, len(new_files))
+        for i, rel in enumerate(new_files, 1):
             target = HERE / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(new_root / rel, target)
+            report("install", i, len(new_files))
         # Program files the new version no longer has (never anything else)
         previous = installed()
         for rel in set(previous["files"] if previous else []) - set(new_files):
@@ -147,18 +170,71 @@ def apply(latest, say=print):
                 (HERE / rel).unlink()
     record(latest["sha"], latest.get("date"), new_files)
 
-    changed = [name for name, digest in old_requirements.items() if file_hash(HERE / name) != digest]
-    if "requirements.txt" in changed:
-        say("Updating Python packages (a minute or two)...")
-        pip("requirements.txt")
-    if "requirements-gpu.txt" in changed and shutil.which("nvidia-smi"):
-        pip("requirements-gpu.txt")
-    say("Updated.")
+    changed = [name for name, digest in old_requirements.items() if file_hash(HERE / name) != digest
+               and (name == "requirements.txt" or shutil.which("nvidia-smi"))]
+    if changed and not packages:
+        PENDING_FILE.write_text("\n".join(changed), encoding="utf-8")
+        report("done")
+        return changed
+    if changed:
+        report("packages")
+        for name in changed:
+            pip(name)
+    report("done")
+    return []
 
 
-def pip(requirements):
-    subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-r", str(HERE / requirements)],
-                   check=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+PENDING_FILE = data_dir() / "update-packages.txt"  # packages an update left for after the window closed
+
+
+def finish(wait_pid, reopen=True):
+    """After the window closes: install any packages the update left pending, then reopen it."""
+    wait_for_exit(wait_pid)
+    try:
+        pending = [n for n in PENDING_FILE.read_text(encoding="utf-8").split() if n]
+    except OSError:
+        pending = []
+    if pending:
+        print("Finishing the update: installing new Python packages (a minute or two)...")
+        try:
+            for name in pending:
+                pip(name, quiet=False)
+            PENDING_FILE.unlink(missing_ok=True)
+        except (OSError, subprocess.CalledProcessError) as e:
+            print(f"That didn't work ({e}). Run Setup.bat to fix it.")
+            input("Press Enter to close.")
+            return
+    if reopen:
+        pythonw = Path(sys.executable).with_name("pythonw.exe")
+        subprocess.Popen([str(pythonw if pythonw.exists() else sys.executable), str(HERE / "app.py")], cwd=str(HERE),
+                         creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+
+
+def wait_for_exit(pid, seconds=60):
+    """Wait until the program with this process id has closed (or give up after a minute)."""
+    import time
+
+    end = time.time() + seconds
+    while time.time() < end:
+        if sys.platform == "win32":
+            import ctypes
+
+            handle = ctypes.windll.kernel32.OpenProcess(0x100000, False, pid)  # SYNCHRONIZE
+            if not handle:
+                return
+            ctypes.windll.kernel32.WaitForSingleObject(handle, int((end - time.time()) * 1000))
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return
+        time.sleep(0.3)
+
+
+def pip(requirements, quiet=True):
+    subprocess.run([sys.executable, "-m", "pip", "install", *(["--quiet"] if quiet else []), "-r", str(HERE / requirements)],
+                   check=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if quiet else 0)
 
 
 def describe(version):
@@ -172,16 +248,20 @@ def main():
     parser.add_argument("--yes", action="store_true", help="update without asking")
     parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)  # for the app window
     parser.add_argument("--record", metavar="SHA", help=argparse.SUPPRESS)  # used by the installer
+    parser.add_argument("--finish", type=int, metavar="PID", help=argparse.SUPPRESS)  # used by the app window
     args = parser.parse_args()
     if args.record:
         record(args.record)
+        return
+    if args.finish:
+        finish(args.finish)
         return
 
     interactive = sys.stdin.isatty() and not args.json
     try:
         status = check()
     except UpdateError as e:
-        return finish(args, error=str(e))
+        return fail(args, error=str(e))
 
     if args.json:
         print(json.dumps(status))
@@ -198,10 +278,10 @@ def main():
     try:
         apply(status["latest"])
     except (UpdateError, OSError, subprocess.CalledProcessError) as e:
-        return finish(args, error=f"The update didn't finish: {e}")
+        return fail(args, error=f"The update didn't finish: {e}")
 
 
-def finish(args, error):
+def fail(args, error):
     if args.json:
         print(json.dumps({"error": error}))
     else:
