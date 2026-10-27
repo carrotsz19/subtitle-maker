@@ -302,9 +302,11 @@ def join(words):
     return "".join(w.word for w in words).strip()
 
 
-def build_cues(words):
+def build_cues(words, prefix=None):
     """Group words into cues that fit 2 lines x 42 chars and read naturally.
 
+    prefix(speaker) is the label that will go in front ("Alex: "), so it counts towards the line
+    length; without it, labels pushed some subtitles onto a third line.
     Returns [start, end, text, speaker] lists; a new cue starts whenever the speaker changes.
     """
     cues, current = [], []
@@ -318,7 +320,7 @@ def build_cues(words):
 
     for w in words:
         if current:
-            too_long = not fits(join(current + [w]))
+            too_long = not fits((prefix(w.speaker) if prefix else "") + join(current + [w]))
             too_slow = w.end - current[0].start > MAX_CUE_SECONDS
             paused = w.start - current[-1].end > PAUSE_SPLIT_SECONDS
             sentence_done = current[-1].word.strip().endswith((".", "?", "!"))
@@ -749,9 +751,12 @@ def make_subtitles(args, level):
         return out
 
     names = name_speakers(detector, audio, turns, cues, args.voices)
-    write_srt(out, cues, names, st["speaker_labels"])
-    print(f"\nWrote {len(cues)} labelled subtitles to {out}")
-    files = [{"path": str(out), "name": None, "count": len(cues)}]
+    # Split again now the names are known, so each label fits inside the line length
+    style = st["speaker_labels"]
+    labelled = build_cues(tokens, lambda spk: label("", names[spk], style)) if style != "none" else cues
+    write_srt(out, labelled, names, style)
+    print(f"\nWrote {len(labelled)} labelled subtitles to {out}")
+    files = [{"path": str(out), "name": None, "count": len(labelled)}]
     for spk, name in (names.items() if st["speaker_files"] else []):
         spk_cues = [c for c in cues if c[3] == spk]
         if spk_cues:
@@ -760,7 +765,7 @@ def make_subtitles(args, level):
             write_srt(path, spk_cues)
             print(f"  {name}: {len(spk_cues)} subtitles -> {path.name}")
             files.append({"path": str(path), "name": name, "count": len(spk_cues)})
-    files += save_transcript(st, out, cues, names)
+    files += save_transcript(st, out, labelled, names)
     remember(args, "done", files=files, length=round(total, 1), language=language, speakers=list(names.values()))
     emit("done", files=files)
     return out

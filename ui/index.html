@@ -44,8 +44,9 @@
     --spring-default:linear(0,0.0098,0.036,0.0745,0.1218,0.1752,0.2322,0.2909,0.35,0.4081,0.4645,0.5184,0.5694,0.6172,0.6616,0.7024,0.7398,0.7738,0.8045,0.8321,0.8567,0.8785,0.8978,0.9147,0.9294,0.9422,0.9533,0.9628,0.9709,0.9777,0.9834,0.9882,0.9921,0.9953,0.9979,1,1.0016,1.0028,1.0037,1.0043,1.0047,1.0049,1.005,1.005,1.0049,1.0047,1.0045,1.0042,1.0039,1.0036,1.0033,1.003,1.0027,1.0025,1.0022,1.002,1.0017,1.0015,1.0013,1.0012,1);
   }
 }
+/* Dark: when Windows is dark (unless Settings says Light), or when Settings says Dark */
 @media (prefers-color-scheme:dark){
-  :root{
+  :root:not([data-theme="light"]){
     --bg-grouped:#15140f; --bg-elevated:#1e1c17; --fill-secondary:#272420;
     --fill-tertiary:rgba(236,239,231,.06); --separator:#37342c;
     --label-primary:#f2efe8; --label-secondary:#a29c8f; --label-tertiary:rgba(236,239,231,.42);
@@ -59,6 +60,20 @@
     --hairline:rgba(255,255,255,.07);
     color-scheme:dark;
   }
+}
+:root[data-theme="dark"]{
+    --bg-grouped:#15140f; --bg-elevated:#1e1c17; --fill-secondary:#272420;
+    --fill-tertiary:rgba(236,239,231,.06); --separator:#37342c;
+    --label-primary:#f2efe8; --label-secondary:#a29c8f; --label-tertiary:rgba(236,239,231,.42);
+    --tint:#d9633e; --tint-soft:#3a2a22;
+    --positive:#7fae87; --positive-soft:#22302a;
+    --negative:#d9633e; --negative-soft:#382720;
+    --on-tint:#161310;
+    --elev-1:inset 0 1px 0 rgba(255,255,255,.045), 0 1px 2px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.30);
+    --elev-2:inset 0 1px 0 rgba(255,255,255,.055), 0 2px 8px rgba(0,0,0,.30), 0 12px 28px rgba(0,0,0,.40);
+    --elev-3:inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px rgba(0,0,0,.40), 0 8px 16px rgba(0,0,0,.35), 0 24px 64px rgba(0,0,0,.55);
+    --hairline:rgba(255,255,255,.07);
+    color-scheme:dark;
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{ animation-duration:1ms !important; transition-duration:1ms !important; }
@@ -165,7 +180,8 @@ input[type=text]:focus{ outline:none; border-color:var(--accent); box-shadow:0 0
 .seg{ display:inline-flex; gap:3px; background:var(--panel-2); padding:3px; border-radius:var(--r-control); }
 .seg button{ border:0; background:transparent; color:var(--dim); font-weight:600; padding:6px 14px; min-height:32px; border-radius:7px; font-size:13px; }
 .seg button[aria-selected="true"]{ background:var(--bg-elevated); color:var(--ink); box-shadow:var(--elev-1); }
-@media (prefers-color-scheme:dark){ .seg button[aria-selected="true"]{ background:var(--separator); } }
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .seg button[aria-selected="true"]{ background:var(--separator); } }
+:root[data-theme="dark"] .seg button[aria-selected="true"]{ background:var(--separator); }
 .radio{ width:20px; height:20px; border-radius:99px; box-shadow:inset 0 0 0 2px var(--line); flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:box-shadow .16s var(--ease-standard); }
 [aria-checked="true"] .radio{ box-shadow:inset 0 0 0 6px var(--accent); }
 
@@ -237,6 +253,21 @@ details[open] summary::before{ transform:rotate(90deg); }
 kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px; padding:1px 6px; font-size:12.5px; }
 
 @media (max-width:860px){ .meters{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* ---------- settings: switches and the subtitle preview ---------- */
+.switch{ width:50px; height:30px; border-radius:99px; border:0; padding:2px; background:var(--line); flex-shrink:0; position:relative;
+  transition:background-color .2s var(--ease-standard); }
+.switch span{ display:block; width:26px; height:26px; border-radius:99px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25);
+  transition:transform var(--spring-snappy-ms) var(--spring-snappy); }
+.switch[aria-checked="true"]{ background:var(--ok); }
+.switch[aria-checked="true"] span{ transform:translateX(20px); }
+.grp-row .seg{ flex-shrink:0; }
+.frames{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.frame{ aspect-ratio:16/9; border-radius:10px; position:relative; overflow:hidden; display:flex; align-items:flex-end; justify-content:center;
+  padding:0 8px 7%; background:radial-gradient(ellipse at 30% 20%, #5b6470, #262a31 70%); }
+.frame i{ position:absolute; top:7px; left:9px; font-style:normal; font-size:10.5px; font-weight:700; color:rgba(255,255,255,.55); }
+.frame span{ color:#fff; font-size:11.5px; line-height:1.35; font-weight:600; text-align:center; white-space:pre; text-shadow:0 1px 2px #000, 0 0 6px rgba(0,0,0,.6); }
+.prefs-input{ max-width:100%; }
 
 /* ---------- starting screen ---------- */
 .loader{ position:fixed; inset:0; z-index:100; background:var(--bg); display:flex; flex-direction:column; align-items:center;
@@ -544,9 +575,9 @@ function viewResults(items) {
       ${first ? `<button class="btn" data-act="reveal" data-path="${esc(first.path)}">${ICON.folder} Show in folder</button>` : ""}</div>` : ""}
     ${files.length ? `<div class="grp inset" style="box-shadow:none;background:var(--panel-2)">${files.map(f => `
       <div class="grp-row has-icon tap" data-act="reveal" data-path="${esc(f.path)}" role="button" tabindex="0" title="Show in folder">
-        <div class="tile-icon ${f.name ? "" : "t-accent"}">${f.name ? ICON.person : ICON.srt}</div>
+        <div class="tile-icon ${f.name || f.kind ? "" : "t-accent"}">${f.name ? ICON.person : f.kind ? ICON.file : ICON.srt}</div>
         <div class="grow"><div class="row-title trunc">${esc(baseName(f.path))}</div>
-          <div class="row-sub">${f.count} subtitles${f.name ? ` · only ${esc(f.name)}'s lines` : ""}</div></div>
+          <div class="row-sub">${f.kind === "transcript" ? "Transcript of everything said" : `${f.count} subtitles${f.name ? ` · only ${esc(f.name)}'s lines` : ""}`}</div></div>
         <span class="faint">${ICON.folder}</span></div>`).join("")}</div>` : ""}
     ${bad.map(q => `<div class="banner bad"><b>${esc(q.name)}</b><br><span class="selectable">${esc(q.error || "It stopped unexpectedly.")}</span>
         ${q.log ? `<br><button class="linkbtn" data-act="error-log" style="margin-top:6px">Open the error details</button>` : ""}</div>`).join("")}
@@ -646,9 +677,115 @@ function viewSettings() {
         : S.run ? `<button class="btn big" disabled>Save</button><p class="foot">You can save once the current video is finished.</p>`
         : `<button class="btn big" data-act="save" ${changed || !S.info.configured ? "" : "disabled"}>${S.info.configured ? "Save" : "Save and download"}</button>`}
     </div>
+    ${prefsBlocks()}
     ${updatesBlock()}
     <div class="block"><div class="grp"><div class="grp-row tap danger" role="button" tabindex="0" data-act="uninstall">Uninstall Subtitle Maker…</div></div>
       <p class="foot">Removes it from this PC. Your videos and subtitles are never touched.</p></div>`;
+}
+
+/* Settings that save the moment they change */
+const PREF_OPTIONS = {
+  max_chars: [[32, "32"], [37, "37"], [42, "42"], [50, "50"]],
+  max_lines: [[1, "1"], [2, "2"]],
+  min_seconds: [[0.7, "0.7 s"], [1.0, "1 s"], [1.5, "1.5 s"]],
+  max_seconds: [[4.0, "4 s"], [6.0, "6 s"], [8.0, "8 s"]],
+  pause_split: [[0.4, "Short"], [0.7, "Normal"], [1.2, "Long"]],
+  speaker_labels: [["name", "Alex: Hi"], ["dash", "- Hi"], ["none", "None"]],
+  device: [["auto", "Automatic"], ["cuda", "Graphics card"], ["cpu", "Processor"]],
+  theme: [["system", "Match Windows"], ["light", "Light"], ["dark", "Dark"]],
+};
+const PREVIEW_TEXT = "So today I wanted to slow down and actually look at the street I walk every day, the one I never notice.";
+
+function segPref(key) {
+  const now = S.info.settings[key];
+  return `<div class="seg">${PREF_OPTIONS[key].map(([v, l]) =>
+    `<button data-act="pref" data-k="${key}" data-v='${JSON.stringify(v)}' aria-selected="${now === v}">${esc(l)}</button>`).join("")}</div>`;
+}
+function switchPref(key) {
+  const on = !!S.info.settings[key];
+  return `<button class="switch" role="switch" aria-checked="${on}" aria-label="${key}" data-act="pref" data-k="${key}" data-v='${!on}'><span></span></button>`;
+}
+function prefRow(title, sub, control) {
+  return `<div class="grp-row"><div class="grow"><div class="row-title">${title}</div>${sub ? `<div class="row-sub">${sub}</div>` : ""}</div>${control}</div>`;
+}
+
+/* The same line-breaking as make_subtitles.py (greedy wrap, then as even as possible), to preview it */
+function wrapLines(text, width) {
+  const lines = []; let cur = "";
+  for (const w of text.split(" ")) {
+    if (!cur) cur = w; else if ((cur + " " + w).length <= width) cur += " " + w; else { lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+function evenLines(text, maxChars, maxLines) {
+  if (text.length <= maxChars) return [text];
+  for (let width = Math.floor(text.length / 2) + 1; width <= maxChars; width++) {
+    const lines = wrapLines(text, width); if (lines.length <= maxLines) return lines;
+  }
+  return wrapLines(text, maxChars);
+}
+function previewCues(st) {
+  const lab = st.speaker_labels === "name" ? "Alex: " : st.speaker_labels === "dash" ? "- " : "";
+  // The label counts towards the line length, as in make_subtitles.py
+  const fits = t => wrapLines(lab + t, st.max_chars).length <= st.max_lines;
+  const cues = []; let cur = [];
+  for (const w of PREVIEW_TEXT.split(" ")) {
+    if (cur.length && !fits([...cur, w].join(" "))) {
+      // Like make_subtitles.py: break after a comma in the back half, so a short tail isn't left alone
+      let comma = -1; cur.forEach((x, i) => { if (x.endsWith(",")) comma = i; });
+      const cut = comma >= Math.floor(cur.length / 2) ? comma + 1 : cur.length;
+      cues.push(cur.slice(0, cut).join(" ")); cur = cur.slice(cut);
+    }
+    cur.push(w);
+  }
+  if (cur.length) cues.push(cur.join(" "));
+  return cues.map(c => evenLines(lab + c, st.max_chars, st.max_lines));
+}
+
+function prefsBlocks() {
+  const st = S.info.settings;
+  const frames = previewCues(st).slice(0, 2).map((lines, i) => `<div class="frame"><i>${i + 1}</i><span>${lines.map(esc).join("\n")}</span></div>`).join("");
+  return `
+    <div class="block"><h2>Subtitle style</h2>
+      <div class="card stack"><div class="frames" aria-label="Preview">${frames}</div>
+        <p class="xs dim">Preview of how a sentence splits, with the settings below. Fonts and colours are set in Resolve.</p></div>
+      <div class="grp" style="margin-top:12px">
+        ${prefRow("Characters per line", "42 is the film and TV standard; fewer suits phones.", segPref("max_chars"))}
+        ${prefRow("Lines per subtitle", "One line covers less of the picture.", segPref("max_lines"))}
+        ${prefRow("Shortest time on screen", "So quick lines can still be read.", segPref("min_seconds"))}
+        ${prefRow("Longest time on screen", "Longer lines are split.", segPref("max_seconds"))}
+        ${prefRow("New subtitle after a pause", "How long a gap in speech starts a new one.", segPref("pause_split"))}
+      </div></div>
+    <div class="block"><h2>Speakers</h2><div class="grp">
+        ${prefRow("Name labels", "How each line shows who's talking (with Several people).", segPref("speaker_labels"))}
+        ${prefRow("Also save one file per person", "Handy for Resolve's subtitle regions.", switchPref("speaker_files"))}
+      </div></div>
+    <div class="block"><h2>Accuracy</h2><div class="grp">
+        <div class="grp-row" style="flex-wrap:wrap"><div class="grow" style="min-width:220px"><div class="row-title">Words to spell right</div>
+            <div class="row-sub">Names, places and brands it might mishear, separated by commas.</div></div>
+          <input type="text" id="hotwords" class="prefs-input" style="flex:1;min-width:240px" maxlength="500"
+            placeholder="e.g. Jamie, Singapore Polytechnic, DaVinci" value="${esc(st.hotwords)}"></div>
+        ${prefRow("Remove filler words", "Leaves out um, uh, er and hmm.", switchPref("remove_fillers"))}
+        ${prefRow("Skip music and silence", "Turn off if quiet speech gets missed.", switchPref("vad"))}
+        ${prefRow("Run on", S.info.hardware.gpu ? "Automatic uses the graphics card when it has room." : "This PC has no NVIDIA graphics card, so it uses the processor.", segPref("device"))}
+      </div></div>
+    <div class="block"><h2>When it's done</h2><div class="grp">
+        ${prefRow("Play a sound", "", switchPref("done_sound"))}
+        ${prefRow("Open the folder", "Shows the subtitles once everything in the queue is done.", switchPref("open_folder"))}
+        ${prefRow("Also save a transcript", "A plain .txt of everything said, next to the .srt.", switchPref("transcript"))}
+      </div></div>
+    <div class="block"><h2>Appearance</h2><div class="grp">
+        ${prefRow("Colours", "", segPref("theme"))}
+        ${prefRow("Check for updates automatically", "Security updates are always shown.", switchPref("auto_update"))}
+      </div>
+      <p class="foot"><button class="linkbtn" data-act="reset-prefs">Reset these settings to their defaults</button></p></div>`;
+}
+
+function applyTheme() {
+  const t = S.info.settings.theme;
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
 }
 
 function versionText(v) {
@@ -686,6 +823,8 @@ async function checkUpdate(quiet) {
   const r = await api().check_update();
   if (r.error) S.update = { state: quiet && !sheet ? "idle" : "error", error: r.error, sheet };
   else S.update = { state: r.update ? "available" : "ok", data: r, sheet };
+  // Automatic checks off: a quiet check keeps everything but a security update to itself
+  if (quiet && r.update && r.kind !== "security" && !S.info.settings.auto_update) S.update = { state: "idle" };
   // A security update doesn't wait to be noticed
   if (quiet && r.update && r.kind === "security" && !S.run && !S.setup) S.update.sheet = true;
   render();
@@ -1027,6 +1166,8 @@ function bind(root) {
     if (el.getAttribute("role") === "button" || el.getAttribute("role") === "radio")
       el.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handler(el); } };
   });
+  const hot = $("#hotwords", root);
+  if (hot) hot.onchange = async () => { S.info.settings = await api().save_prefs({ hotwords: hot.value.trim() }); toast("Saved."); };
   const wizCode = $("#wiz-code", root);
   if (wizCode) wizCode.oninput = () => { S.setup.language = wizCode.value.trim().toLowerCase() || "other"; };
   const code = $("#lang-code", root);
@@ -1039,6 +1180,14 @@ function updateSave() {
 }
 
 const ACTIONS = {
+  pref: async el => {
+    const key = el.dataset.k;
+    S.info.settings = await api().save_prefs({ [key]: JSON.parse(el.dataset.v) });
+    if (key === "theme") applyTheme();
+    render();
+  },
+  "reset-prefs": () => confirmBox("Reset these settings?", "Subtitle style, speakers, accuracy, when it's done and appearance go back to how they started. Quality, language and where subtitles go stay as they are.",
+    "Reset", async () => { S.info.settings = await api().reset_prefs(); applyTheme(); render(); toast("Settings reset."); }),
   "out-here": async () => { S.info.settings = await api().set_output_dir(null); render(); },
   "out-folder": async () => {
     const dir = await api().choose_folder();
@@ -1103,7 +1252,14 @@ const ACTIONS = {
 function next() {
   if (S.run) return;
   const item = S.queue.find(q => q.status === "waiting");
-  if (!item) { render(); return; }
+  if (!item) {
+    // The whole queue is done: show where the subtitles went, if Settings says to
+    const first = (S.batch || []).find(Boolean);
+    if (first && S.info.settings.open_folder) api().reveal(first);
+    S.batch = [];
+    render();
+    return;
+  }
   item.status = "working";
   const potato = S.info.settings.level === "potato";
   const speakers = S.multi && !potato ? S.people : null;
@@ -1164,7 +1320,9 @@ const app = {
         if (/^Speaker detection on/.test(ev.text)) r.stage = "Starting speaker detection";
         break;
       case "ask_speaker": showAsk(ev); return;
-      case "done": if (r.item) { r.item.status = "done"; r.item.files = ev.files; } break;
+      case "done":
+        if (r.item) { r.item.status = "done"; r.item.files = ev.files; (S.batch = S.batch || []).push(ev.files[0] && ev.files[0].path); }
+        break;
       case "error":
         if (r.item) { r.item.status = "failed"; r.item.error = ev.message; r.item.log = ev.log; }
         else if (r.after) r.error = ev.message;
@@ -1283,11 +1441,13 @@ async function boot() {
 }
 
 async function startApp() {
+  applyTheme();
   if (S.info.mode === "setup" || !S.info.configured) startSetup();
   go("make");
   requestAnimationFrame(() => api().page_ready());  // for startup.log
   if (S.info.mode === "update") openUpdate();  // opened by Update.bat
   // Quietly, and a few seconds in so it doesn't slow the start: only a ready update is shown
+  // Even with automatic checks off this looks, but then only speaks up for a security update
   else setTimeout(() => checkUpdate(true), 4000);
 }
 if (window.pywebview && window.pywebview.api) boot();

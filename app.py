@@ -25,8 +25,8 @@ import configure  # noqa: E402
 import models  # noqa: E402
 import uninstall  # noqa: E402
 import update  # noqa: E402
-from paths import (ERROR_LOG, LEVELS, SETTINGS_FILE, data_dir, load_history, load_settings, save_history,
-                   save_settings)  # noqa: E402
+from paths import (DEFAULT_SETTINGS, ERROR_LOG, LEVELS, SETTINGS_FILE, data_dir, load_history,  # noqa: E402
+                   load_settings, save_history, save_settings)
 
 HERE = Path(__file__).parent
 VOICES_DIR = HERE / "Voices"
@@ -81,7 +81,10 @@ def watchdog():
 
 
 def dark_mode():
-    """Is Windows set to dark apps? Then the window starts dark too, instead of flashing white."""
+    """Will the window be dark? Then it starts dark too, instead of flashing white."""
+    theme = load_settings()["theme"]
+    if theme != "system":
+        return theme == "dark"
     if sys.platform != "win32":
         return False
     try:
@@ -248,7 +251,7 @@ class Api:
             if line.startswith(EVENT_PREFIX):
                 event = json.loads(line[len(EVENT_PREFIX):])
                 reported |= event["type"] in ("done", "error")
-                if event["type"] == "done" and sys.platform == "win32":
+                if event["type"] == "done" and sys.platform == "win32" and load_settings()["done_sound"]:
                     import winsound
 
                     winsound.MessageBeep()
@@ -289,6 +292,25 @@ class Api:
     def choose_folder(self):
         picked = self._window.create_file_dialog(webview.FileDialog.FOLDER)
         return picked[0] if picked else None
+
+    # Settings that take effect straight away (quality and language have their own Save, since
+    # they can mean a download)
+    _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
+               "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "done_sound",
+               "open_folder", "theme", "auto_update")
+
+    def save_prefs(self, changes):
+        """Save some instant settings; anything not allowed falls back to its default."""
+        settings = load_settings()
+        settings.update({k: v for k, v in changes.items() if k in self._INSTANT})
+        save_settings(settings)
+        return load_settings()  # the cleaned-up version
+
+    def reset_prefs(self):
+        settings = load_settings()
+        settings.update({k: DEFAULT_SETTINGS[k] for k in self._INSTANT})
+        save_settings(settings)
+        return settings
 
     def set_output_dir(self, folder):
         """None = next to each video. Saved straight away; no download needed."""
