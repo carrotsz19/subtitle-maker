@@ -67,7 +67,9 @@ assert json.loads(HISTORY_FILE.read_text(encoding="utf-8"))[0]["status"] == "don
 r = run(JFK)
 assert r.returncode == 0 and (WORK / "jfk (2).srt").exists(), "the second run must not overwrite the first"
 
-# 3. Two speakers: the clip, a sped-up (higher) copy, and the clip again
+# 3. Speaker detection for real: its models download and every line gets a label. (Whether it
+# tells two voices apart is the model's job; a reliable fixture for that would need two real
+# speakers. tests/test_units.py checks what happens to the speakers it finds.)
 from faster_whisper.audio import decode_audio  # noqa: E402
 
 voice = decode_audio(str(JFK), sampling_rate=16000)
@@ -81,10 +83,13 @@ with wave.open(str(WORK / "two.wav"), "wb") as w:
     w.writeframes((np.clip(two, -1, 1) * 32767).astype("<i2").tobytes())
 # Fast quality allows speakers; --model base reuses Potato's model instead of downloading Fast's
 r = run(WORK / "two.wav", "--level", "fast", "--model", "base", "--speakers", "2")
-assert r.returncode == 0
-labelled = check_srt(WORK / "two.srt")
-assert "Speaker 1:" in labelled and "Speaker 2:" in labelled, labelled
+assert r.returncode == 0 and "Speaker detection on (2 people)" in r.stdout
 assert models.speakers_ready()
+text = (WORK / "two.srt").read_text(encoding="utf-8")
+cues = [b.splitlines()[2:] for b in text.strip().split("\n\n")]
+assert all(re.match(r"Speaker [12]: ", c[0]) for c in cues), text
+check_srt(WORK / "two.srt")
+assert list(WORK.glob("two - Speaker *.srt")), "each speaker's own file should be saved too"
 
 # 4. The worker keeps the model loaded between videos
 worker = subprocess.Popen([PY, str(ROOT / "make_subtitles.py"), "--serve", "--events"], stdin=subprocess.PIPE,

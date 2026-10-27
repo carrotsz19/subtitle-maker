@@ -38,6 +38,20 @@ for name in ("Alex", "Christopher-Jamie"):
         lines = ms.wrap(ms.label(cue[2], name, "name")).splitlines()
         assert len(lines) <= ms.MAX_LINES and all(len(x) <= ms.MAX_LINE_CHARS for x in lines), lines
 
+# Speakers: each word goes to whoever was talking, a new subtitle starts when the speaker changes,
+# and voice samples pair up with the closest detected speaker (each name used once)
+import speakers  # noqa: E402
+
+turns = [(0.0, 2.0, 0), (2.5, 4.0, 1), (4.2, 6.0, 0)]
+assert [speakers.speaker_at(s, e, turns) for s, e in ((0.5, 0.9), (1.9, 2.8), (3.0, 3.5), (4.05, 4.1), (9, 9.5))] == [0, 1, 1, 1, 0]
+toks = [ms.Token(" " + w, s, s + 0.3, speakers.speaker_at(s, s + 0.3, turns))
+        for w, s in (("Hi", 0.2), ("there.", 0.6), ("Hello", 2.6), ("back.", 3.0), ("Bye.", 4.5))]
+assert [c[3] for c in ms.build_cues(toks)] == [0, 1, 0]
+e = np.eye(3)
+prints = {0: e[0], 1: (e[0] + e[1]) / np.sqrt(2)}
+assert speakers.match_names(prints, {"Alex": e[0], "Sam": e[1]}) == {0: ("Alex", 1.0), 1: ("Sam", float(prints[1] @ e[1]))}
+assert speakers.match_names(prints, {"Nobody": e[2]}) == {}
+
 # Filler words
 assert ms.is_filler(" Um,") and ms.is_filler("uh.") and not ms.is_filler("umbrella")
 
