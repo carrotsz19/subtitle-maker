@@ -70,13 +70,26 @@ SAMPLE_RATE = 16000
 # A transcribed word, plus who said it (None when speakers aren't being detected)
 Token = namedtuple("Token", "word start end speaker")
 
-# Movie subtitle conventions
+# Movie subtitle conventions (the defaults; Settings can change them, see apply_style)
 MAX_LINE_CHARS = 42
 MAX_LINES = 2
 MAX_CUE_SECONDS = 6.0
 MIN_CUE_SECONDS = 1.0
 PAUSE_SPLIT_SECONDS = 0.7   # a pause this long starts a new subtitle
 GAP_BETWEEN_CUES = 0.08     # keep cues from touching so they don't flicker
+FILLERS = {"um", "umm", "uh", "uhh", "er", "erm", "hmm", "mm", "mhm", "ah"}
+
+
+def apply_style(settings):
+    """Use the subtitle style chosen in Settings instead of the defaults above."""
+    global MAX_LINE_CHARS, MAX_LINES, MIN_CUE_SECONDS, MAX_CUE_SECONDS, PAUSE_SPLIT_SECONDS
+    MAX_LINE_CHARS, MAX_LINES = settings["max_chars"], settings["max_lines"]
+    MIN_CUE_SECONDS, MAX_CUE_SECONDS = settings["min_seconds"], settings["max_seconds"]
+    PAUSE_SPLIT_SECONDS = settings["pause_split"]
+
+
+def is_filler(word):
+    return word.strip().strip(".,!?;:\"'").lower() in FILLERS
 
 VOICE_CLIP_SECONDS = 7.0    # how much of a speaker to play when asking who they are
 
@@ -381,13 +394,32 @@ def remember(args, status, **details):
                      "level": args.level, "model": args.model or LEVELS[args.level]["model"], **details})
 
 
-def write_srt(path, cues, names=None):
-    """Write cues to an .srt; with names, prefix each line with who is speaking."""
+def label(text, name, style):
+    """A line with who said it: "Alex: Hi" (name), "- Hi" (dash, as in dialogue) or just "Hi" (none)."""
+    if style == "name" and name:
+        return f"{name}: {text}"
+    return f"- {text}" if style == "dash" else text
+
+
+def write_srt(path, cues, names=None, style="name"):
+    """Write cues to an .srt; with names, mark each line with who is speaking."""
     with open(path, "w", encoding="utf-8") as f:
         for i, (start, end, text, speaker) in enumerate(cues, 1):
             if names:
-                text = f"{names[speaker]}: {text}"
+                text = label(text, names[speaker], style)
             f.write(f"{i}\n{timestamp(start)} --> {timestamp(end)}\n{wrap(text)}\n\n")
+
+
+def write_transcript(path, cues, names=None):
+    """A plain-text transcript: one paragraph per speaker turn, or after a long pause."""
+    paragraphs, last = [], None
+    for start, end, text, speaker in cues:
+        if paragraphs and speaker == last[3] and start - last[1] < 2.0:
+            paragraphs[-1] += " " + text
+        else:
+            paragraphs.append(f"{names[speaker]}: {text}" if names else text)
+        last = (start, end, text, speaker)
+    path.write_text("\n\n".join(paragraphs) + "\n", encoding="utf-8")
 
 
 def set_title(text):
@@ -403,22 +435,25 @@ def set_title(text):
         sys.stdout.flush()
 
 
-def announce_done(path):
-    """Beep and open the folder with the new file selected."""
+def announce_done(path, sound=True, reveal=True):
+    """Beep and/or open the folder with the new file selected (as chosen in Settings)."""
     if not IN_CONSOLE:
         return
     try:
-        if sys.platform == "win32":
-            import winsound
+        if sound:
+            if sys.platform == "win32":
+                import winsound
 
-            winsound.MessageBeep()
-            subprocess.Popen(f'explorer /select,"{path}"')
-        elif sys.platform == "darwin":
-            print("\a", end="", flush=True)
-            subprocess.Popen(["open", "-R", str(path)])
-        else:
-            print("\a", end="", flush=True)
-            subprocess.Popen(["xdg-open", str(path.parent)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                winsound.MessageBeep()
+            else:
+                print("\a", end="", flush=True)
+        if reveal:
+            if sys.platform == "win32":
+                subprocess.Popen(f'explorer /select,"{path}"')
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path.parent)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         pass
 
@@ -561,18 +596,20 @@ def name_speakers(detector, audio, turns, cues, voices_dir):
     return names
 
 
-def transcribe(whisper, model_name, audio, language, beam_size, bar):
+def transcribe(whisper, model_name, audio, language, beam_size, bar, options=None):
     """Transcribe audio into Tokens, moving to the CPU if the GPU runs out of memory partway through.
 
     whisper is {"model": ..., "device": ...}; it is the only reference to the model, so swapping it
-    for a CPU one frees the GPU memory. Returns (tokens, detected language).
+    for a CPU one frees the GPU memory. options go to faster-whisper (vad_filter, hotwords).
+    Returns (tokens, detected language).
     """
+    options = {"vad_filter": True, **(options or {})}
     tokens, done = [], 0.0  # done = seconds of audio fully transcribed so far
     while True:
         offset = done  # timestamps from this attempt are relative to where it started
         try:
             segments, info = whisper["model"].transcribe(audio[int(offset * SAMPLE_RATE):], language=language,
-                                              word_timestamps=True, vad_filter=True, beam_size=beam_size)
+                                              word_timestamps=True, beam_size=beam_size, **options)
             language = info.language  # keep it the same if we have to resume on the CPU
             for seg in segments:
                 tokens.extend(Token(w.word, w.start + offset, w.end + offset, None) for w in seg.words)
@@ -672,7 +709,9 @@ def make_subtitles(args, level):
     # Potato still shows CPU and RAM (nearly free to read); only the GPU polling is skipped
     monitor = ResourceMonitor(bar, extra, gpu=not potato)
     with monitor or contextlib.nullcontext():
-        tokens, language = transcribe(whisper, model_name, audio, args.language, 1 if potato else 5, bar)
+        st = args.settings
+        options = {"vad_filter": st["vad"], "hotwords": st["hotwords"].strip() or None}
+        tokens, language = transcribe(whisper, model_name, audio, args.language, 1 if potato else 5, bar, options)
         bar.update(bar.total - bar.n)
         if detector:
             bar.set_description_str("Finishing speaker detection ")
@@ -690,6 +729,8 @@ def make_subtitles(args, level):
             peaks = f"Peak VRAM {monitor.peak_vram / 1024:.1f}GB  " + peaks
         print(f"{peaks}  (whole system, all apps)")
 
+    if st["remove_fillers"]:
+        tokens = [t for t in tokens if not is_filler(t.word)]
     if not tokens:
         raise FriendlyError("No speech found. If there's loud music, try a version with the music muted.")
     if turns:
@@ -702,15 +743,16 @@ def make_subtitles(args, level):
         write_srt(out, cues)
         print(f"Wrote {len(cues)} subtitles to {out}")
         files = [{"path": str(out), "name": None, "count": len(cues)}]
+        files += save_transcript(st, out, cues)
         remember(args, "done", files=files, length=round(total, 1), language=language, speakers=[])
         emit("done", files=files)
         return out
 
     names = name_speakers(detector, audio, turns, cues, args.voices)
-    write_srt(out, cues, names)
+    write_srt(out, cues, names, st["speaker_labels"])
     print(f"\nWrote {len(cues)} labelled subtitles to {out}")
     files = [{"path": str(out), "name": None, "count": len(cues)}]
-    for spk, name in names.items():
+    for spk, name in (names.items() if st["speaker_files"] else []):
         spk_cues = [c for c in cues if c[3] == spk]
         if spk_cues:
             safe_name = "".join(ch for ch in name if ch not in '<>:"/\\|?*')
@@ -718,13 +760,25 @@ def make_subtitles(args, level):
             write_srt(path, spk_cues)
             print(f"  {name}: {len(spk_cues)} subtitles -> {path.name}")
             files.append({"path": str(path), "name": name, "count": len(spk_cues)})
+    files += save_transcript(st, out, cues, names)
     remember(args, "done", files=files, length=round(total, 1), language=language, speakers=list(names.values()))
     emit("done", files=files)
     return out
 
 
+def save_transcript(settings, out, cues, names=None):
+    """The optional .txt transcript next to the .srt; returns its entry for the file list."""
+    if not settings["transcript"]:
+        return []
+    path = unique_path(out.with_suffix(".txt"))
+    write_transcript(path, cues, names)
+    print(f"  Transcript -> {path.name}")
+    return [{"path": str(path), "name": None, "count": len(cues), "kind": "transcript"}]
+
+
 def main():
     settings = load_settings()
+    apply_style(settings)
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("input", type=Path, nargs="?", help="video or audio file")
     parser.add_argument("--prepare", action="store_true",
@@ -735,7 +789,8 @@ def main():
                                         "e.g. tiny, base, small, medium, large-v3-turbo, large-v3")
     parser.add_argument("--language", default=settings["language"],
                         help=f"e.g. en, or 'auto' to detect it (default: {settings['language'] or 'auto'}, from Settings)")
-    parser.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
+    parser.add_argument("--device", default=settings["device"], choices=["auto", "cuda", "cpu"],
+                        help=f"auto, cuda (the graphics card) or cpu (default: {settings['device']}, from Settings)")
     parser.add_argument("--out", type=Path, help="output .srt path (default: next to input, or the subtitles folder)")
     parser.add_argument("--out-dir", type=Path, default=settings.get("output_dir"),
                         help="folder to save subtitles in (default: "
@@ -746,6 +801,7 @@ def main():
     parser.add_argument("--voices", type=Path, default=VOICES_DIR, help="folder of voice clips named after each person")
     parser.add_argument("--events", action="store_true", help=argparse.SUPPRESS)  # used by the app window
     args = parser.parse_args()
+    args.settings = settings
     if args.events:
         global EVENTS
         EVENTS = True
@@ -776,7 +832,7 @@ def main():
                  "Send that file along if you ask for help.")
     if out:
         set_title(f"Done - {out.name}")
-        announce_done(out)
+        announce_done(out, settings["done_sound"], settings["open_folder"])
 
 
 def log_error(error):

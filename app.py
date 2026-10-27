@@ -41,9 +41,12 @@ class Timings:
 
     def __init__(self):
         self.marks = []
+        self.ready = threading.Event()
 
     def mark(self, stage):
         self.marks.append((stage, time.perf_counter() - STARTED))
+        if stage == "window ready to use":
+            self.ready.set()
 
     def save(self):
         try:
@@ -55,6 +58,26 @@ class Timings:
 
 
 TIMINGS = Timings()
+READY_WITHIN = 40  # seconds before the watchdog says something
+
+
+def watchdog():
+    """If the window still isn't ready after READY_WITHIN seconds, note it in startup.log and ask
+    whether to keep waiting. This runs outside the window, so it works even if the window froze."""
+    while not TIMINGS.ready.wait(READY_WITHIN):
+        TIMINGS.mark(f"NOT READY after {READY_WITHIN} more seconds (last step above is where it got stuck)")
+        TIMINGS.save()
+        if sys.platform != "win32":
+            continue
+        import ctypes
+
+        answer = ctypes.windll.user32.MessageBoxW(
+            None, "Subtitle Maker is taking much longer than usual to open.\n\n"
+                  "Retry keeps waiting. Cancel closes it; open it again, and if it keeps happening, "
+                  f"send the file {STARTUP_LOG} along.",
+            "Subtitle Maker", 0x5 | 0x30 | 0x40000)  # Retry/Cancel, warning icon, on top
+        if answer == 2:  # Cancel
+            os._exit(1)
 
 
 def dark_mode():
@@ -96,20 +119,23 @@ class Api:
     """Everything the page can ask for. Each method is window.pywebview.api.<name>() in the page."""
 
     def __init__(self):
-        self.window = None
-        self.process = None
-        self.lock = threading.Lock()
+        # Everything that isn't for the page starts with _: pywebview walks every public attribute
+        # (and theirs, recursively) on the window's main thread to build the page's API, and walking
+        # into the window and its .NET form froze the window at startup ("Not Responding")
+        self._window = None
+        self._process = None
+        self._lock = threading.Lock()
         # Look at the PC (nvidia-smi can take a second or two) while the window is still opening,
         # so the page never waits for it
-        self.probe = {}
-        self.probe_thread = threading.Thread(target=self.look_at_pc, daemon=True)
-        self.probe_thread.start()
+        self._probe = {}
+        self._probe_thread = threading.Thread(target=self.look_at_pc, daemon=True)
+        self._probe_thread.start()
 
     def look_at_pc(self):
         gpu = configure.nvidia_gpu()
         ram_gb = psutil.virtual_memory().total / 2**30
         cores = psutil.cpu_count(logical=False) or os.cpu_count() or 2
-        self.probe.update(
+        self._probe.update(
             recommended=configure.recommend(gpu, ram_gb, cores),
             hardware={"gpu": gpu[0] if gpu else None, "vram_mb": gpu[1] if gpu else None,
                       "ram_gb": round(ram_gb), "cores": cores},
@@ -120,32 +146,32 @@ class Api:
     # ---- talking to the page ----------------------------------------------------------------
 
     def send(self, event):
-        if self.window:
-            self.window.evaluate_js(f"app.onEvent({json.dumps(event)})")
+        if self._window:
+            self._window.evaluate_js(f"app.onEvent({json.dumps(event)})")
             if event["type"] == "progress" and event.get("total"):
-                self.window.set_title(f"{event['done'] / event['total']:.0%} · Subtitle Maker")
+                self._window.set_title(f"{event['done'] / event['total']:.0%} · Subtitle Maker")
 
     def on_drop(self, event):
         files = event.get("dataTransfer", {}).get("files", [])
         paths = [f["pywebviewFullPath"] for f in files if f.get("pywebviewFullPath")]
         if paths:
-            self.window.evaluate_js(f"app.addFiles({json.dumps(paths)})")
+            self._window.evaluate_js(f"app.addFiles({json.dumps(paths)})")
 
     # ---- state ------------------------------------------------------------------------------
 
     def init(self):
         TIMINGS.mark("page asked for its data")
-        self.probe_thread.join()  # normally long finished by now
+        self._probe_thread.join()  # normally long finished by now
         return {
             "settings": load_settings(),
             "configured": SETTINGS_FILE.exists(),
             "levels": LEVELS,
-            "recommended": self.probe["recommended"],
-            "hardware": self.probe["hardware"],
+            "recommended": self._probe["recommended"],
+            "hardware": self._probe["hardware"],
             "voices": self.voices(),
             "platform": sys.platform,
             "version": update.installed(),
-            "models": self.probe["models"],
+            "models": self._probe["models"],
             # Setup.bat opens the window with --setup; Update.bat with --update
             "mode": "setup" if "--setup" in sys.argv else "update" if "--update" in sys.argv else None,
         }
@@ -154,6 +180,18 @@ class Api:
         """The page has drawn itself: the window is fully open."""
         TIMINGS.mark("window ready to use")
         TIMINGS.save()
+
+    def restart_app(self):
+        """Close this window and open a fresh one (the page offers this if starting goes wrong)."""
+        exe = Path(sys.executable)
+        pythonw = exe.with_name("pythonw.exe")
+        subprocess.Popen([str(pythonw if pythonw.exists() else exe), str(HERE / "app.py")], cwd=str(HERE),
+                         creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+        self._window.destroy()
+
+    def open_startup_log(self):
+        TIMINGS.save()
+        open_in_file_manager(STARTUP_LOG)
 
     def models_status(self):
         """Which speech models are downloaded, per quality level, and whether the speaker models are."""
@@ -168,7 +206,7 @@ class Api:
     def choose_files(self):
         kinds = ("Video and audio (*.mp4;*.mov;*.mkv;*.avi;*.m4v;*.webm;*.wav;*.mp3;*.m4a;*.flac;*.ogg;*.aac)",
                  "All files (*.*)")
-        picked = self.window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=True, file_types=kinds)
+        picked = self._window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=True, file_types=kinds)
         return list(picked or [])
 
     # ---- running make_subtitles.py ------------------------------------------------------------
@@ -185,18 +223,18 @@ class Api:
         return self.run(["--prepare"])
 
     def run(self, args):
-        with self.lock:
-            if self.process and self.process.poll() is None:
+        with self._lock:
+            if self._process and self._process.poll() is None:
                 return False
             env = {**os.environ, "PYTHONUNBUFFERED": "1", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
                    "PYTHONIOENCODING": "utf-8"}
-            self.process = subprocess.Popen(
+            self._process = subprocess.Popen(
                 [console_python(), str(HERE / "make_subtitles.py"), *args, "--events"],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, encoding="utf-8", errors="replace", bufsize=1,
                 cwd=str(HERE), env=env, creationflags=NO_WINDOW,
             )
-        threading.Thread(target=self.follow, args=(self.process,), daemon=True).start()
+        threading.Thread(target=self.follow, args=(self._process,), daemon=True).start()
         return True
 
     def follow(self, process):
@@ -223,20 +261,20 @@ class Api:
             tail = "".join(errors).strip().splitlines()
             self.send({"type": "error", "message": tail[-1] if tail else f"It stopped unexpectedly (code {code}).",
                        "log": None})
-        if self.window:
-            self.window.set_title("Subtitle Maker")
+        if self._window:
+            self._window.set_title("Subtitle Maker")
         self.send({"type": "exit", "code": code, "cancelled": getattr(process, "cancelled", False)})
 
     def answer(self, name):
         """The name typed for the speaker the run is asking about."""
-        if self.process and self.process.poll() is None:
-            self.process.stdin.write(name.replace("\n", " ") + "\n")
-            self.process.stdin.flush()
+        if self._process and self._process.poll() is None:
+            self._process.stdin.write(name.replace("\n", " ") + "\n")
+            self._process.stdin.flush()
 
     def cancel(self):
-        if self.process and self.process.poll() is None:
-            self.process.cancelled = True
-            self.process.kill()
+        if self._process and self._process.poll() is None:
+            self._process.cancelled = True
+            self._process.kill()
 
     # ---- settings and folders ---------------------------------------------------------------
 
@@ -249,7 +287,7 @@ class Api:
     # ---- where subtitles go ------------------------------------------------------------------
 
     def choose_folder(self):
-        picked = self.window.create_file_dialog(webview.FileDialog.FOLDER)
+        picked = self._window.create_file_dialog(webview.FileDialog.FOLDER)
         return picked[0] if picked else None
 
     def set_output_dir(self, folder):
@@ -293,11 +331,11 @@ class Api:
         def work():
             try:
                 # Packages this window has loaded are locked on Windows; finish() installs them after it closes
-                self.pending_packages = update.apply(latest, report, packages=False)
-                self.send({"type": "update_done", "packages": bool(self.pending_packages)})
+                self._pending_packages = update.apply(latest, report, packages=False)
+                self.send({"type": "update_done", "packages": bool(self._pending_packages)})
             except Exception as e:
                 self.send({"type": "update_done", "error": f"The update didn't finish: {e}"})
-        if self.process and self.process.poll() is None:
+        if self._process and self._process.poll() is None:
             return False
         threading.Thread(target=work, daemon=True).start()
         return True
@@ -305,10 +343,10 @@ class Api:
     def restart(self):
         """Close this window and open the new version (after installing any new packages)."""
         # A visible console only when there are packages to install, so the wait isn't a mystery
-        flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if getattr(self, "pending_packages", None) else NO_WINDOW
+        flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if getattr(self, "_pending_packages", None) else NO_WINDOW
         subprocess.Popen([console_python(), str(HERE / "update.py"), "--finish", str(os.getpid())],
                          cwd=str(HERE), creationflags=flags)
-        self.window.destroy()
+        self._window.destroy()
 
     # ---- uninstalling ------------------------------------------------------------------------
 
@@ -317,10 +355,10 @@ class Api:
 
     def uninstall(self, keep_voices=True):
         """Start the removal (it waits for this window to close), then close the window."""
-        if self.process and self.process.poll() is None:
+        if self._process and self._process.poll() is None:
             return False
         uninstall.start(keep_voices, os.getpid())
-        self.window.destroy()
+        self._window.destroy()
         return True
 
     def reveal(self, path):
@@ -338,12 +376,13 @@ class Api:
 
 def main():
     TIMINGS.mark("Python and the app's code loaded")
+    threading.Thread(target=watchdog, daemon=True).start()
     api = Api()
     window = webview.create_window(
         "Subtitle Maker", str(HERE / "ui" / "index.html"), js_api=api,
         width=1040, height=720, min_size=(760, 560), background_color="#15140f" if dark_mode() else "#f3f1ec",
     )
-    api.window = window
+    api._window = window
     # Videos dropped onto the "Subtitle Maker.bat" icon arrive as arguments
     opened_with = [str(Path(a).absolute()) for a in sys.argv[1:] if Path(a).is_file()]
 

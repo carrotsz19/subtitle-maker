@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import io
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -73,6 +74,22 @@ def installed():
     return version if version.get("folder") == str(HERE.resolve()) else None
 
 
+# What kind of update a change is, from the start of its commit message ("Security: ..."), most
+# serious first. The app makes more noise the more serious the most serious waiting change is.
+KINDS = ("security", "hotfix", "feature", "improvement")
+KIND_WORDS = {"security": "security", "hotfix": "hotfix", "fix": "hotfix", "feature": "feature",
+              "improvement": "improvement"}
+
+
+def change(message):
+    """{"kind", "text"} for one commit: "Hotfix: Window froze" -> hotfix, "Window froze"."""
+    line = message.splitlines()[0].strip()
+    m = re.match(r"(\w+)\s*:\s*(.+)", line)
+    if m and m.group(1).lower() in KIND_WORDS:
+        return {"kind": KIND_WORDS[m.group(1).lower()], "text": m.group(2)}
+    return {"kind": "improvement", "text": line}
+
+
 def check():
     """What's on GitHub compared with what's installed. Raises UpdateError."""
     commit = fetch_json(f"/commits/{BRANCH}")
@@ -83,11 +100,14 @@ def check():
     if current and current["sha"] != latest["sha"]:
         try:
             compare = fetch_json(f"/compare/{current['sha']}...{latest['sha']}")
-            news = [c["commit"]["message"].splitlines()[0] for c in compare.get("commits", [])][-10:]
+            news = [change(c["commit"]["message"]) for c in compare.get("commits", [])]
         except UpdateError:
             pass  # the list of changes is a nicety; the update itself still works
+    news = news or [change(latest["message"])]
+    # Most serious first, then newest first; ten is plenty to read
+    news = sorted(reversed(news), key=lambda n: KINDS.index(n["kind"]))[:10]
     return {"repo": REPO, "latest": latest, "installed": current,
-            "update": not current or current["sha"] != latest["sha"], "news": news or [latest["message"]]}
+            "update": not current or current["sha"] != latest["sha"], "news": news, "kind": news[0]["kind"]}
 
 
 def program_files(root):
@@ -270,7 +290,9 @@ def main():
     if not status["update"]:
         print("You have the latest version.")
         return
-    print("What's new:\n" + "\n".join(f"  - {line}" for line in status["news"]))
+    print("What's new:\n" + "\n".join(f"  - [{n['kind']}] {n['text']}" for n in status["news"]))
+    if status["kind"] == "security":
+        print("This includes a security update: please install it.")
     if args.check:
         return
     if not args.yes and interactive and input("Update now? [Y/n] ").strip().lower() not in ("", "y", "yes"):

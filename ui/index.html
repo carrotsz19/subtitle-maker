@@ -238,6 +238,16 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 
 @media (max-width:860px){ .meters{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
 
+/* ---------- starting screen ---------- */
+.loader{ position:fixed; inset:0; z-index:100; background:var(--bg); display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:14px; text-align:center; padding:24px; transition:opacity .35s var(--ease-out); }
+.loader img{ border-radius:18px; box-shadow:var(--elev-2); }
+.loader b{ font-size:17px; }
+.loader .bar{ width:220px; height:6px; }
+.loader p{ margin:0; max-width:420px; color:var(--dim); font-size:13.5px; white-space:pre-line; }
+.loader.problem .bar{ display:none; }
+.loader.gone{ opacity:0; pointer-events:none; }
+
 /* ---------- setup wizard: the sidebar steps aside ---------- */
 body.wizard .shell{ grid-template-columns:1fr; }
 body.wizard aside.side{ display:none; }
@@ -257,6 +267,9 @@ body.wizard aside.side{ display:none; }
 .fact b{ display:block; font-size:15px; margin-top:3px; }
 
 /* ---------- update sheet ---------- */
+.newslist{ display:flex; flex-direction:column; gap:8px; font-size:13.5px; }
+.news{ display:flex; gap:10px; align-items:baseline; }
+.news .pill{ flex-shrink:0; min-width:64px; text-align:center; }
 .steplist{ display:flex; flex-direction:column; gap:12px; }
 .step{ display:flex; gap:12px; align-items:flex-start; }
 .step .dot{ width:24px; height:24px; border-radius:99px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--panel-2); color:var(--faint); font-size:12px; font-weight:800; }
@@ -267,6 +280,14 @@ body.wizard aside.side{ display:none; }
 </style>
 </head>
 <body>
+<!-- Shown until the app is ready; it says so if starting takes too long or goes wrong -->
+<div id="loader" class="loader" role="status" aria-live="polite">
+  <img src="icon.svg" width="72" height="72" alt="">
+  <b id="loader-title">Starting Subtitle Maker</b>
+  <div class="bar indeterminate" id="loader-bar"><i></i></div>
+  <p id="loader-text">Getting things ready…</p>
+  <div id="loader-actions" class="row"></div>
+</div>
 <div class="shell">
   <aside class="side">
     <div class="brand">
@@ -400,8 +421,7 @@ function viewMake() {
     <div class="topbar"><h1>Make subtitles</h1>
       <p>Drop a video and get a .srt you can import into DaVinci Resolve.</p></div>
     <div class="stack">
-      ${S.update.state === "available" && !busy ? `<div class="banner between"><span>A new version of Subtitle Maker is ready.</span>
-          <button class="btn sm" data-act="open-update">See what's new</button></div>` : ""}
+      ${S.update.state === "available" && !busy && S.update.data.kind !== "improvement" ? updateBanner(S.update.data.kind) : ""}
       ${busy ? viewRunning() : showResult ? viewResults(last) : ""}
       ${busy || showResult ? dropZone(true) : dropZone(false)}
       ${S.queue.some(q => q.status === "waiting") ? queueList() : ""}
@@ -643,8 +663,8 @@ function updatesBlock() {
     case "checking": body = `<div class="row dim"><div class="bar indeterminate grow"><i></i></div><span class="sm">Checking GitHub…</span></div>`; break;
     case "ok": body = `<div class="between"><span class="row"><span class="pill ok">Up to date</span><span class="sm dim">You have the latest version.</span></span>
         <button class="btn sec sm" data-act="check-update">Check again</button></div>`; break;
-    case "available": body = `<div class="between"><b>A new version is ready</b><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
-        <ul class="steps sm">${(d.news || []).map(n => `<li>${esc(n)}</li>`).join("")}</ul>
+    case "available": body = `<div class="between"><b>${(UPDATE_KINDS[d.kind] || UPDATE_KINDS.improvement).title}</b><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
+        ${newsList(d.news)}
         ${S.run ? `<button class="btn" disabled>Install update</button><p class="sm dim">You can update once the current video is finished.</p>`
           : `<div><button class="btn" data-act="install-update">Install update</button></div>`}`; break;
     case "error": body = `<div class="banner bad selectable">${esc(u.error)}</div><div><button class="btn sec sm" data-act="check-update">Try again</button></div>`; break;
@@ -666,8 +686,31 @@ async function checkUpdate(quiet) {
   const r = await api().check_update();
   if (r.error) S.update = { state: quiet && !sheet ? "idle" : "error", error: r.error, sheet };
   else S.update = { state: r.update ? "available" : "ok", data: r, sheet };
+  // A security update doesn't wait to be noticed
+  if (quiet && r.update && r.kind === "security" && !S.run && !S.setup) S.update.sheet = true;
   render();
   renderUpdateSheet();
+}
+
+/* What kind of update: the most serious waiting change decides how much it speaks up */
+const UPDATE_KINDS = {
+  security: { pill: "Security", cls: "bad", banner: "A security update is ready. Please install it.", title: "Security update ready" },
+  hotfix: { pill: "Fix", cls: "accent", banner: "An important fix is ready.", title: "An important fix is ready" },
+  feature: { pill: "New", cls: "ok", banner: "New features are ready.", title: "New features are ready" },
+  improvement: { pill: "Improved", cls: "", banner: "A new version is ready.", title: "A new version is ready" },
+};
+
+function updateBanner(kind) {
+  const k = UPDATE_KINDS[kind] || UPDATE_KINDS.improvement;
+  return `<div class="banner between${kind === "security" ? " bad" : ""}"><span>${k.banner}</span>
+      <button class="btn sm${kind === "security" ? " dan" : ""}" data-act="open-update">${kind === "security" ? "Update now" : "See what's new"}</button></div>`;
+}
+
+function newsList(news) {
+  return `<div class="newslist">${(news || []).map(n => {
+    const k = UPDATE_KINDS[n.kind] || UPDATE_KINDS.improvement;
+    return `<div class="news"><span class="pill ${k.cls}">${k.pill}</span><span>${esc(n.text)}</span></div>`;
+  }).join("")}</div>`;
 }
 
 /* ---------------------------------------------------------------------
@@ -828,7 +871,7 @@ function renderUpdateSheet() {
       actions = `<div class="grow"></div><button class="btn" data-up="close">Done</button>`; break;
     case "available":
       body = `<div class="between"><span class="sm dim">New version</span><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
-        <div><h2 style="margin-left:0">What's new</h2><ul class="steps sm">${(d.news || []).map(n => `<li>${esc(n)}</li>`).join("")}</ul></div>
+        <div><h2 style="margin-left:0">What's new</h2>${newsList(d.news)}</div>
         <p class="sm dim">Takes about a minute. Your voice clips, settings, models and history are kept.</p>`;
       actions = S.run ? `<span class="sm dim grow">You can update once the current video is finished.</span><button class="btn sec" data-up="close">Later</button>`
         : `<button class="btn sec" data-up="close">Later</button><div class="grow"></div><button class="btn" data-up="install">Update now</button>`; break;
@@ -851,7 +894,8 @@ function renderUpdateSheet() {
   const fresh = !root.querySelector("#update-sheet");
   root.innerHTML = `<div class="scrim" id="update-sheet" ${fresh ? "" : 'style="animation:none"'}><div class="dialog stack" role="dialog" aria-modal="true" aria-labelledby="up-title" ${fresh ? "" : 'style="animation:none"'}>
       <div class="row"><div class="tile-icon t-accent">${ICON.again}</div><h3 id="up-title">${
-        { checking: "Checking for updates", ok: "Subtitle Maker is up to date", available: "A new version is ready", installing: "Updating Subtitle Maker",
+        { checking: "Checking for updates", ok: "Subtitle Maker is up to date",
+          available: (UPDATE_KINDS[d.kind] || UPDATE_KINDS.improvement).title, installing: "Updating Subtitle Maker",
           installed: "Update installed" }[u.state] || "The update didn't work"}</h3></div>
       ${body}<div class="row">${actions}</div></div></div>`;
   root.querySelectorAll("[data-up]").forEach(b => b.onclick = () => UPDATE_ACTIONS[b.dataset.up]());
@@ -1190,8 +1234,55 @@ document.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth
 document.addEventListener("dragover", e => e.preventDefault());
 document.addEventListener("drop", () => { dragDepth = 0; document.body.classList.remove("dragging"); });
 
+/* ---------------------------------------------------------------------
+   Starting up: the loader says what's happening, and speaks up if it's slow or broken
+--------------------------------------------------------------------- */
+const BOOT = { stage: "connecting the window to Subtitle Maker", done: false };
+
+function loaderSay(title, text) {
+  $("#loader-title").textContent = title;
+  $("#loader-text").textContent = text;
+}
+
+function loaderProblem(text, detail) {
+  if (BOOT.done) return;
+  const box = $("#loader");
+  box.classList.add("problem");
+  loaderSay("Subtitle Maker didn't start properly", text + (detail ? "\n\n" + detail : ""));
+  const hasApi = !!(window.pywebview && window.pywebview.api);
+  $("#loader-actions").innerHTML = `<button class="btn" id="ld-retry">Try again</button>
+    ${hasApi ? `<button class="btn sec" id="ld-restart">Restart</button><button class="btn ghost" id="ld-log">Open the startup log</button>` : ""}`;
+  $("#ld-retry").onclick = () => location.reload();
+  if (hasApi) {
+    $("#ld-restart").onclick = () => api().restart_app();
+    $("#ld-log").onclick = () => api().open_startup_log();
+  }
+}
+
+setTimeout(() => { if (!BOOT.done) loaderSay("Still starting…", "This can take a little longer the first time after installing or updating."); }, 8000);
+setTimeout(() => loaderProblem(`It got stuck ${BOOT.stage}.`,
+  "Try again usually fixes it. If it keeps happening, restart your PC, or run Setup.bat to repair."), 25000);
+
+function loaderDone() {
+  BOOT.done = true;
+  const box = $("#loader");
+  box.classList.add("gone");
+  setTimeout(() => box.remove(), 400);
+}
+
 async function boot() {
-  S.info = await api().init();
+  BOOT.stage = "loading your settings";
+  try {
+    S.info = await api().init();
+  } catch (e) {
+    return loaderProblem("It couldn't load your settings.", String(e && e.message || e));
+  }
+  BOOT.stage = "drawing the window";
+  try { await startApp(); } catch (e) { return loaderProblem("Something went wrong while opening.", String(e && e.message || e)); }
+  loaderDone();
+}
+
+async function startApp() {
   if (S.info.mode === "setup" || !S.info.configured) startSetup();
   go("make");
   requestAnimationFrame(() => api().page_ready());  // for startup.log

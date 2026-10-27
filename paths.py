@@ -43,7 +43,25 @@ LEVELS = {
 
 # High (large-v3-turbo) measured as fast as small and more accurate on a GTX 1050, so it is the default
 # output_dir None = save each .srt next to its video
-DEFAULT_SETTINGS = {"level": "high", "language": "en", "output_dir": None}
+DEFAULT_SETTINGS = {
+    "level": "high", "language": "en", "output_dir": None,
+    # How subtitles look (movie conventions by default)
+    "max_chars": 42, "max_lines": 2, "min_seconds": 1.0, "max_seconds": 6.0, "pause_split": 0.7,
+    # Speakers: "name" = "Alex: Hi", "dash" = "- Hi", "none" = no labels
+    "speaker_labels": "name", "speaker_files": True,
+    # Accuracy: words to spell right (names, places), drop um/uh, skip music and silence, device
+    "hotwords": "", "remove_fillers": False, "vad": True, "device": "auto",
+    # When a video is done, and the app itself
+    "transcript": False, "done_sound": True, "open_folder": True, "theme": "system", "auto_update": True,
+}
+# The values each setting may take; anything else (a hand-edited file, an old version) goes back to the default
+SETTING_CHOICES = {
+    "max_chars": (32, 37, 42, 50), "max_lines": (1, 2), "min_seconds": (0.7, 1.0, 1.5),
+    "max_seconds": (4.0, 6.0, 8.0), "pause_split": (0.4, 0.7, 1.2), "speaker_labels": ("name", "dash", "none"),
+    "speaker_files": (True, False), "remove_fillers": (True, False), "vad": (True, False),
+    "device": ("auto", "cuda", "cpu"), "transcript": (True, False), "done_sound": (True, False),
+    "open_folder": (True, False), "theme": ("system", "light", "dark"), "auto_update": (True, False),
+}
 
 
 def load_settings():
@@ -53,6 +71,12 @@ def load_settings():
         settings = dict(DEFAULT_SETTINGS)
     if settings["level"] not in LEVELS:
         settings["level"] = DEFAULT_SETTINGS["level"]
+    for key, allowed in SETTING_CHOICES.items():
+        if settings[key] not in allowed:
+            settings[key] = DEFAULT_SETTINGS[key]
+    if not isinstance(settings["hotwords"], str):
+        settings["hotwords"] = ""
+    settings["hotwords"] = settings["hotwords"][:500]
     return settings
 
 
