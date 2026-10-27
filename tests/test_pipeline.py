@@ -95,7 +95,7 @@ assert list(WORK.glob("two - Speaker *.srt")), "each speaker's own file should b
 worker = subprocess.Popen([PY, str(ROOT / "make_subtitles.py"), "--serve", "--events"], stdin=subprocess.PIPE,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", bufsize=1, env=ENV)
 log, finished = [], []
-for _ in range(2):
+for _ in range(3):
     worker.stdin.write(json.dumps({"type": "job", "argv": [str(JFK), "--events"]}) + "\n")
     worker.stdin.flush()
     for line in worker.stdout:
@@ -109,8 +109,9 @@ for _ in range(2):
 worker.stdin.close()
 worker.wait(timeout=60)
 print("--- worker log:\n" + "\n".join(log))
-assert finished == [0, 0], finished
-assert sum("Loading 'base' model" in x for x in log) == 1, "the model should load once for two videos"
+print("--- worker stderr:\n" + worker.stderr.read()[-3000:])
+assert finished == [0, 0, 0], finished
+assert sum("Loading 'base' model" in x for x in log) == 1, "the model should load once for three videos"
 assert any("already loaded" in x for x in log)
 
 print(f"Pipeline tests passed ({WORK})")

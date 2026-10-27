@@ -926,6 +926,10 @@ def serve():
                 code = 0
             except SystemExit as e:
                 code = e.code if isinstance(e.code, int) else 1
+            except Exception as e:  # never take the worker down with one video
+                log_error(e)
+                emit("error", message=f"Something went wrong: {e.__class__.__name__}: {e}", log=str(ERROR_LOG))
+                code = 1
             emit("finished", code=code)
 
 
@@ -968,10 +972,12 @@ def main(argv=None):
     parser.add_argument("--serve", action="store_true", help=argparse.SUPPRESS)  # used by the app window
     args = parser.parse_args(argv)
     args.settings = settings
-    if args.events:
+    if args.events and not SERVE:
         global EVENTS
         EVENTS = True
-        # The window reads this through a pipe: send each line as soon as it is printed, in UTF-8
+        # The window reads this through a pipe: send each line as soon as it is printed, in UTF-8.
+        # Only once: in --serve the jobs come through stdin, and Python can't change a stream's
+        # encoding after reading from it (that killed the worker on its second video).
         sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
         sys.stdin.reconfigure(encoding="utf-8")
     if args.language == "auto":
