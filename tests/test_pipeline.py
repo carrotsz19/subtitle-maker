@@ -45,7 +45,7 @@ def check_srt(path, max_chars=42, max_lines=2):
         assert re.match(r"\d\d:\d\d:\d\d,\d\d\d --> \d\d:\d\d:\d\d,\d\d\d$", b[1]), b
         lines = b[2:]
         assert 1 <= len(lines) <= max_lines and all(len(x) <= max_chars for x in lines), b
-    return text
+    return " ".join(" ".join(b[2:]) for b in blocks)  # just the words, as they'd be read
 
 
 settings = load_settings()
@@ -62,7 +62,7 @@ assert r.returncode == 0 and "already downloaded" in r.stdout, "a second --prepa
 r = run(JFK)
 assert r.returncode == 0
 srt = check_srt(WORK / "jfk.srt")
-assert "ask not what your country can do for you" in " ".join(srt.lower().split()), srt
+assert "ask not what your country can do for you" in srt.lower(), srt
 assert json.loads(HISTORY_FILE.read_text(encoding="utf-8"))[0]["status"] == "done"
 r = run(JFK)
 assert r.returncode == 0 and (WORK / "jfk (2).srt").exists(), "the second run must not overwrite the first"
