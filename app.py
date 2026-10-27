@@ -354,6 +354,19 @@ class Api:
             self._worker.stdin.write(name.replace("\n", " ") + "\n")
             self._worker.stdin.flush()
 
+    def review_clip(self, clip_id, start, end):
+        """Play back a line while checking: the audio comes back as a "clip" event."""
+        self._to_job({"type": "clip", "id": clip_id, "start": float(start), "end": float(end)})
+
+    def review_done(self, cues, names):
+        """The checked lines: the worker saves these."""
+        self._to_job({"type": "review_done", "cues": cues, "names": names})
+
+    def _to_job(self, request):
+        if self._job and self._worker and self._worker.poll() is None:
+            self._worker.stdin.write(json.dumps(request) + "\n")
+            self._worker.stdin.flush()
+
     def cancel(self):
         if self._job:
             self.stop_worker()  # the next video starts a fresh worker
@@ -383,7 +396,7 @@ class Api:
     # Settings that take effect straight away (quality and language have their own Save, since
     # they can mean a download)
     _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
-               "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "done_sound",
+               "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "review", "done_sound",
                "open_folder", "theme", "auto_update")
 
     def save_prefs(self, changes):

@@ -41,7 +41,13 @@ Double-click  Subtitle Maker.bat
    the graphics card, CPU and memory are working.
 4. With several people, it plays a few seconds of each voice it can't name,
    shows their longest lines, and you type who it is.
-5. When it's done, click "Show in folder".
+5. It shows you the lines before saving: fix any misheard words (Find and replace
+   fixes a name everywhere at once), rename or swap speakers, delete lines, or
+   click a line's play button to hear it. Then click "Save subtitles".
+   (Settings > "Check the lines before saving" turns this step off.)
+6. When it's done, click "Show in folder". After the first video, the rest of the
+   queue starts right away: the speech model stays loaded until you've been idle
+   for 3 minutes.
 Under "Save subtitles to" you can pick a folder for all your subtitles instead of
 next to each video (the drag-onto-icon .bat files use that folder too).
 History lists everything you've made, with Show in folder and Make again.

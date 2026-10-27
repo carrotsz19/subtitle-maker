@@ -269,6 +269,27 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 .frame span{ color:#fff; font-size:11.5px; line-height:1.35; font-weight:600; text-align:center; white-space:pre; text-shadow:0 1px 2px #000, 0 0 6px rgba(0,0,0,.6); }
 .prefs-input{ max-width:100%; }
 
+/* ---------- checking the lines before saving ---------- */
+.rv-head{ position:sticky; top:-26px; z-index:5; background:var(--bg); padding:14px 0 12px; margin-top:-14px; }
+.rv-tools{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.rv-tools input{ width:auto; flex:1; min-width:140px; font-size:14px; padding:8px 10px; }
+.rv-names{ display:flex; flex-wrap:wrap; gap:8px; }
+.rv-names label{ margin:0; display:flex; align-items:center; gap:6px; text-transform:none; letter-spacing:0; font-size:13px; color:var(--dim); font-weight:600; }
+.rv-names input{ width:160px; font-size:14px; padding:7px 10px; }
+.rv-list{ background:var(--panel); border-radius:var(--r-card); box-shadow:var(--elev-1); }
+.rv-row{ display:grid; grid-template-columns:32px 46px auto 1fr auto 32px; gap:8px; align-items:start; padding:8px 10px 8px 8px; position:relative; }
+.rv-row + .rv-row::before{ content:""; position:absolute; top:0; left:52px; right:0; height:1px; background:var(--hairline); }
+.rv-row.no-spk{ grid-template-columns:32px 46px 1fr auto 32px; }
+.rv-time{ font-size:12px; color:var(--faint); padding-top:8px; font-variant-numeric:tabular-nums; }
+.rv-row select{ font:inherit; font-size:13px; padding:6px 8px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--ink); max-width:150px; }
+.rv-row textarea{ font:inherit; font-size:14.5px; line-height:1.4; width:100%; resize:none; border:1px solid transparent; border-radius:8px; padding:6px 8px;
+  background:transparent; color:var(--ink); overflow:hidden; field-sizing:content; min-height:34px; }
+.rv-row textarea:hover{ background:var(--fill-tertiary); }
+.rv-row textarea:focus{ outline:none; border-color:var(--accent); background:var(--panel); box-shadow:0 0 0 3px var(--accent-soft); }
+.rv-warn{ padding-top:7px; }
+.rv-row.gone textarea, .rv-row.gone .rv-time{ text-decoration:line-through; opacity:.45; }
+.rv-row.playing .rv-play{ color:var(--accent); background:var(--accent-soft); }
+
 /* ---------- starting screen ---------- */
 .loader{ position:fixed; inset:0; z-index:100; background:var(--bg); display:flex; flex-direction:column; align-items:center;
   justify-content:center; gap:14px; text-align:center; padding:24px; transition:opacity .35s var(--ease-out); }
@@ -453,8 +474,8 @@ function viewMake() {
       <p>Drop a video and get a .srt you can import into DaVinci Resolve.</p></div>
     <div class="stack">
       ${S.update.state === "available" && !busy && S.update.data.kind !== "improvement" ? updateBanner(S.update.data.kind) : ""}
-      ${busy ? viewRunning() : showResult ? viewResults(last) : ""}
-      ${busy || showResult ? dropZone(true) : dropZone(false)}
+      ${busy && S.review ? viewReview() : busy ? viewRunning() : showResult ? viewResults(last) : ""}
+      ${S.review ? "" : busy || showResult ? dropZone(true) : dropZone(false)}
       ${S.queue.some(q => q.status === "waiting") ? queueList() : ""}
       ${busy ? "" : talkCard()}
       ${busy ? "" : whereCard()}
@@ -560,6 +581,74 @@ function viewRunning() {
     ${meters}
     <details ${r.logOpen ? "open" : ""} data-act="log"><summary>Details</summary><div class="log code selectable" id="run-log">${esc(r.log.slice(-40).join("\n"))}</div></details>
   </div>`;
+}
+
+/* ---------------------------------------------------------------------
+   Checking the lines before saving
+--------------------------------------------------------------------- */
+function rvLabel(i) {
+  const r = S.review, c = r.cues[i];
+  return r.style === "name" && r.names[c.speaker] != null ? r.names[c.speaker] + ": " : r.style === "dash" && r.hasNames ? "- " : "";
+}
+function rvTooLong(i) {
+  const r = S.review;
+  return evenLines(rvLabel(i) + r.cues[i].text.trim(), r.max_chars, r.max_lines).length > r.max_lines;
+}
+function rvRow(c, i) {
+  const r = S.review, spk = r.hasNames;
+  return `<div class="rv-row${spk ? "" : " no-spk"}${c.gone ? " gone" : ""}" data-i="${i}">
+    <button class="iconbtn rv-play" data-act="rv-play" data-i="${i}" title="Play this line">${ICON.play}</button>
+    <span class="rv-time">${clock(c.start)}</span>
+    ${spk ? `<select data-rv="speaker" data-i="${i}" aria-label="Speaker">${Object.entries(r.names).map(([k, n]) =>
+      `<option value="${k}" ${String(c.speaker) === k ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}
+    <textarea rows="1" data-rv="text" data-i="${i}" aria-label="Line ${i + 1}" ${c.gone ? "disabled" : ""}>${esc(c.text)}</textarea>
+    <span class="rv-warn" id="rv-warn-${i}">${!c.gone && rvTooLong(i) ? `<span class="pill bad" title="Longer than ${r.max_lines} line(s) of ${r.max_chars} characters">Too long</span>` : ""}</span>
+    <button class="iconbtn" data-act="rv-del" data-i="${i}" title="${c.gone ? "Undo" : "Delete this line"}">${c.gone ? ICON.again : ICON.x}</button>
+  </div>`;
+}
+function viewReview() {
+  const r = S.review, live = r.cues.filter(c => !c.gone).length, long = r.cues.filter((c, i) => !c.gone && rvTooLong(i)).length;
+  return `<div id="review">
+    <div class="rv-head stack">
+      <div class="between"><div class="grow"><div class="sm dim">Check before saving${queueLeft() ? ` · ${queueLeft()} more after this` : ""}</div>
+          <h3 class="trunc">${esc(r.file)}</h3></div>
+        <button class="btn ghost sm" data-act="rv-discard">Discard</button>
+        <button class="btn" data-act="rv-save">Save subtitles</button></div>
+      ${r.hasNames ? `<div class="rv-names">${Object.entries(r.names).map(([k, n]) =>
+        `<label>Speaker ${+k + 1} <input type="text" data-rv="name" data-k="${k}" value="${esc(n)}" maxlength="40"></label>`).join("")}</div>` : ""}
+      <div class="rv-tools"><input type="text" id="rv-find" placeholder="Find (e.g. a misheard name)">
+        <input type="text" id="rv-repl" placeholder="Replace with"><button class="btn sec sm" data-act="rv-replace">Replace all</button></div>
+      <div class="sm dim" id="rv-count">${live} lines${long ? ` · <span style="color:var(--bad)">${long} too long</span>` : ""} · Enter goes to the next line</div>
+    </div>
+    <div class="rv-list">${r.cues.map(rvRow).join("")}</div>
+  </div>`;
+}
+function rvCount() {
+  const r = S.review, live = r.cues.filter(c => !c.gone).length, long = r.cues.filter((c, i) => !c.gone && rvTooLong(i)).length;
+  const el = $("#rv-count");
+  if (el) el.innerHTML = `${live} lines${long ? ` · <span style="color:var(--bad)">${long} too long</span>` : ""} · Enter goes to the next line`;
+}
+function bindReview(root) {
+  root.querySelectorAll("[data-rv]").forEach(el => {
+    const i = +el.dataset.i;
+    if (el.dataset.rv === "text") {
+      el.oninput = () => {
+        S.review.cues[i].text = el.value.replace(/\n/g, " ");
+        $("#rv-warn-" + i).innerHTML = rvTooLong(i) ? '<span class="pill bad">Too long</span>' : "";
+        rvCount();
+      };
+      el.onkeydown = e => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        const next = root.querySelector(`textarea[data-i="${i + 1}"]`);
+        if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
+      };
+    } else if (el.dataset.rv === "speaker") {
+      el.onchange = () => { S.review.cues[i].speaker = +el.value; $("#rv-warn-" + i).innerHTML = rvTooLong(i) ? '<span class="pill bad">Too long</span>' : ""; rvCount(); };
+    } else if (el.dataset.rv === "name") {
+      el.onchange = () => { S.review.names[el.dataset.k] = el.value.trim() || `Speaker ${+el.dataset.k + 1}`; render(); };
+    }
+  });
 }
 
 function queueLeft() { return S.queue.filter(q => q.status === "waiting").length; }
@@ -771,6 +860,7 @@ function prefsBlocks() {
         ${prefRow("Run on", S.info.hardware.gpu ? "Automatic uses the graphics card when it has room." : "This PC has no NVIDIA graphics card, so it uses the processor.", segPref("device"))}
       </div></div>
     <div class="block"><h2>When it's done</h2><div class="grp">
+        ${prefRow("Check the lines before saving", "Fix words and names, then save. Off: saves straight away.", switchPref("review"))}
         ${prefRow("Play a sound", "", switchPref("done_sound"))}
         ${prefRow("Open the folder", "Shows the subtitles once everything in the queue is done.", switchPref("open_folder"))}
         ${prefRow("Also save a transcript", "A plain .txt of everything said, next to the .srt.", switchPref("transcript"))}
@@ -1166,6 +1256,7 @@ function bind(root) {
     if (el.getAttribute("role") === "button" || el.getAttribute("role") === "radio")
       el.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handler(el); } };
   });
+  if (S.review) bindReview(root);
   const hot = $("#hotwords", root);
   if (hot) hot.onchange = async () => { S.info.settings = await api().save_prefs({ hotwords: hot.value.trim() }); toast("Saved."); };
   const wizCode = $("#wiz-code", root);
@@ -1180,6 +1271,31 @@ function updateSave() {
 }
 
 const ACTIONS = {
+  "rv-play": el => {
+    const c = S.review.cues[+el.dataset.i];
+    document.querySelectorAll(".rv-row.playing").forEach(x => x.classList.remove("playing"));
+    el.closest(".rv-row").classList.add("playing");
+    api().review_clip(+el.dataset.i, c.start, c.end);
+  },
+  "rv-del": el => { const c = S.review.cues[+el.dataset.i]; c.gone = !c.gone; render(); },
+  "rv-replace": () => {
+    const find = $("#rv-find").value, repl = $("#rv-repl").value;
+    if (!find) return;
+    const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    let n = 0;
+    S.review.cues.forEach(c => { if (c.gone) return; c.text = c.text.replace(re, () => { n++; return repl; }); });
+    render();
+    toast(n ? `Replaced ${n} time${n > 1 ? "s" : ""}.` : `"${find}" isn't in any line.`, !n);
+  },
+  "rv-save": () => {
+    const r = S.review;
+    api().review_done(r.cues.filter(c => !c.gone).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })), r.names);
+    S.review = null;
+    S.run.stage = "Saving";
+    render();
+  },
+  "rv-discard": () => confirmBox("Discard these subtitles?", "Nothing for this video is saved. The next video in the queue starts.", "Discard",
+    () => { S.review = null; api().cancel(); }),
   pref: async el => {
     const key = el.dataset.k;
     S.info.settings = await api().save_prefs({ [key]: JSON.parse(el.dataset.v) });
@@ -1322,6 +1438,20 @@ const app = {
         if (/^Speaker detection on/.test(ev.text)) r.stage = "Starting speaker detection";
         break;
       case "ask_speaker": showAsk(ev); return;
+      case "review": {
+        const names = Object.keys(ev.names).length ? ev.names : null;
+        S.review = { file: ev.file, style: ev.style, max_chars: ev.max_chars, max_lines: ev.max_lines,
+          names: names || {}, hasNames: !!names, cues: ev.cues.map(c => ({ ...c })) };
+        if (S.view === "make") render(true); else toast("The subtitles are ready to check.");
+        return;
+      }
+      case "clip": {
+        if (S.player) S.player.pause();
+        S.player = new Audio(ev.data);
+        S.player.onended = () => document.querySelectorAll(".rv-row.playing").forEach(x => x.classList.remove("playing"));
+        S.player.play().catch(() => {});
+        return;
+      }
       case "done":
         if (r.item) { r.item.status = "done"; r.item.files = ev.files; (S.batch = S.batch || []).push(ev.files[0] && ev.files[0].path); }
         break;
@@ -1339,6 +1469,7 @@ const app = {
         }
         if (r.kind === "make") { S.history = null; if (S.view === "history") loadHistory(); }
         S.run = null;
+        S.review = null;
         $("#dialog-root").innerHTML = "";
         S.ask = null;
         if (ev.cancelled || S.cancelAll) {

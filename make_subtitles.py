@@ -763,26 +763,27 @@ def make_subtitles(args, level):
     if turns:
         tokens = [t._replace(speaker=speakers.speaker_at(t.start, t.end, turns)) for t in tokens]
     cues = build_cues(tokens)
-
-    if not turns:
-        if detector:
-            print("No separate speakers found, writing plain subtitles.")
-        write_srt(out, cues)
-        print(f"Wrote {len(cues)} subtitles to {out}")
-        files = [{"path": str(out), "name": None, "count": len(cues)}]
-        files += save_transcript(st, out, cues)
-        remember(args, "done", files=files, length=round(total, 1), language=language, speakers=[])
-        emit("done", files=files)
-        return out
-
-    names = name_speakers(detector, audio, turns, cues, args.voices)
-    # Split again now the names are known, so each label fits inside the line length
     style = st["speaker_labels"]
-    labelled = build_cues(tokens, lambda spk: label("", names[spk], style)) if style != "none" else cues
-    write_srt(out, labelled, names, style)
-    print(f"\nWrote {len(labelled)} labelled subtitles to {out}")
-    files = [{"path": str(out), "name": None, "count": len(labelled)}]
-    for spk, name in (names.items() if st["speaker_files"] else []):
+
+    names = None
+    if turns:
+        names = name_speakers(detector, audio, turns, cues, args.voices)
+        # Split again now the names are known, so each label fits inside the line length
+        if style != "none":
+            cues = build_cues(tokens, lambda spk: label("", names[spk], style))
+    elif detector:
+        print("No separate speakers found, writing plain subtitles.")
+
+    # In the window, the lines can be checked and fixed before anything is saved
+    if EVENTS and st["review"]:
+        cues, names = review(cues, names, audio, out, style)
+        if not cues:
+            raise FriendlyError("Every line was deleted in the check, so there was nothing to save.")
+
+    write_srt(out, cues, names, style)
+    print(f"\nWrote {len(cues)} {'labelled ' if names else ''}subtitles to {out}")
+    files = [{"path": str(out), "name": None, "count": len(cues)}]
+    for spk, name in (names.items() if names and st["speaker_files"] else []):
         spk_cues = [c for c in cues if c[3] == spk]
         if spk_cues:
             safe_name = "".join(ch for ch in name if ch not in '<>:"/\\|?*')
@@ -790,10 +791,44 @@ def make_subtitles(args, level):
             write_srt(path, spk_cues)
             print(f"  {name}: {len(spk_cues)} subtitles -> {path.name}")
             files.append({"path": str(path), "name": name, "count": len(spk_cues)})
-    files += save_transcript(st, out, labelled, names)
-    remember(args, "done", files=files, length=round(total, 1), language=language, speakers=list(names.values()))
+    files += save_transcript(st, out, cues, names)
+    remember(args, "done", files=files, length=round(total, 1), language=language,
+             speakers=list(names.values()) if names else [])
     emit("done", files=files)
     return out
+
+
+def review(cues, names, audio, out, style):
+    """Send the lines to the window to be checked, and wait for them to come back fixed.
+
+    While waiting it also plays back lines: {"type": "clip", "id", "start", "end"} answers with
+    a "clip" event holding that stretch of audio. Returns (cues, names) as edited.
+    """
+    emit("review", file=out.name, style=style, max_chars=MAX_LINE_CHARS, max_lines=MAX_LINES,
+         names={str(k): v for k, v in (names or {}).items()},
+         cues=[{"start": round(c[0], 3), "end": round(c[1], 3), "text": c[2], "speaker": c[3]} for c in cues])
+    print("Waiting for the lines to be checked...")
+    while True:
+        line = read_line()
+        if not line:
+            return cues, names  # the window went away: keep them as they were
+        try:
+            request = json.loads(line)
+        except ValueError:
+            continue
+        if request.get("type") == "clip":
+            start, end = max(0.0, request["start"] - 0.15), request["end"] + 0.15
+            clip = audio[int(start * SAMPLE_RATE):int(end * SAMPLE_RATE)]
+            emit("clip", id=request["id"], data="data:audio/wav;base64," + base64.b64encode(wav_bytes(clip)).decode("ascii"))
+        elif request.get("type") == "review_done":
+            fixed = [[float(c["start"]), float(c["end"]), " ".join(str(c["text"]).split()), c.get("speaker")]
+                     for c in request["cues"] if str(c["text"]).strip()]
+            if names:
+                names = {int(k): (str(v).strip() or names.get(int(k), f"Speaker {int(k) + 1}"))
+                         for k, v in request.get("names", {}).items()} or names
+                fixed = [[a, b, t, spk if spk in names else next(iter(names))] for a, b, t, spk in fixed]
+            print(f"Checked: {len(fixed)} lines.")
+            return sorted(fixed, key=lambda c: c[0]), names
 
 
 def save_transcript(settings, out, cues, names=None):
