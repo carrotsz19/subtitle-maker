@@ -1283,6 +1283,8 @@ const app = {
     if (!added) return;
     // A finished batch makes way for the new one
     if (!S.run) S.queue = S.queue.filter(q => q.status === "waiting");
+    // Start loading the speech model while you pick the options, so the first video starts sooner
+    if (!S.run) api().warm();
     if (S.view !== "make") go("make"); else render();
   },
 

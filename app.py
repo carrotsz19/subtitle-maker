@@ -126,7 +126,9 @@ class Api:
         # (and theirs, recursively) on the window's main thread to build the page's API, and walking
         # into the window and its .NET form froze the window at startup ("Not Responding")
         self._window = None
-        self._process = None
+        self._process = None  # a one-off run (downloading models)
+        self._worker = None  # make_subtitles --serve: keeps the model loaded between videos
+        self._job = None  # the worker's current job: {"cancelled", "reported"}
         self._lock = threading.Lock()
         # Look at the PC (nvidia-smi can take a second or two) while the window is still opening,
         # so the page never waits for it
@@ -186,6 +188,7 @@ class Api:
 
     def restart_app(self):
         """Close this window and open a fresh one (the page offers this if starting goes wrong)."""
+        self.shutdown()
         exe = Path(sys.executable)
         pythonw = exe.with_name("pythonw.exe")
         subprocess.Popen([str(pythonw if pythonw.exists() else exe), str(HERE / "app.py")], cwd=str(HERE),
@@ -215,32 +218,114 @@ class Api:
     # ---- running make_subtitles.py ------------------------------------------------------------
 
     def start(self, path, speakers=None):
-        """Make subtitles for one file. Progress arrives in the page as events."""
-        args = [str(Path(path).absolute())]  # the run starts in the Tools folder
+        """Make subtitles for one file. Progress arrives in the page as events, ending with "exit"."""
+        argv = [str(Path(path).absolute()), "--events"]  # the worker runs in the Tools folder
         if speakers is not None:
-            args += ["--speakers", str(int(speakers))]
-        return self.run(args)
+            argv += ["--speakers", str(int(speakers))]
+        with self._lock:
+            if self._busy():
+                return False
+            self._job = {"cancelled": False, "reported": False}
+            if not self._tell_worker({"type": "job", "argv": argv}):
+                self._job = None
+                return False
+        return True
+
+    def warm(self):
+        """Start loading the speech model now (files were just added), so the first video starts sooner."""
+        with self._lock:
+            if not self._busy() and SETTINGS_FILE.exists():
+                self._tell_worker({"type": "warm"})
+
+    def _busy(self):
+        return bool(self._job) or bool(self._process and self._process.poll() is None)
+
+    def _tell_worker(self, request):
+        """Send a request to the worker, starting one if none is running. Call with _lock held."""
+        if not (self._worker and self._worker.poll() is None):
+            self._worker = self._spawn(["--serve"])
+            threading.Thread(target=self._follow_worker, args=(self._worker,), daemon=True).start()
+        try:
+            self._worker.stdin.write(json.dumps(request) + "\n")
+            self._worker.stdin.flush()
+            return True
+        except OSError:
+            return False
+
+    def _spawn(self, args):
+        env = {**os.environ, "PYTHONUNBUFFERED": "1", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
+               "PYTHONIOENCODING": "utf-8"}
+        return subprocess.Popen(
+            [console_python(), str(HERE / "make_subtitles.py"), *args, "--events"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace", bufsize=1,
+            cwd=str(HERE), env=env, creationflags=NO_WINDOW,
+        )
+
+    def _follow_worker(self, worker):
+        """Pass the worker's events to the page; each job ends with an "exit" event, as a one-off run does."""
+        errors = deque(maxlen=30)
+        threading.Thread(target=lambda: errors.extend(worker.stderr), daemon=True).start()
+        for line in worker.stdout:
+            line = line.rstrip("\n")
+            if not line.startswith(EVENT_PREFIX):
+                if line.strip() and self._job:
+                    self.send({"type": "log", "text": line})
+                continue
+            event = json.loads(line[len(EVENT_PREFIX):])
+            kind = event["type"]
+            if kind == "finished":
+                self._job = None
+                self._finish_title()
+                self.send({"type": "exit", "code": event["code"], "cancelled": False})
+            elif kind in ("warmed", "idle_exit", "model_loaded"):
+                continue
+            elif self._job:
+                self._job["reported"] |= kind in ("done", "error")
+                self._beep_if_done(event)
+                self.send(event)
+        code = worker.wait()
+        job, self._job = self._job, None
+        if job:  # the worker ended mid-job: cancelled, or it crashed
+            if not job["cancelled"] and not job["reported"]:
+                tail = "".join(errors).strip().splitlines()
+                self.send({"type": "error", "message": tail[-1] if tail else f"It stopped unexpectedly (code {code}).",
+                           "log": None})
+            self._finish_title()
+            self.send({"type": "exit", "code": code or 1, "cancelled": job["cancelled"]})
+
+    def _beep_if_done(self, event):
+        if event["type"] == "done" and sys.platform == "win32" and load_settings()["done_sound"]:
+            import winsound
+
+            winsound.MessageBeep()
+
+    def _finish_title(self):
+        if self._window:
+            self._window.set_title("Subtitle Maker")
+
+    def stop_worker(self):
+        """Stop the worker (and free its memory): before closing, uninstalling or updating."""
+        if self._worker and self._worker.poll() is None:
+            if self._job:
+                self._job["cancelled"] = True
+            self._worker.kill()
+            self._worker.wait(timeout=10)
 
     def prepare(self):
         """Download what the saved settings need (after Settings changes)."""
         return self.run(["--prepare"])
 
     def run(self, args):
+        """A one-off run (downloading models)."""
         with self._lock:
-            if self._process and self._process.poll() is None:
+            if self._busy():
                 return False
-            env = {**os.environ, "PYTHONUNBUFFERED": "1", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
-                   "PYTHONIOENCODING": "utf-8"}
-            self._process = subprocess.Popen(
-                [console_python(), str(HERE / "make_subtitles.py"), *args, "--events"],
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                text=True, encoding="utf-8", errors="replace", bufsize=1,
-                cwd=str(HERE), env=env, creationflags=NO_WINDOW,
-            )
-        threading.Thread(target=self.follow, args=(self._process,), daemon=True).start()
+            self._process = self._spawn(args)
+        threading.Thread(target=self._follow, args=(self._process,), daemon=True).start()
         return True
 
-    def follow(self, process):
+    def _follow(self, process):
         """Pass the run's events to the page, then report how it ended."""
         errors = deque(maxlen=30)
         stderr_thread = threading.Thread(target=lambda: errors.extend(process.stderr), daemon=True)
@@ -251,10 +336,6 @@ class Api:
             if line.startswith(EVENT_PREFIX):
                 event = json.loads(line[len(EVENT_PREFIX):])
                 reported |= event["type"] in ("done", "error")
-                if event["type"] == "done" and sys.platform == "win32" and load_settings()["done_sound"]:
-                    import winsound
-
-                    winsound.MessageBeep()
                 self.send(event)
             elif line.strip():
                 self.send({"type": "log", "text": line})
@@ -264,20 +345,26 @@ class Api:
             tail = "".join(errors).strip().splitlines()
             self.send({"type": "error", "message": tail[-1] if tail else f"It stopped unexpectedly (code {code}).",
                        "log": None})
-        if self._window:
-            self._window.set_title("Subtitle Maker")
+        self._finish_title()
         self.send({"type": "exit", "code": code, "cancelled": getattr(process, "cancelled", False)})
 
     def answer(self, name):
-        """The name typed for the speaker the run is asking about."""
-        if self._process and self._process.poll() is None:
-            self._process.stdin.write(name.replace("\n", " ") + "\n")
-            self._process.stdin.flush()
+        """The name typed for the speaker the current video is asking about."""
+        if self._job and self._worker and self._worker.poll() is None:
+            self._worker.stdin.write(name.replace("\n", " ") + "\n")
+            self._worker.stdin.flush()
 
     def cancel(self):
-        if self._process and self._process.poll() is None:
+        if self._job:
+            self.stop_worker()  # the next video starts a fresh worker
+        elif self._process and self._process.poll() is None:
             self._process.cancelled = True
             self._process.kill()
+
+    def shutdown(self):
+        """The window is closing: stop everything still running."""
+        self.cancel()
+        self.stop_worker()
 
     # ---- settings and folders ---------------------------------------------------------------
 
@@ -357,8 +444,9 @@ class Api:
                 self.send({"type": "update_done", "packages": bool(self._pending_packages)})
             except Exception as e:
                 self.send({"type": "update_done", "error": f"The update didn't finish: {e}"})
-        if self._process and self._process.poll() is None:
+        if self._busy():
             return False
+        self.stop_worker()  # it runs the old files, and would keep them in use
         threading.Thread(target=work, daemon=True).start()
         return True
 
@@ -366,6 +454,7 @@ class Api:
         """Close this window and open the new version (after installing any new packages)."""
         # A visible console only when there are packages to install, so the wait isn't a mystery
         flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if getattr(self, "_pending_packages", None) else NO_WINDOW
+        self.stop_worker()
         subprocess.Popen([console_python(), str(HERE / "update.py"), "--finish", str(os.getpid())],
                          cwd=str(HERE), creationflags=flags)
         self._window.destroy()
@@ -377,8 +466,9 @@ class Api:
 
     def uninstall(self, keep_voices=True):
         """Start the removal (it waits for this window to close), then close the window."""
-        if self._process and self._process.poll() is None:
+        if self._busy():
             return False
+        self.stop_worker()  # its Python would otherwise stay in use and couldn't be deleted
         uninstall.start(keep_voices, os.getpid())
         self._window.destroy()
         return True
@@ -419,7 +509,7 @@ def main():
             window.evaluate_js(f"app.addFiles({json.dumps(opened_with)})")
 
     window.events.loaded += on_loaded
-    window.events.closing += api.cancel
+    window.events.closing += api.shutdown
     if sys.platform == "win32":
         import ctypes
 

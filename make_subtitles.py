@@ -24,6 +24,7 @@ import contextlib
 import io
 import json
 import os
+import queue
 import shutil
 import subprocess
 import sys
@@ -98,6 +99,14 @@ IN_CONSOLE = sys.stdout.isatty()
 
 # Set by --events: the app window runs this script and reads progress as JSON lines from stdout
 EVENTS = False
+
+# --serve: the app keeps one of these running, sending one job after another, so the speech model
+# stays loaded between videos. It leaves on its own after IDLE_SECONDS with nothing to do, which
+# frees the memory (on a 3 GB graphics card, DaVinci Resolve needs it back).
+SERVE = False
+IDLE_SECONDS = 180
+LOADED = {}  # (model name, device asked for) -> {"model", "device"}; one model at a time
+read_line = sys.stdin.readline  # where answers (speaker names) come from; a queue when serving
 EVENT_PREFIX = "@@"
 
 
@@ -550,7 +559,7 @@ def ask_name(spk, audio, turns, cues, player):
         emit("ask_speaker", speaker=spk, label=default, talk=round(talk, 1),
              lines=[{"start": round(c[0], 1), "text": c[2]} for c in sorted(lines)],
              clip="data:audio/wav;base64," + base64.b64encode(wav_bytes(clip)).decode("ascii"))
-        answer = sys.stdin.readline()
+        answer = read_line()
         return answer.strip() or default
     can_play = player.play(clip)
     if can_play:
@@ -596,6 +605,22 @@ def name_speakers(detector, audio, turns, cues, voices_dir):
     finally:
         player.close()
     return names
+
+
+def get_whisper(model_name, device, potato, quality=""):
+    """The speech model, loading it unless --serve already has it loaded from the last video."""
+    key = (model_name, device)
+    if key in LOADED:
+        print(f"Using the '{model_name}' model, already loaded.")
+        return LOADED[key]
+    LOADED.clear()  # switching model or device frees the old one first
+    # Potato mode skips the resource readout, which polls nvidia-smi every second
+    resolved = device if potato else preflight(model_name, device)
+    print(f"Loading '{model_name}' model{quality}...")
+    whisper = dict(zip(("model", "device"), load_model(model_name, resolved)))
+    if SERVE:
+        LOADED[key] = whisper
+    return whisper
 
 
 def transcribe(whisper, model_name, audio, language, beam_size, bar, options=None):
@@ -663,8 +688,6 @@ def make_subtitles(args, level):
         args.speakers = None
 
     set_title(f"Loading - {args.input.name}")
-    # Potato mode skips the resource readout, which polls nvidia-smi every second
-    device = args.device if potato else preflight(model_name, args.device)
     try:
         audio = decode_audio(str(args.input), sampling_rate=SAMPLE_RATE)
     except Exception as e:
@@ -673,8 +696,8 @@ def make_subtitles(args, level):
     if not len(audio):
         raise FriendlyError(f"'{args.input.name}' has no sound in it.")
     quality = "" if args.model else f" ({LEVELS[level]['name']} quality)"
-    print(f"Loading '{model_name}' model{quality}...")
-    whisper = dict(zip(("model", "device"), load_model(model_name, device)))
+    whisper = get_whisper(model_name, args.device, potato, quality)
+    loaded_on = whisper["device"]
 
     # Speaker detection runs on the CPU in the background while Whisper transcribes
     detector, detection = None, {}
@@ -719,6 +742,8 @@ def make_subtitles(args, level):
             bar.set_description_str("Finishing speaker detection ")
             detect_thread.join()
     bar.close()
+    if whisper["device"] != loaded_on:
+        LOADED.clear()  # it fell back to the CPU partway: the next video tries the GPU afresh
     print(f"Language: {language}  Length: {clock(len(audio) / SAMPLE_RATE)}")
     emit("progress", done=total, total=total, stage="Writing subtitles", speakers=None)
     if "error" in detection:
@@ -781,7 +806,60 @@ def save_transcript(settings, out, cues, names=None):
     return [{"path": str(path), "name": None, "count": len(cues), "kind": "transcript"}]
 
 
-def main():
+def serve():
+    """--serve: make subtitles for one job after another from stdin, keeping the model loaded.
+
+    The app sends one JSON line per request: {"type": "job", "argv": [...]} runs main(argv) and
+    ends with a "finished" event; {"type": "warm"} loads the model for the current settings so the
+    first video starts sooner. Other lines (a speaker's name) are answers to the job running now.
+    """
+    global SERVE, read_line
+    SERVE = True
+    lines = queue.Queue()
+
+    def reader():
+        for line in sys.stdin:
+            lines.put(line)
+        lines.put(None)  # the app closed the pipe
+
+    threading.Thread(target=reader, daemon=True).start()
+    read_line = lambda: lines.get() or ""  # noqa: E731
+    while True:
+        try:
+            line = lines.get(timeout=IDLE_SECONDS)
+        except queue.Empty:
+            emit("idle_exit")  # nothing to do for a while: leave, which frees the memory
+            return
+        if line is None:
+            return
+        try:
+            request = json.loads(line)
+        except ValueError:
+            continue  # a stray answer with no question waiting
+        if request.get("type") == "warm":
+            warm()
+        elif request.get("type") == "job":
+            try:
+                main(request["argv"])
+                code = 0
+            except SystemExit as e:
+                code = e.code if isinstance(e.code, int) else 1
+            emit("finished", code=code)
+
+
+def warm():
+    """Load the model the current settings use, ready for the first video."""
+    settings = load_settings()
+    level = settings["level"]
+    try:
+        get_whisper(LEVELS[level]["model"], settings["device"], level == "potato")
+        emit("warmed")
+    except Exception as e:  # the job itself will report it properly; warming is only a head start
+        log_error(e)
+        LOADED.clear()
+
+
+def main(argv=None):
     settings = load_settings()
     apply_style(settings)
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -805,7 +883,8 @@ def main():
                              "(or use how many clips are in the Voices folder)")
     parser.add_argument("--voices", type=Path, default=VOICES_DIR, help="folder of voice clips named after each person")
     parser.add_argument("--events", action="store_true", help=argparse.SUPPRESS)  # used by the app window
-    args = parser.parse_args()
+    parser.add_argument("--serve", action="store_true", help=argparse.SUPPRESS)  # used by the app window
+    args = parser.parse_args(argv)
     args.settings = settings
     if args.events:
         global EVENTS
@@ -815,6 +894,8 @@ def main():
         sys.stdin.reconfigure(encoding="utf-8")
     if args.language == "auto":
         args.language = None
+    if args.serve:
+        return serve()
 
     try:
         out = make_subtitles(args, args.level)
