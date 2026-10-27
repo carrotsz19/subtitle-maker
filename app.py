@@ -5,30 +5,70 @@ so the window stays responsive, Cancel can stop a run cleanly, and the GPU memor
 after every video. Start it with "Subtitle Maker.bat" (or app.sh on Mac/Linux).
 """
 
-import json
-import os
-import subprocess
-import sys
-import threading
-from collections import deque
-from pathlib import Path
+import time
 
-import psutil
-import webview
-from webview.dom import DOMEventHandler
+STARTED = time.perf_counter()  # for the startup timings in startup.log
 
-import configure
-import models
-import uninstall
-import update
+import json  # noqa: E402
+import os  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+import threading  # noqa: E402
+from collections import deque  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import psutil  # noqa: E402
+import webview  # noqa: E402
+from webview.dom import DOMEventHandler  # noqa: E402
+
+import configure  # noqa: E402
+import models  # noqa: E402
+import uninstall  # noqa: E402
+import update  # noqa: E402
 from paths import (ERROR_LOG, LEVELS, SETTINGS_FILE, data_dir, load_history, load_settings, save_history,
-                   save_settings)
+                   save_settings)  # noqa: E402
 
 HERE = Path(__file__).parent
 VOICES_DIR = HERE / "Voices"
 EVENT_PREFIX = "@@"  # matches make_subtitles.EVENT_PREFIX
 AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".mov"}  # matches speakers.AUDIO_EXTS
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+STARTUP_LOG = data_dir() / "startup.log"
+
+
+class Timings:
+    """How long each stage of opening the window took, written to startup.log for comparing PCs."""
+
+    def __init__(self):
+        self.marks = []
+
+    def mark(self, stage):
+        self.marks.append((stage, time.perf_counter() - STARTED))
+
+    def save(self):
+        try:
+            STARTUP_LOG.parent.mkdir(parents=True, exist_ok=True)
+            STARTUP_LOG.write_text("Seconds since Subtitle Maker started:\n" +
+                                   "".join(f"{t:6.2f}  {stage}\n" for stage, t in self.marks), encoding="utf-8")
+        except OSError:
+            pass
+
+
+TIMINGS = Timings()
+
+
+def dark_mode():
+    """Is Windows set to dark apps? Then the window starts dark too, instead of flashing white."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
+            return winreg.QueryValueEx(key, "AppsUseLightTheme")[0] == 0
+    except OSError:
+        return False
 
 
 def console_python():
@@ -59,6 +99,23 @@ class Api:
         self.window = None
         self.process = None
         self.lock = threading.Lock()
+        # Look at the PC (nvidia-smi can take a second or two) while the window is still opening,
+        # so the page never waits for it
+        self.probe = {}
+        self.probe_thread = threading.Thread(target=self.look_at_pc, daemon=True)
+        self.probe_thread.start()
+
+    def look_at_pc(self):
+        gpu = configure.nvidia_gpu()
+        ram_gb = psutil.virtual_memory().total / 2**30
+        cores = psutil.cpu_count(logical=False) or os.cpu_count() or 2
+        self.probe.update(
+            recommended=configure.recommend(gpu, ram_gb, cores),
+            hardware={"gpu": gpu[0] if gpu else None, "vram_mb": gpu[1] if gpu else None,
+                      "ram_gb": round(ram_gb), "cores": cores},
+            models=self.models_status(),
+        )
+        TIMINGS.mark("looked at this PC (graphics card, memory, models)")
 
     # ---- talking to the page ----------------------------------------------------------------
 
@@ -77,23 +134,26 @@ class Api:
     # ---- state ------------------------------------------------------------------------------
 
     def init(self):
-        gpu = configure.nvidia_gpu()
-        ram_gb = psutil.virtual_memory().total / 2**30
-        cores = psutil.cpu_count(logical=False) or os.cpu_count() or 2
+        TIMINGS.mark("page asked for its data")
+        self.probe_thread.join()  # normally long finished by now
         return {
             "settings": load_settings(),
             "configured": SETTINGS_FILE.exists(),
             "levels": LEVELS,
-            "recommended": configure.recommend(gpu, ram_gb, cores),
-            "hardware": {"gpu": gpu[0] if gpu else None, "vram_mb": gpu[1] if gpu else None,
-                         "ram_gb": round(ram_gb), "cores": cores},
+            "recommended": self.probe["recommended"],
+            "hardware": self.probe["hardware"],
             "voices": self.voices(),
             "platform": sys.platform,
             "version": update.installed(),
-            "models": self.models_status(),
+            "models": self.probe["models"],
             # Setup.bat opens the window with --setup; Update.bat with --update
             "mode": "setup" if "--setup" in sys.argv else "update" if "--update" in sys.argv else None,
         }
+
+    def page_ready(self):
+        """The page has drawn itself: the window is fully open."""
+        TIMINGS.mark("window ready to use")
+        TIMINGS.save()
 
     def models_status(self):
         """Which speech models are downloaded, per quality level, and whether the speaker models are."""
@@ -277,16 +337,20 @@ class Api:
 
 
 def main():
+    TIMINGS.mark("Python and the app's code loaded")
     api = Api()
     window = webview.create_window(
         "Subtitle Maker", str(HERE / "ui" / "index.html"), js_api=api,
-        width=1040, height=720, min_size=(760, 560), background_color="#f3f1ec",
+        width=1040, height=720, min_size=(760, 560), background_color="#15140f" if dark_mode() else "#f3f1ec",
     )
     api.window = window
     # Videos dropped onto the "Subtitle Maker.bat" icon arrive as arguments
     opened_with = [str(Path(a).absolute()) for a in sys.argv[1:] if Path(a).is_file()]
 
+    window.events.shown += lambda: TIMINGS.mark("window shown (web view started)")
+
     def on_loaded():
+        TIMINGS.mark("page loaded")
         # Dropped files only come with their full paths when Python handles the drop
         window.dom.document.events.dragover += DOMEventHandler(lambda e: None, prevent_default=True)
         window.dom.document.events.drop += DOMEventHandler(api.on_drop, prevent_default=True, stop_propagation=True)

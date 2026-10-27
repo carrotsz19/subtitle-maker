@@ -157,6 +157,9 @@ IF SOMETHING GOES WRONG
 "Couldn't read the sound in ..."          -> it isn't a video or audio file, or it's damaged.
                                              Export it again as .mp4 or .wav.
 Setup failed                              -> check your internet and run Setup.bat again.
+The window is slow to open                -> every launch writes how long each step took to
+                                             C:\Users\<you>\.subtitle-maker\startup.log
+                                             Send that file along to find out why.
 "Something went wrong"                    -> the details are saved in
                                              C:\Users\<you>\.subtitle-maker\last_error.log
                                              Send that file along if you ask for help.

@@ -1194,6 +1194,7 @@ async function boot() {
   S.info = await api().init();
   if (S.info.mode === "setup" || !S.info.configured) startSetup();
   go("make");
+  requestAnimationFrame(() => api().page_ready());  // for startup.log
   if (S.info.mode === "update") openUpdate();  // opened by Update.bat
   // Quietly, and a few seconds in so it doesn't slow the start: only a ready update is shown
   else setTimeout(() => checkUpdate(true), 4000);
