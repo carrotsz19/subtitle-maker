@@ -3,6 +3,8 @@
     python update.py               check, show what's new, ask, then update
     python update.py --yes         update without asking
     python update.py --check       just say whether there is an update
+    python update.py --channel experimental   switch to the experimental version
+    python update.py --channel main           go back to the stable version
 
 Only the program files are replaced. Your Voices clips, settings and downloaded models are
 never touched. The repo is public, so no GitHub account is needed.
@@ -23,11 +25,13 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-from paths import data_dir
+from paths import data_dir, load_settings, save_settings
 
 HERE = Path(__file__).parent
 REPO = os.environ.get("SUBTITLE_MAKER_REPO", "carrotsz19/subtitle-maker")
-BRANCH = "main"
+# Which version to follow: the stable one everybody gets, or the experimental one (newer, less
+# tested). Each is a branch of the repo; Settings > Updates switches between them.
+CHANNELS = {"main": "Stable", "experimental": "Experimental"}
 API = os.environ.get("SUBTITLE_MAKER_API", "https://api.github.com") + "/repos/" + REPO  # override for testing
 INSTALLED_FILE = data_dir() / "installed.json"
 
@@ -90,24 +94,42 @@ def change(message):
     return {"kind": "improvement", "text": line}
 
 
-def check():
-    """What's on GitHub compared with what's installed. Raises UpdateError."""
-    commit = fetch_json(f"/commits/{BRANCH}")
+def channel():
+    """The branch Settings says to follow."""
+    return load_settings().get("channel", "main")
+
+
+def check(branch=None):
+    """What's on GitHub compared with what's installed. Raises UpdateError.
+
+    "switch" is set when that means changing channel (the installed copy came from the other
+    branch), and "back" when the version it moves to is older than the installed one.
+    """
+    branch = branch or channel()
+    try:
+        commit = fetch_json(f"/commits/{branch}")
+    except UpdateError:
+        if branch == "main":
+            raise
+        raise UpdateError("There's no experimental version on GitHub right now. Switch back to Stable in Settings.") from None
     latest = {"sha": commit["sha"], "date": commit["commit"]["committer"]["date"],
-              "message": commit["commit"]["message"].splitlines()[0]}
+              "message": commit["commit"]["message"].splitlines()[0], "branch": branch}
     current = installed()
-    news = []
+    switch = branch if current and current.get("branch", "main") != branch else None
+    news, back = [], False
     if current and current["sha"] != latest["sha"]:
         try:
             compare = fetch_json(f"/compare/{current['sha']}...{latest['sha']}")
             news = [change(c["commit"]["message"]) for c in compare.get("commits", [])]
+            back = compare.get("status") == "behind"
         except UpdateError:
             pass  # the list of changes is a nicety; the update itself still works
     news = news or [change(latest["message"])]
     # Most serious first, then newest first; ten is plenty to read
     news = sorted(reversed(news), key=lambda n: KINDS.index(n["kind"]))[:10]
-    return {"repo": REPO, "latest": latest, "installed": current,
-            "update": not current or current["sha"] != latest["sha"], "news": news, "kind": news[0]["kind"]}
+    return {"repo": REPO, "latest": latest, "installed": current, "branch": branch, "switch": switch, "back": back,
+            "update": not current or current["sha"] != latest["sha"] or bool(switch), "news": news,
+            "kind": news[0]["kind"]}
 
 
 def program_files(root):
@@ -134,7 +156,7 @@ def file_hash(path):
 FILES_LIST = data_dir() / "install-files.txt"  # written by Install Subtitle Maker.bat
 
 
-def record(sha, date=None, files=None):
+def record(sha, date=None, files=None, branch="main"):
     """Remember which version this folder now has, and exactly which files came with it.
 
     The file list is what updates replace and Uninstall removes, so it must be the downloaded
@@ -146,7 +168,7 @@ def record(sha, date=None, files=None):
         except OSError:
             files = []  # unknown: better to remove too little than something of yours
     INSTALLED_FILE.parent.mkdir(parents=True, exist_ok=True)
-    INSTALLED_FILE.write_text(json.dumps({"sha": sha, "date": date, "folder": str(HERE.resolve()),
+    INSTALLED_FILE.write_text(json.dumps({"sha": sha, "date": date, "folder": str(HERE.resolve()), "branch": branch,
                                           "files": files}, indent=2), encoding="utf-8")
     FILES_LIST.unlink(missing_ok=True)
 
@@ -189,7 +211,7 @@ def apply(latest, report=print_step, packages=True):
         for rel in set(previous["files"] if previous else []) - set(new_files):
             if (HERE / rel).is_file():
                 (HERE / rel).unlink()
-    record(latest["sha"], latest.get("date"), new_files)
+    record(latest["sha"], latest.get("date"), new_files, latest.get("branch", "main"))
 
     changed = [name for name, digest in old_requirements.items() if file_hash(HERE / name) != digest
                and (name == "requirements.txt" or shutil.which("nvidia-smi"))]
@@ -267,17 +289,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--check", action="store_true", help="only check, don't update")
     parser.add_argument("--yes", action="store_true", help="update without asking")
+    parser.add_argument("--channel", choices=list(CHANNELS), help="follow this version from now on")
     parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)  # for the app window
     parser.add_argument("--record", metavar="SHA", help=argparse.SUPPRESS)  # used by the installer
     parser.add_argument("--finish", type=int, metavar="PID", help=argparse.SUPPRESS)  # used by the app window
     args = parser.parse_args()
     if args.record:
-        record(args.record)
+        record(args.record, branch=args.channel or "main")
+        if args.channel:  # the installer's choice is also the one to follow from now on
+            save_settings({**load_settings(), "channel": args.channel})
         return
     if args.finish:
         finish(args.finish)
         return
 
+    if args.channel:
+        save_settings({**load_settings(), "channel": args.channel})
     interactive = sys.stdin.isatty() and not args.json
     try:
         status = check()
@@ -287,10 +314,12 @@ def main():
     if args.json:
         print(json.dumps(status))
         return
-    print(f"Installed: {describe(status['installed'])}\nLatest:    {describe(status['latest'])}")
+    print(f"Installed: {describe(status['installed'])}\nLatest:    {describe(status['latest'])} ({CHANNELS[status['branch']]})")
     if not status["update"]:
         print("You have the latest version.")
         return
+    if status["switch"]:
+        print(f"This switches to the {CHANNELS[status['switch']].lower()} version.")
     print("What's new:\n" + "\n".join(f"  - [{n['kind']}] {n['text']}" for n in status["news"]))
     if status["kind"] == "security":
         print("This includes a security update: please install it.")

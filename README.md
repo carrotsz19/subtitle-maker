@@ -15,6 +15,11 @@ warnings, because nothing is downloaded through the browser. (Prefer double-clic
 `Install Subtitle Maker.bat` does the same, after the usual warnings for downloaded files.)
 
 **Updating:** Settings > Updates in the window, or `Update.bat`.
+
+**Experimental version:** newer features before they're fully tested. Switch in Settings > Updates
+(Version to follow: Experimental), and back to Stable the same way. To install it fresh:
+
+    $env:SUBTITLE_MAKER_BRANCH = 'experimental'; irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1 | iex
 **Uninstalling:** Settings > Uninstall in the window, or `Uninstall.bat`.
 
 The full guide is in [README.txt](README.txt).

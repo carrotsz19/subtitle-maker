@@ -6,6 +6,10 @@
 # It downloads the latest version into %USERPROFILE%\Subtitle Maker, installs Python and its
 # packages (Setup.bat), puts a shortcut on the desktop and opens the setup window.
 # "Install Subtitle Maker.bat" runs this same script for people who'd rather double-click.
+#
+# For the experimental version (newer, less tested; Settings > Updates switches back to Stable):
+#
+#     $env:SUBTITLE_MAKER_BRANCH = 'experimental'; irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1 | iex
 
 function Install-SubtitleMaker {
     $ErrorActionPreference = 'Stop'
@@ -16,6 +20,7 @@ function Install-SubtitleMaker {
     $api = if ($env:SUBTITLE_MAKER_API) { $env:SUBTITLE_MAKER_API } else { 'https://api.github.com' }  # override for testing
     $dest = if ($env:SUBTITLE_MAKER_INSTALL) { $env:SUBTITLE_MAKER_INSTALL } else { Join-Path $env:USERPROFILE 'Subtitle Maker' }
     $data = if ($env:SUBTITLE_MAKER_HOME) { $env:SUBTITLE_MAKER_HOME } else { Join-Path $env:USERPROFILE '.subtitle-maker' }
+    $branch = if ($env:SUBTITLE_MAKER_BRANCH) { $env:SUBTITLE_MAKER_BRANCH } else { 'main' }
     $headers = @{ 'User-Agent' = 'subtitle-maker-installer'; 'Accept' = 'application/vnd.github+json' }
 
     Write-Host ''
@@ -25,13 +30,14 @@ function Install-SubtitleMaker {
 
     # ---- 1. The latest version from GitHub ----------------------------------------------------
     try {
-        $commit = Invoke-RestMethod -Headers $headers -Uri "$api/repos/$repo/commits/main" -UseBasicParsing
+        $commit = Invoke-RestMethod -Headers $headers -Uri "$api/repos/$repo/commits/$branch" -UseBasicParsing
     } catch {
         Write-Host "Couldn't reach GitHub: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
     $sha = $commit.sha
-    Write-Host "Downloading the latest version ($($sha.Substring(0, 7)))..."
+    $which = if ($branch -eq 'main') { '' } else { "$branch " }
+    Write-Host "Downloading the latest ${which}version ($($sha.Substring(0, 7)))..."
     $zip = Join-Path $env:TEMP "subtitle-maker-$sha.zip"
     $unpacked = Join-Path $env:TEMP "subtitle-maker-$sha"
     Invoke-WebRequest -Headers $headers -Uri "$api/repos/$repo/zipball/$sha" -OutFile $zip -UseBasicParsing
@@ -66,7 +72,7 @@ function Install-SubtitleMaker {
     & cmd.exe /c "`"$dest\Setup.bat`" --no-window"
     if ($LASTEXITCODE -ne 0) { return $false }
     $python = Join-Path $data 'venv\Scripts\python.exe'
-    & $python (Join-Path $dest 'update.py') --record $sha
+    & $python (Join-Path $dest 'update.py') --record $sha --channel $branch
 
     # ---- 3. Desktop shortcut, with the icon --------------------------------------------------
     $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut(
