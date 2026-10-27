@@ -1,11 +1,17 @@
-# Push a version tag (git tag v0.1.0 && git push origin v0.1.0) and this makes the GitHub release,
-# with the installer attached so people can download it straight from the release page.
+# Makes a GitHub release with the installer attached, so people can download it straight from the
+# release page. Either push a version tag (git tag v0.1.0 && git push origin v0.1.0), or run it from
+# the Actions tab (Release > Run workflow) with a version name, and the tag is made on main.
 # v0.x tags and tags with a dash (v1.2.0-beta.1) become pre-releases; others are full releases.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version to release, e.g. v0.1.0"
+        required: true
 
 permissions:
   contents: write
@@ -19,7 +25,7 @@ jobs:
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           prerelease=""
           case "$TAG" in v0.*|*-*) prerelease="--prerelease" ;; esac
@@ -30,5 +36,8 @@ jobs:
 
           Already installed? Use Settings > Updates in the window, or `Update.bat`.
           NOTES
-          gh release create "$TAG" $prerelease --verify-tag --title "Subtitle Maker $TAG" \
+          # A pushed tag already exists; a run from the Actions tab makes it on the commit it ran on
+          verify=""
+          [ "${{ github.event_name }}" = "push" ] && verify="--verify-tag"
+          gh release create "$TAG" $prerelease $verify --target "$GITHUB_SHA" --title "Subtitle Maker $TAG" \
             --notes-file notes.md --generate-notes "Install Subtitle Maker.bat"
