@@ -1,0 +1,82 @@
+# Tests Subtitle Maker on Windows, the way people use it: Setup.bat installs everything, then
+# the unit tests, a real Whisper download and transcription, and the real window opening.
+# On pushes to main it also runs the one-line PowerShell install.
+name: Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Use a scratch data folder
+        shell: pwsh
+        run: |
+          "SUBTITLE_MAKER_HOME=$env:RUNNER_TEMP\subtitle-maker-home" >> $env:GITHUB_ENV
+          "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
+
+      - name: Setup.bat (Python environment and packages)
+        shell: cmd
+        run: call Setup.bat --no-window
+
+      - name: Unit tests
+        shell: pwsh
+        run: '& "$env:SUBTITLE_MAKER_HOME\venv\Scripts\python.exe" tests\test_units.py'
+
+      - name: Real Whisper (download, transcribe, two speakers, model kept loaded)
+        shell: pwsh
+        run: '& "$env:SUBTITLE_MAKER_HOME\venv\Scripts\python.exe" tests\test_pipeline.py'
+
+      - name: The window opens and gets ready
+        shell: pwsh
+        run: '& "$env:SUBTITLE_MAKER_HOME\venv\Scripts\python.exe" tests\test_window.py'
+
+      - name: Logs
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($f in 'startup.log', 'last_error.log') {
+            $p = Join-Path $env:SUBTITLE_MAKER_HOME $f
+            if (Test-Path $p) { "===== $f"; Get-Content $p }
+          }
+
+  install:
+    # The one-line install downloads main from GitHub, so it only means something after a push there
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install.ps1 in Windows PowerShell 5.1 (what people have)
+        shell: powershell
+        env:
+          SUBTITLE_MAKER_NO_LAUNCH: "1"
+        run: |
+          $env:SUBTITLE_MAKER_INSTALL = "$env:RUNNER_TEMP\Subtitle Maker"
+          $env:SUBTITLE_MAKER_HOME = "$env:RUNNER_TEMP\.subtitle-maker"
+          . .\install.ps1
+          if (-not $global:SubtitleMakerInstalled) { throw "install.ps1 reported failure" }
+          foreach ($f in 'app.py', 'make_subtitles.py', 'ui\index.html', 'ui\icon.ico') {
+            if (-not (Test-Path (Join-Path $env:SUBTITLE_MAKER_INSTALL $f))) { throw "missing after install: $f" }
+          }
+          if (Test-Path (Join-Path $env:SUBTITLE_MAKER_INSTALL 'tests')) { throw "tests/ should not be installed" }
+          $installed = Get-Content (Join-Path $env:SUBTITLE_MAKER_HOME 'installed.json') -Raw | ConvertFrom-Json
+          if (-not $installed.sha -or $installed.files.Count -lt 10) { throw "installed.json wasn't recorded properly" }
+          if (-not (Test-Path ([Environment]::GetFolderPath('Desktop') + '\Subtitle Maker.lnk'))) { throw "no desktop shortcut" }
+          Write-Host "Install test passed: $($installed.files.Count) files at $($installed.sha.Substring(0, 7))"

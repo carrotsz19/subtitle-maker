@@ -44,6 +44,11 @@ function Install-SubtitleMaker {
     }
 
     # The exact files this version has: updates replace and Uninstall removes these, nothing else
+    # (tests and .github are for developing it, not part of an install)
+    foreach ($dev in 'tests', '.github') {
+        $devPath = Join-Path $root $dev
+        if (Test-Path $devPath) { Remove-Item -LiteralPath $devPath -Recurse -Force }
+    }
     $files = Get-ChildItem -LiteralPath $root -Recurse -File | ForEach-Object { $_.FullName.Substring($root.Length + 1).Replace('\', '/') }
     [IO.File]::WriteAllLines((Join-Path $data 'install-files.txt'), [string[]]$files)
 
@@ -75,6 +80,7 @@ function Install-SubtitleMaker {
 
     Write-Host ''
     Write-Host 'Installed. There''s a "Subtitle Maker" shortcut on your desktop.' -ForegroundColor Green
+    if ($env:SUBTITLE_MAKER_NO_LAUNCH) { return $true }  # the Windows tests on GitHub
     Write-Host 'Opening the setup window to choose the quality and download what it needs...'
     Start-Process -FilePath (Join-Path $data 'venv\Scripts\pythonw.exe') -ArgumentList "`"$(Join-Path $dest 'app.py')`" --setup" -WorkingDirectory $dest
     return $true

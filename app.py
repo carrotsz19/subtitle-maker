@@ -59,6 +59,8 @@ class Timings:
 
 TIMINGS = Timings()
 READY_WITHIN = 40  # seconds before the watchdog says something
+# --smoke-test (the Windows tests on GitHub): open, wait until ready, close; fail if it never gets ready
+SMOKE_TEST = "--smoke-test" in sys.argv
 
 
 def watchdog():
@@ -67,6 +69,8 @@ def watchdog():
     while not TIMINGS.ready.wait(READY_WITHIN):
         TIMINGS.mark(f"NOT READY after {READY_WITHIN} more seconds (last step above is where it got stuck)")
         TIMINGS.save()
+        if SMOKE_TEST:
+            os._exit(3)
         if sys.platform != "win32":
             continue
         import ctypes
@@ -185,6 +189,8 @@ class Api:
         """The page has drawn itself: the window is fully open."""
         TIMINGS.mark("window ready to use")
         TIMINGS.save()
+        if SMOKE_TEST:
+            threading.Timer(1.0, self._window.destroy).start()
 
     def restart_app(self):
         """Close this window and open a fresh one (the page offers this if starting goes wrong)."""

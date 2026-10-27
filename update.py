@@ -115,7 +115,8 @@ def program_files(root):
     files = []
     for path in sorted(Path(root).rglob("*")):
         rel = path.relative_to(root)
-        if not path.is_file() or rel.parts[0] in (".git", "__pycache__") or "__pycache__" in rel.parts:
+        # tests/ and .github/ are for developing it, not part of an install
+        if not path.is_file() or rel.parts[0] in (".git", ".github", "tests", "__pycache__") or "__pycache__" in rel.parts:
             continue
         if rel.parts[0] == "Voices" and rel.name != "README.txt":
             continue
