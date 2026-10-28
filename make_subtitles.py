@@ -31,6 +31,7 @@ import sys
 import tempfile
 import textwrap
 import threading
+import time
 import traceback
 import wave
 from collections import namedtuple
@@ -42,7 +43,7 @@ from tqdm import tqdm
 
 
 import models  # noqa: E402
-from paths import ERROR_LOG, LEVELS, MODELS_DIR, add_history, level_for_model, load_settings  # noqa: E402
+from paths import ERROR_LOG, LEVELS, MODELS_DIR, add_history, data_dir, level_for_model, load_settings  # noqa: E402
 
 
 def add_cuda_dlls():
@@ -121,6 +122,7 @@ class EventBar:
 
     def __init__(self, total, desc=""):
         self.total, self.n, self.desc, self.extra = total, 0.0, desc.strip(), None
+        self.expect = None  # seconds this PC took for this much audio last time, if known
 
     def update(self, amount):
         self.n += amount
@@ -135,13 +137,44 @@ class EventBar:
 
     def send(self):
         emit("progress", done=round(self.n, 1), total=self.total, stage=self.desc,
-             speakers=self.extra() if self.extra else None)
+             speakers=self.extra() if self.extra else None, expect=self.expect)
 
     def write(self, message):
         print(message, flush=True)
 
     def close(self):
         pass
+
+
+SPEED_FILE = data_dir() / "speed.json"
+
+
+def speed_key(model_name, device, speakers):
+    return f"{model_name}|{device}|{'speakers' if speakers else 'plain'}"
+
+
+def expected_seconds(key, audio_seconds):
+    """How long transcribing this much audio should take on this PC, from earlier videos (or None)."""
+    try:
+        factor = json.loads(SPEED_FILE.read_text(encoding="utf-8")).get(key)
+    except (OSError, ValueError):
+        return None
+    return round(factor * audio_seconds, 1) if isinstance(factor, (int, float)) else None
+
+
+def remember_speed(key, took, audio_seconds):
+    """Keep a running average of seconds taken per second of audio, for the next time-left estimate."""
+    if audio_seconds < 20:  # too short to say much (loading and warm-up dominate)
+        return
+    try:
+        speeds = json.loads(SPEED_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        speeds = {}
+    factor = took / audio_seconds
+    old = speeds.get(key)
+    speeds[key] = round(factor if not isinstance(old, (int, float)) else (old + factor) / 2, 4)
+    with contextlib.suppress(OSError):
+        SPEED_FILE.write_text(json.dumps(speeds, indent=1), encoding="utf-8")
 
 
 class FriendlyError(Exception):
@@ -643,16 +676,24 @@ def ask_name(spk, audio, turns, cues, player):
         player.stop()
 
 
-def name_speakers(detector, audio, turns, cues, voices_dir):
-    """Work out a display name for each detected speaker: voice samples first, then ask."""
+def voice_prints(detector, voices_dir):
+    """{name: fingerprint} for each clip in the Voices folder (Alex.wav is Alex)."""
+    import speakers
+
+    return {name: detector.fingerprint(decode_audio(str(path), sampling_rate=speakers.SAMPLE_RATE))
+            for name, path in speakers.voice_samples(voices_dir).items()}
+
+
+def name_speakers(detector, audio, turns, cues, sample_prints, known=None):
+    """Work out a display name for each detected speaker: already matched to a clip (known),
+    then the closest voice clip, then ask."""
     import speakers
 
     ids = sorted({spk for _, _, spk in turns})
-    names = {}
-    samples = speakers.voice_samples(voices_dir)
-    if samples:
-        sample_prints = {name: detector.fingerprint(decode_audio(str(path), sampling_rate=speakers.SAMPLE_RATE))
-                         for name, path in samples.items()}
+    names = {spk: name for spk, name in (known or {}).items() if name}
+    for spk, name in names.items():
+        print(f"Speaker {spk + 1} is {name} (matched line by line to the voice clips)")
+    if sample_prints and not names:
         matches = speakers.match_names(detector.speaker_fingerprints(audio, turns), sample_prints)
         for spk, (name, score) in matches.items():
             names[spk] = name
@@ -805,6 +846,7 @@ def make_subtitles(args, level):
     if EVENTS:
         bar = EventBar(total, "Transcribing")
         bar.extra = (lambda: round(detector.progress, 3)) if detector else None
+        bar.expect = expected_seconds(speed_key(model_name, loaded_on, detector), total)
         bar.send()
     else:
         bar = tqdm(total=total, unit="s", dynamic_ncols=True,
@@ -816,14 +858,18 @@ def make_subtitles(args, level):
     with monitor or contextlib.nullcontext():
         st = args.settings
         options = {"vad_filter": st["vad"], "hotwords": st["hotwords"].strip() or None}
+        started = time.perf_counter()
         tokens, language = transcribe(whisper, model_name, audio, args.language, 1 if potato else 5, bar, options)
         bar.update(bar.total - bar.n)
         if detector:
             bar.set_description_str("Finishing speaker detection ")
             detect_thread.join()
+        took = time.perf_counter() - started
     bar.close()
     if whisper["device"] != loaded_on:
         LOADED.clear()  # it fell back to the CPU partway: the next video tries the GPU afresh
+    elif "error" not in detection:
+        remember_speed(speed_key(model_name, loaded_on, detector), took, total)
     print(f"Language: {language}  Length: {clock(len(audio) / SAMPLE_RATE)}")
     emit("progress", done=total, total=total, stage="Writing subtitles", speakers=None)
     if "error" in detection:
@@ -841,14 +887,19 @@ def make_subtitles(args, level):
     tokens = apply_fixes(tokens, st["fixes"])
     if not tokens:
         raise FriendlyError("No speech found. If there's loud music, try a version with the music muted.")
+    known, prints = None, None
     if turns:
-        tokens = [t._replace(speaker=speakers.speaker_at(t.start, t.end, turns)) for t in tokens]
+        # Who said each sentence: fingerprints of whole sentences, grouped into people (or matched
+        # to the voice clips), which is much steadier than the detector's word-by-word answer
+        emit("progress", done=total, total=total, stage="Matching voices to lines", speakers=None)
+        prints = voice_prints(detector, args.voices)
+        tokens, turns, known = speakers.assign(tokens, turns, detector, audio, count, prints)
     cues = build_cues(tokens)
     style = st["speaker_labels"]
 
     names = None
     if turns:
-        names = name_speakers(detector, audio, turns, cues, args.voices)
+        names = name_speakers(detector, audio, turns, cues, prints, known)
         # Split again now the names are known, so each label fits inside the line length
         if style != "none":
             cues = build_cues(tokens, lambda spk: label("", names[spk], style))

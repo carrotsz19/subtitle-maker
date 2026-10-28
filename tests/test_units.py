@@ -52,6 +52,48 @@ prints = {0: e[0], 1: (e[0] + e[1]) / np.sqrt(2)}
 assert speakers.match_names(prints, {"Alex": e[0], "Sam": e[1]}) == {0: ("Alex", 1.0), 1: ("Sam", float(prints[1] @ e[1]))}
 assert speakers.match_names(prints, {"Nobody": e[2]}) == {}
 
+# Who said each sentence: whole-sentence fingerprints repair the detector lumping two people
+# together, never give more people than asked for, and voice clips name them
+class FakeDetector:
+    """Fingerprints from the audio itself: speaker A's audio is +0.1, B's is -0.1 (plus noise)."""
+    def fingerprint(self, audio):
+        rng = np.random.default_rng(int(abs(audio.sum()) * 1000) % 2**32)
+        v = (np.array([1.0, 0, 0, 0]) if audio.mean() > 0 else np.array([0, 1.0, 0, 0])) + rng.normal(0, 0.15, 4)
+        return v / np.linalg.norm(v)
+
+
+def said(plan):
+    """[(who, seconds)] -> audio, tokens (a sentence per turn, a word every 0.4 s), truth per word."""
+    audio, toks, truth, t = [], [], [], 0.0
+    for who, length in plan:
+        n = int(length / 0.4)
+        audio.append(np.full(int(length * 16000), 0.1 if who == "A" else -0.1, dtype=np.float32))
+        toks += [ms.Token(" word" + ("." if i == n - 1 else ""), t + i * 0.4, t + i * 0.4 + 0.35, None) for i in range(n)]
+        truth += [who] * n
+        t += length
+    return np.concatenate(audio), toks, truth
+
+
+plan = [("A", 3.2), ("B", 2.4), ("A", 4.0), ("B", 3.2), ("B", 0.4), ("A", 2.8), ("B", 3.6)]
+audio, toks, truth = said(plan)
+lumped = [(0.0, 9.6, 0), (9.6, 19.6, 1)]  # the detector got the first half wrong
+fixed, new_turns, names = speakers.assign(toks, lumped, FakeDetector(), audio, 2)
+groups = {}
+for t, who in zip(fixed, truth):
+    groups.setdefault(who, set()).add(t.speaker)
+assert groups["A"].isdisjoint(groups["B"]) and len(groups["A"]) == len(groups["B"]) == 1, groups
+assert fixed[0].speaker == 0 and names is None and {s for _, _, s in new_turns} == {0, 1}
+assert len({t.speaker for t in speakers.assign(toks, lumped, FakeDetector(), audio, -1)[0]}) == 2  # guessing finds 2
+clips = {"Jamie": FakeDetector().fingerprint(np.full(16000, -0.1, np.float32)), "Alex": FakeDetector().fingerprint(np.full(16000, 0.1, np.float32))}
+fixed, _, names = speakers.assign(toks, lumped, FakeDetector(), audio, 2, clips)
+assert {names[t.speaker] for t, who in zip(fixed, truth) if who == "A"} == {"Alex"}, names
+assert {names[t.speaker] for t, who in zip(fixed, truth) if who == "B"} == {"Jamie"}, names
+# Whisper running on across a change of speaker (no full stop): long "sentences" are split
+run_on = [t._replace(word=t.word.rstrip(".")) for t in toks]
+spans = speakers.sentence_spans(run_on, [0] * len(run_on))
+assert all(run_on[b - 1].end - run_on[a].start <= speakers.LONGEST for a, b in spans)
+assert speakers.assign(toks, [], FakeDetector(), audio, 2) == (toks, [], None)
+
 # Filler words
 assert ms.is_filler(" Um,") and ms.is_filler("uh.") and not ms.is_filler("umbrella")
 

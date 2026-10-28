@@ -602,14 +602,63 @@ function whereCard() {
     </div></div>`;
 }
 
+/* Time left: the speed over the last 45 s or so (it changes, e.g. when speaker detection finishes
+   and frees up the processor), blended at first with how long this PC took last time, counting
+   down between updates, and the slower of transcribing and speaker detection. */
+const RATE_WINDOW = 45000;
+function secondsLeft(r, now = Date.now()) {
+  if (!r.total || !r.startedAt || r.done >= r.total) return null;
+  const elapsed = (now - r.startedAt) / 1000, all = r.points || [];
+  // Since the speed changed (speaker detection finished), plus the update just before, whose
+  // jump already includes some of the new speed
+  const since = all.findIndex(p => p.t >= (r.rateFrom || 0));
+  const points = since < 0 ? all.slice(-1) : all.slice(Math.max(0, since - 1));
+  let left = null, measured = 0;  // measured: seconds of clean measurement behind the estimate
+  if (points.length >= 2) {
+    const last = points[points.length - 1];
+    const first = points.find(p => last.t - p.t <= RATE_WINDOW) || points[0];
+    const span = (last.t - first.t) / 1000;
+    if (span >= 8 && last.done > first.done) {
+      left = (r.total - last.done) / ((last.done - first.done) / span) - (now - last.t) / 1000;
+      measured = span;
+    }
+  }
+  if (left === null && r.done > 0 && elapsed >= 8) {
+    left = (r.total - r.done) / (r.done / elapsed);
+    measured = r.rateFrom ? 0 : elapsed;  // the average from the start is stale once the speed changed
+  }
+  if (r.expect) {  // how long this PC took last time, until there's enough measured to go on
+    const guess = r.expect - elapsed, trust = Math.min(1, measured / 30);
+    left = left === null ? guess : trust * left + (1 - trust) * guess;
+  }
+  // Speaker detection runs alongside: the video isn't done until both are
+  if (left !== null && r.speakers != null && r.speakers > 0.02 && r.speakers < 1) {
+    left = Math.max(left, (1 - r.speakers) / (r.speakers / elapsed));
+  }
+  return left === null ? null : Math.max(left, 5);
+}
+function roughly(seconds) {
+  if (seconds < 50) return "less than a minute";
+  if (seconds < 90) return "about a minute";
+  if (seconds < 3600) return `about ${Math.round(seconds / 60)} min`;
+  const h = Math.floor(seconds / 3600), m = Math.round(seconds % 3600 / 60);
+  return `about ${h} h ${String(m).padStart(2, "0")} min`;
+}
+function etaText(r) {
+  const left = secondsLeft(r);
+  return left === null ? "" : ` · ${roughly(left)} left`;
+}
+/* The time left counts down between progress updates (which come in jumps) */
+setInterval(() => {
+  const r = S.run, el = $("#run-stage");
+  if (!r || r.kind !== "make" || !el || !r.total) return;
+  el.innerHTML = `${esc(r.stage || "Starting")} · ${clock(r.done)} of ${clock(r.total)}${etaText(r)}`;
+}, 1000);
+
 function viewRunning() {
   const r = S.run, pct = r.total ? Math.min(1, r.done / r.total) : 0;
   const left = queueLeft();
-  let eta = "";
-  if (r.total && r.done > 0 && r.startedAt) {
-    const rate = r.done / ((Date.now() - r.startedAt) / 1000);
-    if (rate > 0 && pct < 1) eta = ` · about ${clock((r.total - r.done) / rate)} left`;
-  }
+  const eta = etaText(r);
   const res = r.res || {};
   const meter = (label, value, frac, hot) => `<div class="meter${hot ? " hot" : ""}"><span>${label}</span><b>${value}</b>
       <div class="bar thin"><i style="width:${Math.round(Math.min(1, frac || 0) * 100)}%"></i></div></div>`;
@@ -1694,7 +1743,11 @@ const app = {
     switch (ev.type) {
       case "progress":
         if (ev.stage === "Transcribing" && !r.startedAt && ev.done === 0) r.startedAt = Date.now();
-        Object.assign(r, { done: ev.done, total: ev.total, stage: ev.stage, speakers: ev.speakers });
+        // Speaker detection just finished: the processor is freed up, so measure the speed afresh
+        if (r.speakers != null && r.speakers < 1 && ev.speakers === 1) r.rateFrom = Date.now();
+        if (ev.done !== r.done) (r.points = r.points || []).push({ t: Date.now(), done: ev.done });
+        if (r.points && r.points.length > 400) r.points.splice(0, 200);
+        Object.assign(r, { done: ev.done, total: ev.total, stage: ev.stage, speakers: ev.speakers, expect: ev.expect });
         break;
       case "resources": r.res = ev; break;
       case "download":
