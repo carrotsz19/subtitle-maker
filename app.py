@@ -369,6 +369,7 @@ class Api:
             time.sleep(1)  # the taskbar call runs on the window's thread
             self._progress(state=winextras.NO_PROGRESS)
             time.sleep(0.5)
+            TIMINGS.mark("taskbar probe: " + winextras.probe_taskbar())
             shell = any((proc.info["name"] or "").lower() == "explorer.exe" for proc in psutil.process_iter(["name"]))
             TIMINGS.mark(f"taskbar progress: {self._taskbar.error or ('ok' if self._taskbar.ok else 'nothing happened')}"
                          f" (Windows shell {'running' if shell else 'not running'})")

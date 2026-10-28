@@ -109,6 +109,35 @@ class Taskbar:
             self._requests.put(wanted)
 
 
+def probe_taskbar():
+    """For the Windows tests: which taskbar interfaces this PC's taskbar object offers, on a fresh thread."""
+    import ctypes
+
+    out = []
+
+    def run():
+        ole = ctypes.windll.ole32
+        out.append(f"CoInitializeEx={ole.CoInitializeEx(None, 0x2) & 0xFFFFFFFF:#x}")
+        clsid = ctypes.create_string_buffer(uuid.UUID("56FDF344-FD6D-11d0-958A-006097C9A090").bytes_le, 16)
+        unknown = ctypes.create_string_buffer(uuid.UUID("00000000-0000-0000-C000-000000000046").bytes_le, 16)
+        ptr = ctypes.c_void_p()
+        out.append(f"create(IUnknown)={ole.CoCreateInstance(clsid, None, 1, unknown, ctypes.byref(ptr)) & 0xFFFFFFFF:#x}")
+        if not ptr.value:
+            return
+        table = ctypes.cast(ctypes.cast(ptr, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+        query = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_void_p))(table[0])
+        for name, iid in (("ITaskbarList", "56FDF342-FD6D-11d0-958A-006097C9A090"),
+                          ("ITaskbarList2", "602D4995-B13A-429b-A66E-1935E44F4317"),
+                          ("ITaskbarList3", "ea1afb91-9e28-4b86-90e9-9e9f8a5eee6d")):
+            got = ctypes.c_void_p()
+            out.append(f"{name}={query(ptr, uuid.UUID(iid).bytes_le, ctypes.byref(got)) & 0xFFFFFFFF:#x}")
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    thread.join(10)
+    return " ".join(out)
+
+
 def in_background(window):
     """True when the window is minimised or another window has the focus."""
     if not WINDOWS:
