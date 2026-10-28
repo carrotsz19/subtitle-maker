@@ -178,8 +178,10 @@ class Api:
         if self._window:
             self._window.evaluate_js(f"app.onEvent({json.dumps(event)})")
             if event["type"] == "progress" and event.get("total"):
-                self._window.set_title(f"{event['done'] / event['total']:.0%} · Subtitle Maker")
-                self._progress(event["done"] / event["total"])
+                # The whole video's progress (transcribing is only most of it); never 100% until saved
+                fraction = min(event.get("overall", event["done"] / event["total"]), 0.99)
+                self._window.set_title(f"{int(fraction * 100)}% · Subtitle Maker")
+                self._progress(fraction)
             elif event["type"] == "progress":
                 self._progress(state=winextras.INDETERMINATE)
             elif event["type"] == "error":

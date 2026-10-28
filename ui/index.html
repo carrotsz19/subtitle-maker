@@ -771,6 +771,10 @@ function whereCard() {
    down between updates, and the slower of transcribing and speaker detection. */
 const RATE_WINDOW = 45000;
 function secondsLeft(r, now = Date.now()) {
+  // Transcribed, but speaker detection is still catching up: its own pace says how long
+  if (r.phase === "speakers" && r.startedAt && r.speakers > 0.02 && r.speakers < 1) {
+    return Math.max(5, (1 - r.speakers) / (r.speakers / ((now - r.startedAt) / 1000)));
+  }
   if (!r.total || !r.startedAt || r.done >= r.total) return null;
   const elapsed = (now - r.startedAt) / 1000, all = r.points || [];
   // Since the speed changed (speaker detection finished), plus the update just before, whose
@@ -833,19 +837,32 @@ function shownDone(r, now = Date.now()) {
   return r.shown;
 }
 function stageText(r, done) {
-  return `${esc(r.stage || "Starting")}${r.total ? ` · ${clock(done)} of ${clock(r.total)}${etaText(r)}` : ""}`;
+  const transcribing = !r.phase || r.phase === "transcribe";
+  return `${esc(r.stage || "Starting")}${r.total && transcribing ? ` · ${clock(done)} of ${clock(r.total)}` : ""}${r.total && r.phase !== "lines" && r.phase !== "writing" ? etaText(r) : ""}`;
 }
+/* The whole video's progress, not just the transcript's (as make_subtitles.py works it out):
+   transcribing, alongside speaker detection, is the first 92% (the slower of the two decides);
+   matching voices, making the lines and writing are the rest. 100% only once it's saved. */
+const TRANSCRIBED_AT = 0.92;  // the same as make_subtitles.TRANSCRIBED_AT
+function overallShown(r) {
+  if (!r.total) return 0;
+  if (r.phase && r.phase !== "transcribe") return Math.min(r.overall ?? 0.99, 0.99);
+  const transcribed = Math.min(1, shownDone(r) / r.total);
+  const base = r.speakers != null && r.speakers < 1 ? Math.min(transcribed, r.speakers) : transcribed;
+  return Math.min(0.99, TRANSCRIBED_AT * base);
+}
+const pctText = fraction => Math.floor(fraction * 100) + "%";
 setInterval(() => {
   const r = S.run, card = $("#running");
   if (!r || r.kind !== "make" || !card || !r.total) return;
-  const done = shownDone(r);
-  $("#run-pct", card).textContent = Math.round(Math.min(1, done / r.total) * 100) + "%";
-  card.querySelector(".bar > i").style.width = `${Math.min(1, done / r.total) * 100}%`;
+  const done = shownDone(r), whole = overallShown(r);
+  $("#run-pct", card).textContent = pctText(whole);
+  card.querySelector(".bar > i").style.width = `${whole * 100}%`;
   $("#run-stage", card).innerHTML = stageText(r, done);
 }, 250);
 
 function viewRunning() {
-  const r = S.run, done = shownDone(r), pct = r.total ? Math.min(1, done / r.total) : 0;
+  const r = S.run, done = shownDone(r), pct = overallShown(r);
   const left = queueLeft();
   const res = r.res || {};
   const meter = (label, value, frac, hot) => `<div class="meter${hot ? " hot" : ""}"><span>${label}</span><b>${value}</b>
@@ -860,7 +877,7 @@ function viewRunning() {
         <h3 class="trunc">${esc(r.item.name)}</h3></div>
       <button class="btn ghost sm" data-act="cancel">Cancel</button></div>
     <div><div class="between" style="align-items:flex-end;margin-bottom:8px">
-        <div><div class="big-pct mono" id="run-pct">${r.total ? Math.round(pct * 100) + "%" : "…"}</div></div>
+        <div><div class="big-pct mono" id="run-pct">${r.total ? pctText(pct) : "…"}</div></div>
         <div class="sm dim right mono" id="run-stage">${stageText(r, done)}</div></div>
       <div class="bar ${r.total ? "" : "indeterminate"}"><i style="width:${pct * 100}%"></i></div></div>
     ${r.speakers != null ? `<div><div class="between sm"><span class="dim">Working out who's talking</span><span class="mono dim" id="run-spk">${Math.round(r.speakers * 100)}%</span></div>
@@ -1980,7 +1997,8 @@ const app = {
         if (r.speakers != null && r.speakers < 1 && ev.speakers === 1) r.rateFrom = Date.now();
         if (ev.done !== r.done) (r.points = r.points || []).push({ t: Date.now(), done: ev.done });
         if (r.points && r.points.length > 400) r.points.splice(0, 200);
-        Object.assign(r, { done: ev.done, total: ev.total, stage: ev.stage, speakers: ev.speakers, expect: ev.expect });
+        Object.assign(r, { done: ev.done, total: ev.total, stage: ev.stage, speakers: ev.speakers, expect: ev.expect,
+          phase: ev.phase, overall: ev.overall });
         break;
       case "resources": r.res = ev; break;
       case "download":

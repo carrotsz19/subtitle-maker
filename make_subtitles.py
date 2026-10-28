@@ -124,6 +124,7 @@ class EventBar:
     def __init__(self, total, desc=""):
         self.total, self.n, self.desc, self.extra = total, 0.0, desc.strip(), None
         self.expect = None  # seconds this PC took for this much audio last time, if known
+        self.phase = "transcribe"  # then "speakers": transcribed, speaker detection catching up
 
     def update(self, amount):
         self.n += amount
@@ -137,8 +138,9 @@ class EventBar:
         pass  # the window gets structured "resources" events instead
 
     def send(self):
-        emit("progress", done=round(self.n, 1), total=self.total, stage=self.desc,
-             speakers=self.extra() if self.extra else None, expect=self.expect)
+        speakers = self.extra() if self.extra else None
+        emit("progress", done=round(self.n, 1), total=self.total, stage=self.desc, speakers=speakers,
+             expect=self.expect, phase=self.phase, overall=overall_progress(self.phase, self.n / self.total if self.total else 0, speakers))
 
     def write(self, message):
         print(message, flush=True)
@@ -176,6 +178,28 @@ def remember_speed(key, took, audio_seconds):
     speeds[key] = round(factor if not isinstance(old, (int, float)) else (old + factor) / 2, 4)
     with contextlib.suppress(OSError):
         SPEED_FILE.write_text(json.dumps(speeds, indent=1), encoding="utf-8")
+
+
+# How far the whole video is, not just the transcript: transcribing (with speaker detection running
+# alongside, so the slower of the two) is most of it; matching voices to lines, making the lines
+# and writing the files are the rest. 100% only once the subtitles are saved.
+TRANSCRIBED_AT = 0.92
+
+
+def overall_progress(phase, transcribed=1.0, speakers=None, matched=0.0):
+    if phase == "transcribe":
+        return round(TRANSCRIBED_AT * min(transcribed, speakers if speakers is not None else transcribed), 4)
+    if phase == "speakers":
+        return round(TRANSCRIBED_AT * (speakers if speakers is not None else 1.0), 4)
+    if phase == "voices":
+        return round(TRANSCRIBED_AT + 0.05 * matched, 4)
+    return {"lines": 0.97, "writing": 0.99}.get(phase, 0.99)
+
+
+def after_transcript(phase, stage, total, matched=0.0):
+    """Progress after the transcript is done (matching voices, making the lines, writing)."""
+    emit("progress", done=total, total=total, stage=stage, speakers=None, phase=phase,
+         overall=overall_progress(phase, matched=matched))
 
 
 class FriendlyError(Exception):
@@ -783,7 +807,7 @@ class WindowProgress:
     text instead, the bar sat still through windows with no words, then jumped two at once."""
 
     def __init__(self, on_fraction):
-        self.on_fraction, self.used = on_fraction, False
+        self.on_fraction = on_fraction  # .total appears once faster-whisper makes its bar
 
     def __call__(self, total=None, **kwargs):  # faster-whisper makes its bar: tqdm(total=..., ...)
         self.total, self.n = float(total or 0), 0.0
@@ -792,7 +816,6 @@ class WindowProgress:
     def update(self, amount):
         self.n += amount
         if self.total > 0:
-            self.used = True
             self.on_fraction(min(1.0, self.n / self.total))
 
     def close(self):
@@ -826,7 +849,7 @@ def transcribe(whisper, model_name, audio, language, beam_size, bar, options=Non
     def advance(position):
         if position > bar.n:
             bar.update(min(position, bar.total) - bar.n)
-            set_title(f"{bar.n / bar.total:.0%} - Making subtitles")
+            set_title(f"{int(overall_progress('transcribe', bar.n / bar.total) * 100)}% - Making subtitles")
 
     while True:
         offset = done  # timestamps from this attempt are relative to where it started
@@ -841,8 +864,12 @@ def transcribe(whisper, model_name, audio, language, beam_size, bar, options=Non
                     done = seg.end + offset
                     if on_words:
                         on_words(tokens)
-                    if not windows.used:  # a faster-whisper without that progress: go by the lines
-                        advance(done)
+                    # faster-whisper makes its counter before the first line, so only one without it
+                    # goes by the lines, and then never to the end: on music or silence Whisper can
+                    # stamp a line as running to the end of the video long before it gets there
+                    # (the bar sat at 100% for minutes)
+                    if not hasattr(windows, "total"):
+                        advance(min(done, offset + 0.95 * (length - offset)))
             return tokens, language
         except Exception as e:
             if whisper["device"] == "cpu" or not gpu_failed(e):
@@ -946,6 +973,7 @@ def make_subtitles(args, level):
         tokens, language = transcribe(whisper, model_name, audio, args.language, 1 if potato else 5, bar, options, ahead)
         bar.update(bar.total - bar.n)
         if detector:
+            bar.phase = "speakers"
             bar.set_description_str("Finishing speaker detection ")
             detect_thread.join()
         took = time.perf_counter() - started
@@ -955,7 +983,6 @@ def make_subtitles(args, level):
     elif "error" not in detection:
         remember_speed(speed_key(model_name, loaded_on, detector), took, total)
     print(f"Language: {language}  Length: {clock(len(audio) / SAMPLE_RATE)}")
-    emit("progress", done=total, total=total, stage="Writing subtitles", speakers=None)
     if "error" in detection:
         raise detection["error"]
     turns = detection.get("turns", [])
@@ -975,15 +1002,23 @@ def make_subtitles(args, level):
     if turns:
         # Who said each sentence: fingerprints of whole sentences, grouped into people (or matched
         # to the voice clips), which is much steadier than the detector's word-by-word answer
-        emit("progress", done=total, total=total, stage="Matching voices to lines", speakers=None)
+        after_transcript("voices", "Matching voices to lines", total)
         prints = voice_prints(detector, args.voices)
         fingerprints.finish()
-        tokens, turns, known = speakers.assign(tokens, turns, fingerprints, audio, count, prints)
+        last_sent = [0.0]
+
+        def matching(fraction):  # a few times a second at most
+            if time.perf_counter() - last_sent[0] > 0.3:
+                last_sent[0] = time.perf_counter()
+                after_transcript("voices", "Matching voices to lines", total, fraction)
+
+        tokens, turns, known = speakers.assign(tokens, turns, fingerprints, audio, count, prints, progress=matching)
         if fingerprints.ahead_count:
             print(f"Voice fingerprints ready before the transcript finished: {fingerprints.ahead_count}")
         known = dict(known or {})
         if st["remember_voices"]:
             known.update(recognise(detector, audio, turns, known, prints))
+    after_transcript("lines", "Making the lines", total)
     cues = build_cues(tokens)
     style = st["speaker_labels"]
 
@@ -1004,6 +1039,7 @@ def make_subtitles(args, level):
 
     if names and st["remember_voices"] and detector:
         remember_people(detector, audio, cues, names)
+    after_transcript("writing", "Writing subtitles", total)
     write_srt(out, cues, names, style)
     print(f"\nWrote {len(cues)} {'labelled ' if names else ''}subtitles to {out}")
     files = [{"path": str(out), "name": None, "count": len(cues)}]

@@ -331,7 +331,7 @@ def refine(prints, labels, rounds=3):
     return labels
 
 
-def assign(tokens, turns, detector=None, audio=None, count=-1, samples=None):
+def assign(tokens, turns, detector=None, audio=None, count=-1, samples=None, progress=None):
     """Each word's speaker, decided per sentence. Returns (tokens, turns, names or None).
 
     Without a detector it only takes a vote per sentence. With one, it fingerprints the
@@ -349,9 +349,11 @@ def assign(tokens, turns, detector=None, audio=None, count=-1, samples=None):
     if detector is not None and audio is not None:
         long_ones = [k for k, (a, b) in enumerate(spans) if tokens[b - 1].end - tokens[a].start >= MIN_PRINT]
         prints = []
-        for k in long_ones:
+        for n, k in enumerate(long_ones):
             start, end = print_window(tokens, spans[k])
             prints.append(detector.fingerprint(audio[int(start * SAMPLE_RATE):int(end * SAMPLE_RATE)]))
+            if progress:
+                progress((n + 1) / len(long_ones))
         prints = np.array(prints)
         clip_names = sorted(samples or {})
         use_clips = len(prints) and clip_names and (count <= 0 or count <= len(clip_names))

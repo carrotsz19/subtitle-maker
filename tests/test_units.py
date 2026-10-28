@@ -269,9 +269,12 @@ class WindowedModel:
 
         def gen():
             bar = fw.tqdm(total=90.0, unit="seconds", disable=False)  # what faster-whisper does
-            for window, words in enumerate([[(1.0, 2.0)], [], [(70.0, 71.0)]]):  # the middle one is silent
+            # The middle window is silent; the first line claims to run to 89 s (Whisper does that on
+            # music), which must not send the bar to the end
+            for window, words in enumerate([[(1.0, 2.0), (2.5, 89.0)], [], [(70.0, 71.0)]]):
                 for s, e in words:
                     yield Seg(s, e, "w")
+                    assert progress.n <= 30.0 * window, ("went by a line's end time", progress.n)
                 bar.update(30.0)
                 seen.append(round(progress.n, 1))
             bar.close()
@@ -285,10 +288,18 @@ class Progress(Bar):
 seen, progress = [], Progress()
 tokens, _ = ms.transcribe({"model": WindowedModel(), "device": "cpu"}, "base", np.zeros(90 * sr, dtype=np.float32), None, 5, progress)
 assert seen == [30.0, 60.0, 90.0], seen
-assert [t.word for t in tokens] == [" w", " w"]
+assert [t.word for t in tokens] == [" w", " w", " w"]
 import faster_whisper.transcribe as fw  # noqa: E402
 
 assert fw.tqdm.__module__.startswith("tqdm"), "faster-whisper's own progress bar is put back afterwards"
+
+# The percentage is the whole video's: transcribing (with speaker detection, the slower of the two)
+# is most of it, and it never says 100% before the subtitles are saved
+steps = [ms.overall_progress("transcribe", 0.5, 0.9), ms.overall_progress("transcribe", 1.0, 0.6),
+         ms.overall_progress("speakers", 1.0, 0.8), ms.overall_progress("voices", matched=0.0),
+         ms.overall_progress("voices", matched=1.0), ms.overall_progress("lines"), ms.overall_progress("writing")]
+assert steps == sorted(steps) and max(steps) < 1 and steps[1] == round(ms.TRANSCRIBED_AT * 0.6, 4), steps
+assert ms.overall_progress("transcribe", 1.0) == ms.TRANSCRIBED_AT
 
 # The page's API must be our own functions only: pywebview walks every public attribute (and
 # theirs) on the window's main thread, and walking into the window froze it for a minute
