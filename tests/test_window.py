@@ -26,7 +26,9 @@ assert code == 0, "the window didn't get ready (see startup.log above)"
 assert ready, "no 'window ready to use' in startup.log"
 assert float(ready.group(1)) < READY_WITHIN, f"ready after {ready.group(1)} s; more than {READY_WITHIN} s is too slow"
 if sys.platform == "win32":
-    assert "taskbar progress: ok" in text, "taskbar progress failed (see startup.log above)"
+    # GitHub's Windows Server machines lack the taskbar progress interface (Windows 10 and 11 have it)
+    assert re.search(r"taskbar progress: (ok|not supported by this edition of Windows)", text), \
+        "taskbar progress failed (see startup.log above)"
     assert "window handle and flashing: ok" in text, "reading the window handle or flashing failed (see startup.log above)"
     assert "notification: ok" in text, "the notification failed (see startup.log above)"
 print(f"Window test passed: ready after {ready.group(1)} s")

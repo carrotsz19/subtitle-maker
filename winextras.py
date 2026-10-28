@@ -10,6 +10,8 @@ import uuid
 
 WINDOWS = sys.platform == "win32"
 
+UNSUPPORTED = "not supported by this edition of Windows"
+
 # ITaskbarList3 states
 NO_PROGRESS, INDETERMINATE, NORMAL, ERROR = 0, 1, 2, 4
 
@@ -81,9 +83,15 @@ class Taskbar:
         import ctypes
 
         try:
-            self.step = f"CoInitializeEx returned {ctypes.windll.ole32.CoInitializeEx(None, 0x2) & 0xFFFFFFFF:#x}"  # COINIT_APARTMENTTHREADED
+            ctypes.windll.ole32.CoInitializeEx(None, 0x2)  # COINIT_APARTMENTTHREADED
             set_value, set_state = self._connect()
-        except Exception as e:  # an old Windows, a locked-down PC: just no taskbar progress
+        except OSError as e:
+            # Some Windows editions (the Server ones GitHub tests on) only have the older taskbar
+            # interfaces, without progress bars: E_NOINTERFACE
+            self.error = (UNSUPPORTED if (e.winerror or 0) & 0xFFFFFFFF == 0x80004002
+                          else f"{e.__class__.__name__}: {e} (while {self.step})")
+            return
+        except Exception as e:  # a locked-down PC: just no taskbar progress
             self.error = f"{e.__class__.__name__}: {e} (while {self.step})"
             return
         while True:
@@ -107,35 +115,6 @@ class Taskbar:
         if wanted != self._last:
             self._last = wanted
             self._requests.put(wanted)
-
-
-def probe_taskbar():
-    """For the Windows tests: which taskbar interfaces this PC's taskbar object offers, on a fresh thread."""
-    import ctypes
-
-    out = []
-
-    def run():
-        ole = ctypes.windll.ole32
-        out.append(f"CoInitializeEx={ole.CoInitializeEx(None, 0x2) & 0xFFFFFFFF:#x}")
-        clsid = ctypes.create_string_buffer(uuid.UUID("56FDF344-FD6D-11d0-958A-006097C9A090").bytes_le, 16)
-        unknown = ctypes.create_string_buffer(uuid.UUID("00000000-0000-0000-C000-000000000046").bytes_le, 16)
-        ptr = ctypes.c_void_p()
-        out.append(f"create(IUnknown)={ole.CoCreateInstance(clsid, None, 1, unknown, ctypes.byref(ptr)) & 0xFFFFFFFF:#x}")
-        if not ptr.value:
-            return
-        table = ctypes.cast(ctypes.cast(ptr, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
-        query = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_void_p))(table[0])
-        for name, iid in (("ITaskbarList", "56FDF342-FD6D-11d0-958A-006097C9A090"),
-                          ("ITaskbarList2", "602D4995-B13A-429b-A66E-1935E44F4317"),
-                          ("ITaskbarList3", "ea1afb91-9e28-4b86-90e9-9e9f8a5eee6d")):
-            got = ctypes.c_void_p()
-            out.append(f"{name}={query(ptr, uuid.UUID(iid).bytes_le, ctypes.byref(got)) & 0xFFFFFFFF:#x}")
-
-    thread = threading.Thread(target=run)
-    thread.start()
-    thread.join(10)
-    return " ".join(out)
 
 
 def in_background(window):
