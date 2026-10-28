@@ -635,7 +635,7 @@ class Api:
     # they can mean a download)
     _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
                "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "review", "done_sound",
-               "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify", "remember_voices")
+               "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify", "remember_voices", "less_motion")
 
     def save_prefs(self, changes):
         """Save some instant settings; anything not allowed falls back to its default."""

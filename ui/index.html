@@ -75,9 +75,6 @@
     --hairline:rgba(255,255,255,.07);
     color-scheme:dark;
 }
-@media (prefers-reduced-motion:reduce){
-  *,*::before,*::after{ animation-duration:1ms !important; transition-duration:1ms !important; }
-}
 
 *{ box-sizing:border-box; }
 html,body{ margin:0; padding:0; height:100%; }
@@ -127,8 +124,6 @@ main.main{ overflow-y:auto; padding:26px 30px 48px; }
 .inner{ max-width:760px; margin:0 auto; }
 .topbar{ margin-bottom:20px; }
 .topbar p{ color:var(--dim); margin-top:3px; }
-.view{ animation:viewIn var(--spring-default-ms) var(--spring-default) both; }
-@keyframes viewIn{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
 
 /* ---------- surfaces ---------- */
 .card{ background:var(--panel); border-radius:var(--r-card); padding:18px; box-shadow:var(--elev-1); }
@@ -339,6 +334,64 @@ body.wizard aside.side{ display:none; }
 .step.done .dot{ background:var(--ok-soft); color:var(--ok); }
 .step .grow > b{ font-weight:600; }
 .step:not(.active):not(.done) .grow > b{ color:var(--dim); font-weight:500; }
+
+/* =================================================================
+   MOTION (IronLog's, ported)
+   Press: everything compresses under the pointer (above). Depth: a
+   dialog lifts off the app, which sinks back behind it. Curves: the
+   spring tokens at the top. And motion only answers what changed:
+   switching page plays the entrance once; a redraw replays nothing.
+   ================================================================= */
+/* --- page changes: the old page leaves, the new one's sections arrive in turn --- */
+.view-exit{ animation:veyraViewOut .11s var(--ease-standard) both; }
+.view-enter > *{ animation:veyraViewIn var(--spring-default-ms) var(--spring-default) both; }
+.view-enter > *:nth-child(2){ animation-delay:18ms } .view-enter > *:nth-child(3){ animation-delay:36ms }
+.view-enter > *:nth-child(4){ animation-delay:54ms } .view-enter > *:nth-child(5){ animation-delay:72ms }
+.view-enter > *:nth-child(6){ animation-delay:90ms } .view-enter > *:nth-child(7){ animation-delay:108ms }
+.view-enter > *:nth-child(8){ animation-delay:126ms } .view-enter > *:nth-child(n+9){ animation:none }
+@keyframes veyraViewOut{ to{ opacity:0; transform:translateY(-4px) } }
+@keyframes veyraViewIn{ from{ opacity:0; transform:translateY(10px) } to{ opacity:1; transform:none } }
+@keyframes veyraFade{ from{ opacity:0 } to{ opacity:1 } }
+/* cards inside a section rise one after another (45 ms apart, the first eight, above the fold) */
+.mot-rise{ animation:motRise .46s var(--ease-out) both; animation-delay:calc(var(--si, 0) * 45ms); }
+@keyframes motRise{ from{ opacity:0; transform:translateY(10px) scale(.992) } to{ opacity:1; transform:none } }
+/* --- dialogs: grow out of what opened them; the app sinks back behind; both leave too --- */
+.shell{ transform-origin:50% 40%; transition:transform var(--spring-default-ms) var(--spring-default),
+  opacity var(--spring-default-ms) var(--spring-default), border-radius var(--spring-default-ms) var(--spring-default); }
+body.dialog-open .shell{ transform:scale(.94); opacity:.82; border-radius:28px; overflow:hidden; }
+.dialog.from-origin{ animation:veyraDialogFrom var(--spring-default-ms) var(--spring-default) both; }
+@keyframes veyraDialogFrom{ from{ opacity:0; transform:scale(.88) } to{ opacity:1; transform:none } }
+.scrim.is-closing{ animation:veyraScrimOut .18s var(--ease-standard) both; }
+.dialog.is-closing{ animation:veyraDialogOut .19s var(--ease-standard) both; }
+.toast.is-leaving{ animation:veyraToastOut .22s var(--ease-standard) both; }
+@keyframes veyraScrimOut{ to{ opacity:0 } }
+@keyframes veyraDialogOut{ to{ opacity:0; transform:translateY(8px) scale(.985) } }
+@keyframes veyraToastOut{ to{ opacity:0; transform:translateY(8px) } }
+/* --- segmented controls: the selection slides (only when it changes) --- */
+.seg.has-pill{ position:relative; }
+.seg.has-pill button{ position:relative; z-index:1; }
+.seg.has-pill button[aria-selected="true"]{ background:transparent; box-shadow:none; }
+.seg-pill{ position:absolute; top:3px; left:0; height:calc(100% - 6px); width:0; z-index:0; pointer-events:none;
+  border-radius:7px; background:var(--bg-elevated); box-shadow:var(--elev-1);
+  transition:transform var(--spring-snappy-ms) var(--spring-snappy), width var(--spring-snappy-ms) var(--spring-snappy); }
+/* --- less motion: the system setting, or Settings > Less animations. Things still appear and
+   leave (a quick cross-fade moves nothing on screen); they just stop travelling to get there. --- */
+@media (prefers-reduced-motion:reduce){
+  *{ transition:none !important; }
+  .scrim, .dialog, .toast, .view-exit, .view-enter > *, .dialog.from-origin{
+    animation-name:veyraFade !important; animation-duration:.12s !important; animation-delay:0ms !important; animation-timing-function:linear !important; }
+  .mot-rise{ animation:none !important; }
+  body.dialog-open .shell{ transform:none; border-radius:0; opacity:1; }
+  .btn:active:not([disabled]), .iconbtn:active, .seg button:active, .navbtn:active, .sidecard:active, .grp-row.tap:active{ transform:none !important; }
+}
+html.reduce-motion *{ transition:none !important; }
+html.reduce-motion .scrim, html.reduce-motion .dialog, html.reduce-motion .toast, html.reduce-motion .view-exit,
+html.reduce-motion .view-enter > *, html.reduce-motion .dialog.from-origin{
+  animation-name:veyraFade !important; animation-duration:.12s !important; animation-delay:0ms !important; animation-timing-function:linear !important; }
+html.reduce-motion .mot-rise{ animation:none !important; }
+html.reduce-motion body.dialog-open .shell{ transform:none; border-radius:0; opacity:1; }
+html.reduce-motion .btn:active:not([disabled]), html.reduce-motion .iconbtn:active, html.reduce-motion .seg button:active,
+html.reduce-motion .navbtn:active, html.reduce-motion .sidecard:active, html.reduce-motion .grp-row.tap:active{ transform:none !important; }
 </style>
 </head>
 <body>
@@ -451,20 +504,123 @@ function toast(text, bad) {
   t.className = "toast" + (bad ? " bad" : "");
   t.textContent = text;
   $("#toast-root").append(t);
-  setTimeout(() => { t.style.transition = "opacity .3s"; t.style.opacity = 0; setTimeout(() => t.remove(), 320); }, 3200);
+  setTimeout(() => animateOut(t, "is-leaving", 400), 3200);
 }
 
 /* ---------------------------------------------------------------------
    Navigation
 --------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------
+   Motion (IronLog's): only what changed moves. A page switch plays its
+   entrance once; render() on its own replays nothing.
+--------------------------------------------------------------------- */
+const LESS_MOTION = () => S.info && S.info.settings && S.info.settings.less_motion;
+function applyLessMotion() { document.documentElement.classList.toggle("reduce-motion", !!LESS_MOTION()); }
+function prefersReducedMotion() {
+  if (document.documentElement.classList.contains("reduce-motion")) return true;
+  try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; }
+}
+/* Play an exit animation, then remove. The timeout matters: animationend doesn't fire for a
+   hidden element or a cancelled animation, and the element must go regardless. */
+function animateOut(el, cls, maxMs) {
+  if (!el) return;
+  if (prefersReducedMotion()) { el.remove(); return; }
+  if (el.classList.contains(cls)) return;
+  el.classList.add(cls);
+  let done = false;
+  const finish = () => { if (!done) { done = true; if (el.isConnected) el.remove(); } };
+  el.addEventListener("animationend", finish, { once: true });
+  setTimeout(finish, maxMs || 400);
+}
+function closeDialogs() {
+  const root = $("#dialog-root"), scrim = root.querySelector(".scrim:not(.is-closing)");
+  if (!scrim) { root.innerHTML = ""; return; }
+  const dialog = scrim.querySelector(".dialog");
+  if (dialog && !prefersReducedMotion()) dialog.classList.add("is-closing");
+  document.body.classList.remove("dialog-open");  // the app comes forward as the dialog leaves
+  animateOut(scrim, "is-closing", 360);
+}
+/* The app sinks back while a dialog is open, and a new dialog grows out of what was pressed */
+let lastPress = { x: 0, y: 0, t: 0 };
+document.addEventListener("pointerdown", e => { lastPress = { x: e.clientX, y: e.clientY, t: Date.now() }; }, true);
+new MutationObserver(() => {
+  const root = $("#dialog-root");
+  document.body.classList.toggle("dialog-open", !!root.querySelector(".scrim:not(.is-closing)"));
+  const fresh = root.querySelector(".scrim:not(.is-closing) .dialog:not([data-seen])");
+  if (!fresh) return;
+  fresh.dataset.seen = "1";
+  if (Date.now() - lastPress.t < 1000 && fresh.style.animation !== "none" && !prefersReducedMotion()) {
+    const r = fresh.getBoundingClientRect();
+    fresh.style.transformOrigin = `${lastPress.x - r.left}px ${lastPress.y - r.top}px`;
+    fresh.classList.add("from-origin");
+  }
+}).observe(document.getElementById("dialog-root"), { childList: true, subtree: true });
+
+/* Segmented controls get a pill that slides to the selection, and only when it changes:
+   a redraw with the same selection leaves it where it is */
+const segLast = {};
+function syncSegs(root) {
+  root.querySelectorAll(".seg").forEach((seg, i) => {
+    const first = seg.querySelector("button[data-act]");
+    const key = first ? `${first.dataset.act}:${first.dataset.k || ""}` : `seg${i}`;
+    const on = seg.querySelector('button[aria-selected="true"]');
+    let pill = seg.querySelector(".seg-pill");
+    const fresh = !pill;
+    if (fresh) { pill = document.createElement("span"); pill.className = "seg-pill"; pill.setAttribute("aria-hidden", "true"); seg.prepend(pill); }
+    seg.classList.add("has-pill");
+    if (!on) { pill.style.opacity = "0"; return; }
+    const to = { x: on.offsetLeft, w: on.offsetWidth }, from = segLast[key];
+    const moves = !!from && (from.x !== to.x || from.w !== to.w) && !prefersReducedMotion();
+    pill.style.opacity = "1";
+    if (fresh || moves) {
+      pill.style.transition = "none";
+      const start = moves ? from : to;
+      pill.style.transform = `translateX(${start.x}px)`; pill.style.width = `${start.w}px`;
+      void pill.offsetWidth;
+      pill.style.transition = "";
+    }
+    pill.style.transform = `translateX(${to.x}px)`; pill.style.width = `${to.w}px`;
+    segLast[key] = to;
+  });
+}
+
+/* Arriving on a page: its cards rise one after another (the first eight above the fold) */
+function motArrive(root) {
+  if (prefersReducedMotion()) return;
+  let i = 0;
+  for (const el of root.querySelectorAll(".card, .grp, .drop")) {
+    if (i >= 8) break;
+    if (el.parentElement.closest(".card, .grp, .drop") || getComputedStyle(el).animationName !== "none") continue;
+    if (el.getBoundingClientRect().top > window.innerHeight) continue;
+    el.style.setProperty("--si", i++);
+    el.classList.add("mot-rise");
+    el.addEventListener("animationend", function done(e) {
+      if (e.target !== el) return;
+      el.classList.remove("mot-rise"); el.style.removeProperty("--si"); el.removeEventListener("animationend", done);
+    });
+  }
+}
+
+let viewSwap = null;
 function go(view) {
   if (S.view === "settings" && view !== "settings") S.draft = null;
-  S.view = view;
+  if (viewSwap) { clearTimeout(viewSwap); viewSwap = null; }
   document.querySelectorAll(".navbtn").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
   const btn = $(`.navbtn[data-view="${view}"]`);
   $("#nav-pill").style.transform = `translateY(${btn.offsetTop}px)`;
-  render(true);
-  if (view === "history") loadHistory();
+  const el = $("#view"), changing = S.view !== view && el.childElementCount && !prefersReducedMotion();
+  S.view = view;
+  const arrive = () => {
+    viewSwap = null;
+    el.classList.remove("view-exit");
+    render(true);
+    if (view === "history") loadHistory();
+  };
+  if (!changing) return arrive();
+  // The old page leaves first (110 ms), then the new one arrives
+  el.classList.remove("view-enter");
+  el.classList.add("view-exit");
+  viewSwap = setTimeout(arrive, 110);
 }
 document.querySelectorAll(".navbtn").forEach(b => b.onclick = () => go(b.dataset.view));
 $("#pc-card").onclick = () => go("settings");
@@ -473,7 +629,14 @@ function render(animate) {
   const el = $("#view");
   document.body.classList.toggle("wizard", !!S.setup);
   el.innerHTML = S.setup ? viewSetup() : { make: viewMake, history: viewHistory, settings: viewSettings, help: viewHelp }[S.view]();
-  if (animate) { el.classList.remove("view"); void el.offsetWidth; el.classList.add("view"); }
+  if (animate && !prefersReducedMotion()) {
+    // Only this arrival animates: #view outlives every render, so a class left on it would
+    // replay the entrance on the next redraw
+    el.classList.remove("view-enter"); void el.offsetWidth; el.classList.add("view-enter");
+    clearTimeout(el.enterDone);
+    el.enterDone = setTimeout(() => el.classList.remove("view-enter"), 900);
+    motArrive(el);
+  }
   bind(el);
   renderSide();
 }
@@ -1105,6 +1268,7 @@ function prefsBlocks() {
       </div></div>
     <div class="block"><h2>Appearance</h2><div class="grp">
         ${prefRow("Colours", "", segPref("theme"))}
+        ${prefRow("Less animations", "Things appear and go without moving. Also follows Windows' own setting.", switchPref("less_motion"))}
         ${prefRow("Check for updates automatically", "Security updates are always shown.", switchPref("auto_update"))}
       </div>
       <p class="foot"><button class="linkbtn" data-act="reset-prefs">Reset these settings to their defaults</button></p></div>`;
@@ -1403,7 +1567,7 @@ function renderUpdateSheet() {
 }
 
 const UPDATE_ACTIONS = {
-  close: () => { if (S.update.blocking) return; S.update.sheet = false; $("#dialog-root").innerHTML = ""; if (S.view === "settings") render(); },
+  close: () => { if (S.update.blocking) return; S.update.sheet = false; closeDialogs(); if (S.view === "settings") render(); },
   retry: () => checkUpdate(false),
   install: async () => {
     if (!S.update.data) return checkUpdate(false);  // locked while offline: find the version first
@@ -1469,7 +1633,7 @@ function showAsk(ev) {
   ["play", "pause", "timeupdate", "ended"].forEach(e => audio.addEventListener(e, sync));
   play.onclick = () => audio.paused ? audio.play() : audio.pause();
   audio.play().catch(() => {});
-  const send = name => { audio.pause(); api().answer(name); $("#dialog-root").innerHTML = ""; S.ask = null; };
+  const send = name => { audio.pause(); api().answer(name); closeDialogs(); S.ask = null; };
   $("#ask-save").onclick = () => send($("#ask-name").value.trim());
   $("#ask-keep").onclick = () => send("");
   $("#ask-name").onkeydown = e => { if (e.key === "Enter") send(e.target.value.trim()); };
@@ -1482,7 +1646,7 @@ function confirmBox(title, text, action, onYes) {
       <div><h3 id="cf-title">${esc(title)}</h3><div class="sm dim" style="margin-top:4px">${esc(text)}</div></div>
       <div class="row"><button class="btn sec" id="cf-no">Cancel</button><div class="grow"></div><button class="btn dan" id="cf-yes">${esc(action)}</button></div>
     </div></div>`;
-  const close = () => { $("#dialog-root").innerHTML = ""; };
+  const close = () => { closeDialogs(); };
   $("#cf-no").onclick = close;
   $("#cf-yes").onclick = () => { close(); onYes(); };
   $("#cf-no").focus();
@@ -1508,11 +1672,11 @@ function showUninstall(p) {
       <div class="row"><button class="btn sec" id="un-cancel">Cancel</button><div class="grow"></div>
         <button class="btn dan" id="un-go">Uninstall</button></div>
     </div></div>`;
-  $("#un-cancel").onclick = () => { $("#dialog-root").innerHTML = ""; };
+  $("#un-cancel").onclick = () => { closeDialogs(); };
   $("#un-go").onclick = async () => {
     const keep = $("#un-keep") ? $("#un-keep").checked : true;
     $("#un-go").disabled = true;
-    if (!await api().uninstall(keep)) { $("#dialog-root").innerHTML = ""; toast("Wait for the current video to finish first.", true); }
+    if (!await api().uninstall(keep)) { closeDialogs(); toast("Wait for the current video to finish first.", true); }
   };
   $("#un-cancel").focus();
 }
@@ -1529,6 +1693,7 @@ function bind(root) {
     if (el.getAttribute("role") === "button" || el.getAttribute("role") === "radio")
       el.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handler(el); } };
   });
+  syncSegs(root);
   if (S.review) bindReview(root);
   const hot = $("#hotwords", root);
   if (hot) hot.onchange = async () => { S.info.settings = await api().save_prefs({ hotwords: hot.value.trim() }); toast("Saved."); };
@@ -1622,10 +1787,11 @@ const ACTIONS = {
     const key = el.dataset.k;
     S.info.settings = await api().save_prefs({ [key]: JSON.parse(el.dataset.v) });
     if (key === "theme") applyTheme();
+    if (key === "less_motion") applyLessMotion();
     render();
   },
   "reset-prefs": () => confirmBox("Reset these settings?", "Subtitle style, speakers, accuracy, when it's done and appearance go back to how they started. Quality, language and where subtitles go stay as they are.",
-    "Reset", async () => { S.info.settings = await api().reset_prefs(); applyTheme(); render(); toast("Settings reset."); }),
+    "Reset", async () => { S.info.settings = await api().reset_prefs(); applyTheme(); applyLessMotion(); render(); toast("Settings reset."); }),
   "out-here": async () => { S.info.settings = await api().set_output_dir(null); render(); },
   "out-folder": async () => {
     const dir = await api().choose_folder();
@@ -1861,7 +2027,7 @@ const app = {
         if (r.kind === "make") { S.history = null; S.voicesKnown = null; if (S.view === "history") loadHistory(); }
         S.run = null;
         S.review = null;
-        $("#dialog-root").innerHTML = "";
+        closeDialogs();
         S.ask = null;
         if (ev.cancelled || S.cancelAll) {
           S.queue = S.queue.filter(q => q.status !== "cancelled");
@@ -1966,6 +2132,7 @@ async function boot() {
 
 async function startApp() {
   applyTheme();
+  applyLessMotion();
   if (S.info.unfinished && S.info.unfinished.length && S.info.mode !== "setup") S.unfinished = S.info.unfinished;
   if (S.info.required) S.update.blocking = true;
   S.multi = !!S.info.settings.multi;
