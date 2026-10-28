@@ -56,7 +56,12 @@ DEFAULT_SETTINGS = {
     "auto_update": True, "channel": "main",
     # Remembered from the Make subtitles page: "Several people", and how many (0 = guess)
     "multi": False, "people": 0,
+    # Word fixes applied to every video, as [heard, meant] pairs: [["vera", "Veyra"]]
+    "fixes": [],
+    # A Windows notification when the queue finishes while you're in another window
+    "notify": True,
 }
+MAX_FIXES = 200
 # The values each setting may take; anything else (a hand-edited file, an old version) goes back to the default
 SETTING_CHOICES = {
     "max_chars": (32, 37, 42, 50), "max_lines": (1, 2), "min_seconds": (0.7, 1.0, 1.5),
@@ -65,6 +70,7 @@ SETTING_CHOICES = {
     "device": ("auto", "cuda", "cpu"), "transcript": (True, False), "vtt": (True, False), "review": (True, False),
     "done_sound": (True, False), "multi": (True, False), "people": (0, 2, 3, 4, 5, 6),
     "open_folder": (True, False), "theme": ("system", "light", "dark"), "auto_update": (True, False),
+    "notify": (True, False),
     "channel": ("main", "experimental"),
 }
 
@@ -82,7 +88,20 @@ def load_settings():
     if not isinstance(settings["hotwords"], str):
         settings["hotwords"] = ""
     settings["hotwords"] = settings["hotwords"][:500]
+    settings["fixes"] = clean_fixes(settings["fixes"])
     return settings
+
+
+def clean_fixes(fixes):
+    """Word fixes as [heard, meant] pairs of text, without blanks or repeats (a later one wins)."""
+    pairs = {}
+    for pair in fixes if isinstance(fixes, list) else []:
+        if isinstance(pair, (list, tuple)) and len(pair) == 2 and all(isinstance(x, str) for x in pair):
+            heard, meant = " ".join(pair[0].split())[:80], " ".join(pair[1].split())[:80]
+            if heard and heard.lower() != meant.lower():
+                pairs.pop(heard.lower(), None)
+                pairs[heard.lower()] = [heard, meant]
+    return list(pairs.values())[-MAX_FIXES:]
 
 
 def save_settings(settings):

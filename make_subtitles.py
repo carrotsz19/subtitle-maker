@@ -412,6 +412,44 @@ def label(text, name, style):
     return f"- {text}" if style == "dash" else text
 
 
+EDGE_PUNCTUATION = "\"'“”‘’«»()[]¿¡.,!?;:…-—"
+
+
+def word_core(word):
+    return word.strip().strip(EDGE_PUNCTUATION).lower()
+
+
+def apply_fixes(tokens, fixes):
+    """Settings > Word fixes, on the words as heard: ["vera", "Veyra"] turns every "Vera," into "Veyra,".
+
+    Matching ignores case and the punctuation around words, and a fix can be several words long
+    either side ("dove in chee" -> "Dovinci"). An empty replacement removes the words. Working on
+    words rather than finished lines means the line lengths still come out right.
+    """
+    rules = sorted(((ws, meant) for heard, meant in fixes if (ws := [word_core(w) for w in heard.split()]) and all(ws)),
+                   key=lambda r: -len(r[0]))
+    if not rules:
+        return tokens
+    out, i = [], 0
+    while i < len(tokens):
+        for words, meant in rules:
+            n = len(words)
+            if [word_core(t.word) for t in tokens[i:i + n]] == words:
+                first, last = tokens[i], tokens[i + n - 1]
+                head, tail = first.word.strip(), last.word.strip()
+                before = head[:len(head) - len(head.lstrip(EDGE_PUNCTUATION))]
+                after = tail[len(tail.rstrip(EDGE_PUNCTUATION)):]
+                if meant:
+                    space = first.word[:len(first.word) - len(first.word.lstrip())]
+                    out.append(first._replace(word=space + before + meant + after, end=last.end))
+                i += n
+                break
+        else:
+            out.append(tokens[i])
+            i += 1
+    return out
+
+
 def write_srt(path, cues, names=None, style="name"):
     """Write cues to an .srt; with names, mark each line with who is speaking."""
     with open(path, "w", encoding="utf-8") as f:
@@ -800,6 +838,7 @@ def make_subtitles(args, level):
 
     if st["remove_fillers"]:
         tokens = [t for t in tokens if not is_filler(t.word)]
+    tokens = apply_fixes(tokens, st["fixes"])
     if not tokens:
         raise FriendlyError("No speech found. If there's loud music, try a version with the music muted.")
     if turns:

@@ -272,15 +272,25 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 /* ---------- checking the lines before saving ---------- */
 .rv-head{ position:sticky; top:-26px; z-index:5; background:var(--bg); padding:14px 0 12px; margin-top:-14px; }
 .rv-tools{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-.rv-tools input{ width:auto; flex:1; min-width:140px; font-size:14px; padding:8px 10px; }
+.rv-tools input[type="text"]{ width:auto; flex:1; min-width:140px; font-size:14px; padding:8px 10px; }
+.rv-tools .checkrow{ flex:none; align-items:center; color:var(--dim); }
 .rv-names{ display:flex; flex-wrap:wrap; gap:8px; }
 .rv-names label{ margin:0; display:flex; align-items:center; gap:6px; text-transform:none; letter-spacing:0; font-size:13px; color:var(--dim); font-weight:600; }
 .rv-names input{ width:160px; font-size:14px; padding:7px 10px; }
 .rv-list{ background:var(--panel); border-radius:var(--r-card); box-shadow:var(--elev-1); }
-.rv-row{ display:grid; grid-template-columns:32px 46px auto 1fr auto 32px; gap:8px; align-items:start; padding:8px 10px 8px 8px; position:relative; }
+.rv-row{ display:grid; grid-template-columns:32px 52px auto 1fr auto auto; gap:8px; align-items:start; padding:8px 10px 8px 8px; position:relative; }
 .rv-row + .rv-row::before{ content:""; position:absolute; top:0; left:52px; right:0; height:1px; background:var(--hairline); }
-.rv-row.no-spk{ grid-template-columns:32px 46px 1fr auto 32px; }
-.rv-time{ font-size:12px; color:var(--faint); padding-top:8px; font-variant-numeric:tabular-nums; }
+.rv-row.no-spk{ grid-template-columns:32px 52px 1fr auto auto; }
+.rv-time{ font:inherit; font-size:12px; color:var(--faint); margin-top:4px; padding:4px 4px; border:0; border-radius:6px; background:none;
+  font-variant-numeric:tabular-nums; cursor:pointer; text-align:left; }
+.rv-time:hover, .rv-time[aria-expanded="true"]{ background:var(--fill-tertiary); color:var(--ink); }
+.rv-acts{ display:flex; gap:2px; }
+.rv-acts .iconbtn.quiet{ opacity:0; transition:opacity .15s; }
+.rv-row:hover .rv-acts .iconbtn.quiet, .rv-row:focus-within .rv-acts .iconbtn.quiet{ opacity:1; }
+.rv-timing{ grid-column:2 / -1; display:flex; flex-wrap:wrap; gap:14px; align-items:center; padding:2px 0 6px; font-size:13px; color:var(--dim); }
+.rv-timing .nudge{ display:flex; align-items:center; gap:4px; }
+.rv-timing input{ width:92px; font-size:13px; padding:5px 8px; text-align:center; font-variant-numeric:tabular-nums; }
+.rv-timing .btn{ padding:4px 9px; min-width:0; }
 .rv-row select{ font:inherit; font-size:13px; padding:6px 8px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--ink); max-width:150px; }
 .rv-row textarea{ font:inherit; font-size:14.5px; line-height:1.4; width:100%; resize:none; border:1px solid transparent; border-radius:8px; padding:6px 8px;
   background:transparent; color:var(--ink); overflow:hidden; field-sizing:content; min-height:34px; }
@@ -405,6 +415,8 @@ const gb = mb => (mb / 1024).toFixed(1);
 const api = () => window.pywebview.api;
 
 const ICON = {
+  split: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg>',
+  merge: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v7M12 20v-7M8 7l4 4 4-4M8 17l4-4 4 4"/></svg>',
   film: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/></svg>',
   file: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/></svg>',
   srt: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M7 15h4M13 15h4M7 11h10"/></svg>',
@@ -466,7 +478,17 @@ function render(animate) {
   renderSide();
 }
 
+/* What's still to do is kept on disk, so a queue cut short (closed, crashed, restarted) can carry on */
+function persistQueue() {
+  const paths = [...(S.unfinished || []), ...S.queue.filter(q => q.status === "waiting" || q.status === "working").map(q => q.path)];
+  const key = JSON.stringify(paths);
+  if (key === S.savedQueue) return;
+  S.savedQueue = key;
+  api().save_queue(paths);
+}
+
 function renderSide() {
+  if (S.info) persistQueue();
   const waiting = S.queue.filter(q => q.status === "waiting" || q.status === "working").length;
   const c = $("#queue-count");
   c.textContent = waiting; c.classList.toggle("hide", !waiting);
@@ -489,14 +511,24 @@ function viewMake() {
       <p>Drop a video and get a .srt you can import into DaVinci Resolve.</p></div>
     <div class="stack">
       ${S.update.state === "available" && !busy && !S.update.data.switch && S.update.data.kind !== "improvement" ? updateBanner(S.update.data.kind) : ""}
-      ${busy && S.review ? viewReview() : busy ? viewRunning() : showResult ? viewResults(last) : ""}
+      ${S.unfinished && !busy && !S.review ? unfinishedBanner() : ""}
+      ${S.review ? viewReview() : busy ? viewRunning() : showResult ? viewResults(last) : ""}
       ${S.review ? "" : busy || showResult ? dropZone(true) : dropZone(false)}
+      ${S.review && S.review.mode === "file" ? "" : `
       ${S.queue.some(q => q.status === "waiting") ? queueList() : ""}
       ${busy ? "" : talkCard()}
       ${busy ? "" : whereCard()}
       ${busy ? "" : `<button class="btn big" data-act="start" ${S.queue.some(q => q.status === "waiting") ? "" : "disabled"}>
           ${startLabel()}</button>`}
+      ${busy ? "" : `<div class="row" style="justify-content:center"><button class="linkbtn" data-act="open-srt">Fix an existing .srt…</button></div>`}`}
     </div>`;
+}
+
+function unfinishedBanner() {
+  const n = S.unfinished.length;
+  return `<div class="banner between"><span>${n > 1 ? `${n} videos weren't finished` : `${esc(baseName(S.unfinished[0]))} wasn't finished`} last time.</span>
+    <span class="row" style="gap:8px"><button class="btn ghost sm" data-act="unfinished-no">Dismiss</button>
+      <button class="btn sm" data-act="unfinished-go">Carry on</button></span></div>`;
 }
 
 function startLabel() {
@@ -616,27 +648,65 @@ function rvRow(c, i) {
   const r = S.review, spk = r.hasNames;
   return `<div class="rv-row${spk ? "" : " no-spk"}${c.gone ? " gone" : ""}" data-i="${i}">
     <button class="iconbtn rv-play" data-act="rv-play" data-i="${i}" title="Play this line">${ICON.play}</button>
-    <span class="rv-time">${clock(c.start)}</span>
+    <button class="rv-time" data-act="rv-timing" data-i="${i}" aria-expanded="${r.timing === i}" title="Change when it shows">${clock(c.start)}</button>
     ${spk ? `<select data-rv="speaker" data-i="${i}" aria-label="Speaker">${Object.entries(r.names).map(([k, n]) =>
       `<option value="${k}" ${String(c.speaker) === k ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}
     <textarea rows="1" data-rv="text" data-i="${i}" aria-label="Line ${i + 1}" ${c.gone ? "disabled" : ""}>${esc(c.text)}</textarea>
     <span class="rv-warn" id="rv-warn-${i}">${!c.gone && rvTooLong(i) ? `<span class="pill bad" title="Longer than ${r.max_lines} line(s) of ${r.max_chars} characters">Too long</span>` : ""}</span>
-    <button class="iconbtn" data-act="rv-del" data-i="${i}" title="${c.gone ? "Undo" : "Delete this line"}">${c.gone ? ICON.again : ICON.x}</button>
+    <div class="rv-acts">
+      ${c.gone ? "" : `<button class="iconbtn quiet" data-act="rv-split" data-i="${i}" title="Split into two lines (at the cursor)">${ICON.split}</button>
+      ${i + 1 < r.cues.length && !r.cues[i + 1].gone ? `<button class="iconbtn quiet" data-act="rv-merge" data-i="${i}" title="Join with the next line">${ICON.merge}</button>` : ""}`}
+      <button class="iconbtn" data-act="rv-del" data-i="${i}" title="${c.gone ? "Undo" : "Delete this line"}">${c.gone ? ICON.again : ICON.x}</button></div>
+    ${r.timing === i && !c.gone ? rvTiming(c, i) : ""}
   </div>`;
 }
+/* Times as 1:02.35 (or 1:02:03.40 past an hour), and back */
+function stamp(t) {
+  const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = (t % 60).toFixed(2).padStart(5, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+function unstamp(text) {
+  const parts = String(text).trim().replace(",", ".").split(":");
+  if (!parts.length || parts.length > 3 || parts.some(x => x === "" || isNaN(x))) return null;
+  return parts.reduce((total, x) => total * 60 + parseFloat(x), 0);
+}
+function rvTiming(c, i) {
+  const nudge = key => `<span class="nudge"><button class="btn sec sm" data-act="rv-nudge" data-i="${i}" data-k="${key}" data-d="-0.1" title="0.1 s earlier">−</button>
+      <input type="text" data-rv="${key}" data-i="${i}" value="${stamp(c[key])}" aria-label="${key === "start" ? "Shows at" : "Goes at"}">
+      <button class="btn sec sm" data-act="rv-nudge" data-i="${i}" data-k="${key}" data-d="0.1" title="0.1 s later">+</button></span>`;
+  return `<div class="rv-timing">Shows ${nudge("start")} Goes ${nudge("end")} <span>${(c.end - c.start).toFixed(1)} s on screen</span></div>`;
+}
+/* A new time for one end of a line, kept between its neighbours and at least 0.2 s long */
+function rvSetTime(i, key, t) {
+  const cues = S.review.cues, c = cues[i];
+  const prev = cues.slice(0, i).reverse().find(x => !x.gone), next = cues.slice(i + 1).find(x => !x.gone);
+  t = Math.round(t * 100) / 100;
+  const lo = key === "start" ? (prev ? prev.end : 0) : c.start + 0.2;
+  const hi = key === "start" ? c.end - 0.2 : (next ? next.start : Infinity);
+  if (t < lo || t > hi) {
+    toast(key === "start" ? (t < lo ? "It can't start before the line above ends." : "It has to start at least 0.2 s before it goes.")
+      : (t > hi ? "It can't go after the next line starts." : "It has to show for at least 0.2 s."), true);
+    t = Math.min(Math.max(t, lo), hi);
+  }
+  c[key] = t;
+}
+
 function viewReview() {
   const r = S.review, live = r.cues.filter(c => !c.gone).length, long = r.cues.filter((c, i) => !c.gone && rvTooLong(i)).length;
   return `<div id="review">
     <div class="rv-head stack">
-      <div class="between"><div class="grow"><div class="sm dim">Check before saving${queueLeft() ? ` · ${queueLeft()} more after this` : ""}</div>
+      <div class="between"><div class="grow"><div class="sm dim">${r.mode === "file"
+            ? (r.video ? `Fixing an existing file · plays from ${esc(r.video)}` : "Fixing an existing file · no video with the same name next to it, so lines can't play")
+            : `Check before saving${queueLeft() ? ` · ${queueLeft()} more after this` : ""}`}</div>
           <h3 class="trunc">${esc(r.file)}</h3></div>
-        <button class="btn ghost sm" data-act="rv-discard">Discard</button>
-        <button class="btn" data-act="rv-save">Save subtitles</button></div>
+        <button class="btn ghost sm" data-act="rv-discard">${r.mode === "file" ? "Close" : "Discard"}</button>
+        <button class="btn" data-act="rv-save">${r.mode === "file" ? "Save changes" : "Save subtitles"}</button></div>
       ${r.hasNames ? `<div class="rv-names">${Object.entries(r.names).map(([k, n]) =>
         `<label>Speaker ${+k + 1} <input type="text" data-rv="name" data-k="${k}" value="${esc(n)}" maxlength="40"></label>`).join("")}</div>` : ""}
       <div class="rv-tools"><input type="text" id="rv-find" placeholder="Find (e.g. a misheard name)">
-        <input type="text" id="rv-repl" placeholder="Replace with"><button class="btn sec sm" data-act="rv-replace">Replace all</button></div>
-      <div class="sm dim" id="rv-count">${live} lines${long ? ` · <span style="color:var(--bad)">${long} too long</span>` : ""} · Enter goes to the next line</div>
+        <input type="text" id="rv-repl" placeholder="Replace with"><button class="btn sec sm" data-act="rv-replace">Replace all</button>
+        <label class="checkrow sm"><input type="checkbox" id="rv-remember" style="margin:0"> Fix it in every video from now on</label></div>
+      <div class="sm dim" id="rv-count">${live} lines${long ? ` · <span style="color:var(--bad)">${long} too long</span>` : ""} · Enter goes to the next line · click a time to change it</div>
     </div>
     <div class="rv-list">${r.cues.map(rvRow).join("")}</div>
   </div>`;
@@ -644,7 +714,7 @@ function viewReview() {
 function rvCount() {
   const r = S.review, live = r.cues.filter(c => !c.gone).length, long = r.cues.filter((c, i) => !c.gone && rvTooLong(i)).length;
   const el = $("#rv-count");
-  if (el) el.innerHTML = `${live} lines${long ? ` · <span style="color:var(--bad)">${long} too long</span>` : ""} · Enter goes to the next line`;
+  if (el) el.innerHTML = `${live} lines${long ? ` · <span style="color:var(--bad)">${long} too long</span>` : ""} · Enter goes to the next line · click a time to change it`;
 }
 function bindReview(root) {
   root.querySelectorAll("[data-rv]").forEach(el => {
@@ -655,12 +725,22 @@ function bindReview(root) {
         $("#rv-warn-" + i).innerHTML = rvTooLong(i) ? '<span class="pill bad">Too long</span>' : "";
         rvCount();
       };
+      const caret = () => { S.review.caret = { i, pos: el.selectionStart }; };
+      el.onkeyup = caret; el.onclick = caret; el.onselect = caret;
       el.onkeydown = e => {
         if (e.key !== "Enter") return;
         e.preventDefault();
         const next = root.querySelector(`textarea[data-i="${i + 1}"]`);
         if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
       };
+    } else if (el.dataset.rv === "start" || el.dataset.rv === "end") {
+      el.onchange = () => {
+        const t = unstamp(el.value);
+        if (t === null) toast("Type a time like 1:02.35", true);
+        else rvSetTime(i, el.dataset.rv, t);
+        render();
+      };
+      el.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } };
     } else if (el.dataset.rv === "speaker") {
       el.onchange = () => { S.review.cues[i].speaker = +el.value; $("#rv-warn-" + i).innerHTML = rvTooLong(i) ? '<span class="pill bad">Too long</span>' : ""; rvCount(); };
     } else if (el.dataset.rv === "name") {
@@ -740,7 +820,7 @@ function viewHistory() {
     return `<div class="grp-row has-icon">
       <div class="tile-icon ${ok ? "t-ok" : "t-bad"}">${ok ? ICON.srt : ICON.x}</div>
       <div class="grow"><div class="row"><span class="row-title trunc">${esc(baseName(it.input))}</span>
-          ${gone ? '<span class="pill">Moved or deleted</span>' : ""}${ok && it.files.length > 1 ? `<span class="pill">${it.files.length} files</span>` : ""}</div>
+          ${gone ? '<span class="pill">Moved or deleted</span>' : ""}${ok && it.files[0] && it.files[0].exists ? `<button class="btn ghost sm" data-act="edit-srt" data-path="${esc(it.files[0].path)}">Fix lines</button>` : ""}${ok && it.files.length > 1 ? `<span class="pill">${it.files.length} files</span>` : ""}</div>
         <div class="row-sub trunc">${time} · ${parts.join(" · ")}</div></div>
       ${ok && main && main.exists ? `<button class="iconbtn" data-act="reveal" data-path="${esc(main.path)}" title="Show in folder">${ICON.folder}</button>` : ""}
       ${it.input_exists ? `<button class="iconbtn" data-act="again" data-path="${esc(it.input)}" title="Make again">${ICON.again}</button>` : ""}
@@ -814,6 +894,23 @@ function modelsBlock() {
   const total = S.models.reduce((a, m) => a + m.gb, 0);
   return `<div class="block"><h2>Downloaded models</h2><div class="grp">${rows}</div>
     <p class="foot">${total.toFixed(2)} GB in all. A deleted model downloads again if you switch back to it.</p></div>`;
+}
+
+/* Word fixes: corrections applied to every video, as it's transcribed */
+function fixesBlock() {
+  const fixes = S.info.settings.fixes || [];
+  const rows = fixes.map(([heard, meant], i) => `<div class="grp-row"><div class="grow row" style="gap:10px;flex-wrap:wrap">
+      <span class="selectable">${esc(heard)}</span><span class="faint">→</span><b class="selectable">${meant ? esc(meant) : '<span class="faint" style="font-weight:400">(removed)</span>'}</b></div>
+      <button class="iconbtn" data-act="fix-del" data-i="${i}" title="Remove this fix">${ICON.x}</button></div>`).join("");
+  return `<div class="block"><h2>Word fixes</h2><div class="grp">${rows}
+      <div class="grp-row" style="flex-wrap:wrap;gap:8px">
+        <input type="text" id="fix-heard" class="prefs-input" style="flex:1;min-width:140px" maxlength="80" placeholder="It hears (e.g. vera)">
+        <span class="faint">→</span>
+        <input type="text" id="fix-meant" class="prefs-input" style="flex:1;min-width:140px" maxlength="80" placeholder="Should be (e.g. Veyra)">
+        <button class="btn sec sm" data-act="fix-add">Add</button></div></div>
+    <p class="foot">Fixed in every new video as it's made. Leave "Should be" empty to remove a word. You can also tick
+      "Fix it in every video" when you use Replace in the check screen. Earlier versions of files you fixed are in
+      <button class="linkbtn" data-act="open-backups">Backups</button>.</p></div>`;
 }
 
 /* Settings that save the moment they change */
@@ -903,10 +1000,12 @@ function prefsBlocks() {
         ${prefRow("Skip music and silence", "Turn off if quiet speech gets missed.", switchPref("vad"))}
         ${prefRow("Run on", S.info.hardware.gpu ? "Automatic uses the graphics card when it has room." : "This PC has no NVIDIA graphics card, so it uses the processor.", segPref("device"))}
       </div></div>
+    ${fixesBlock()}
     <div class="block"><h2>When it's done</h2><div class="grp">
         ${prefRow("Check the lines before saving", "Fix words and names, then save. Off: saves straight away.", switchPref("review"))}
         ${prefRow("Play a sound", "", switchPref("done_sound"))}
         ${prefRow("Open the folder", "Shows the subtitles once everything in the queue is done.", switchPref("open_folder"))}
+        ${S.info.platform === "win32" ? prefRow("Notify me", "If you're in another window when the queue finishes, Windows shows a notification.", switchPref("notify")) : ""}
         ${prefRow("Also save a transcript", "A plain .txt of everything said, next to the .srt.", switchPref("transcript"))}
         ${prefRow("Also save a .vtt", "The same subtitles for YouTube and web players.", switchPref("vtt"))}
       </div></div>
@@ -1335,30 +1434,79 @@ function updateSave() {
 }
 
 const ACTIONS = {
-  "rv-play": el => {
+  "rv-play": async el => {
     const c = S.review.cues[+el.dataset.i];
     document.querySelectorAll(".rv-row.playing").forEach(x => x.classList.remove("playing"));
     el.closest(".rv-row").classList.add("playing");
-    api().review_clip(+el.dataset.i, c.start, c.end);
+    if (S.review.mode !== "file") return api().review_clip(+el.dataset.i, c.start, c.end);
+    if (!S.review.video) { el.closest(".rv-row").classList.remove("playing"); return toast("There's no video with the same name next to this file, so there's nothing to play.", true); }
+    const data = await api().edit_clip(c.start, c.end);
+    if (!data) { el.closest(".rv-row").classList.remove("playing"); return toast("Couldn't play that part of the video.", true); }
+    app.onEvent({ type: "clip", data });
+  },
+  "rv-timing": el => { const i = +el.dataset.i; S.review.timing = S.review.timing === i ? null : i; render(); },
+  "rv-nudge": el => {
+    const i = +el.dataset.i, key = el.dataset.k, c = S.review.cues[i];
+    rvSetTime(i, key, c[key] + parseFloat(el.dataset.d));
+    render();
+  },
+  "rv-split": el => {
+    const r = S.review, i = +el.dataset.i, c = r.cues[i], text = c.text.trim();
+    let at = r.caret && r.caret.i === i ? r.caret.pos : -1;
+    if (at <= 0 || at >= text.length) {
+      // No cursor in this line: the space nearest the middle
+      const spaces = [...text.matchAll(/ /g)].map(m => m.index);
+      if (!spaces.length) return toast("A single word can't be split.", true);
+      at = spaces.reduce((best, x) => Math.abs(x - text.length / 2) < Math.abs(best - text.length / 2) ? x : best);
+    }
+    const left = text.slice(0, at).trim(), right = text.slice(at).trim();
+    if (!left || !right) return toast("Put the cursor where the line should be split.", true);
+    // The time is shared out by length, which is close to how long each part takes to say
+    const cut = Math.round((c.start + (c.end - c.start) * left.length / (left.length + right.length)) * 100) / 100;
+    r.cues.splice(i, 1, { ...c, text: left, end: cut }, { ...c, text: right, start: cut });
+    r.timing = null; r.caret = null;
+    render();
+  },
+  "rv-merge": el => {
+    const r = S.review, i = +el.dataset.i, c = r.cues[i], next = r.cues[i + 1];
+    if (!next || next.gone) return;
+    if (r.hasNames && next.speaker !== c.speaker) toast(`Joined into ${r.names[c.speaker] || "the first speaker"}'s line.`);
+    r.cues.splice(i, 2, { ...c, text: `${c.text.trim()} ${next.text.trim()}`, end: next.end });
+    r.timing = null; r.caret = null;
+    render();
   },
   "rv-del": el => { const c = S.review.cues[+el.dataset.i]; c.gone = !c.gone; render(); },
-  "rv-replace": () => {
+  "rv-replace": async () => {
     const find = $("#rv-find").value, repl = $("#rv-repl").value;
     if (!find) return;
     const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
     let n = 0;
     S.review.cues.forEach(c => { if (c.gone) return; c.text = c.text.replace(re, () => { n++; return repl; }); });
+    const remember = $("#rv-remember") && $("#rv-remember").checked;
     render();
-    toast(n ? `Replaced ${n} time${n > 1 ? "s" : ""}.` : `"${find}" isn't in any line.`, !n);
+    if (remember) {
+      S.info.settings = await api().add_fix(find, repl);
+      toast(`${n ? `Replaced ${n} time${n > 1 ? "s" : ""}. ` : ""}From now on every video gets "${find}" → "${repl || "(removed)"}".`);
+    } else toast(n ? `Replaced ${n} time${n > 1 ? "s" : ""}.` : `"${find}" isn't in any line.`, !n);
   },
-  "rv-save": () => {
+  "rv-save": async () => {
     const r = S.review;
+    if (r.mode === "file") {
+      const res = await api().save_srt(r.cues.filter(c => !c.gone).map(({ start, end, text }) => ({ start, end, text })));
+      if (res.error) return toast(res.error, true);
+      S.review = null;
+      render();
+      return toast(`Saved ${res.count} lines to ${baseName(res.path)}.${res.backup ? " The old version is backed up." : ""}`);
+    }
     api().review_done(r.cues.filter(c => !c.gone).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })), r.names);
     S.review = null;
     S.run.stage = "Saving";
     render();
   },
-  "rv-discard": () => confirmBox("Discard these subtitles?", "Nothing for this video is saved. The next video in the queue starts.", "Discard",
+  "rv-discard": () => S.review.mode === "file"
+    ? confirmBox("Close without saving?", "Any changes you made to this file are lost. The file stays as it was.", "Close",
+      () => { S.review = null; api().close_srt(); render(); })
+    : confirmBox("Discard these subtitles?", "Nothing for this video is saved. The next video in the queue starts.", "Discard",
     () => { S.review = null; api().cancel(); }),
   pref: async el => {
     const key = el.dataset.k;
@@ -1407,6 +1555,22 @@ const ACTIONS = {
     showUninstall(await api().uninstall_plan());
   },
   choose: async () => app.addFiles(await api().choose_files()),
+  "open-srt": async () => { const p = await api().choose_srt(); if (p) app.openSrt(p); },
+  "edit-srt": el => app.openSrt(el.dataset.path),
+  "unfinished-go": () => { const paths = S.unfinished; S.unfinished = null; app.addFiles(paths); next(); },
+  "unfinished-no": () => { S.unfinished = null; persistQueue(); render(); },
+  "fix-add": async () => {
+    const heard = $("#fix-heard").value.trim(), meant = $("#fix-meant").value.trim();
+    if (!heard) return toast("Type what it hears wrong first.", true);
+    S.info.settings = await api().add_fix(heard, meant);
+    render();
+    toast(`Every video from now on: "${heard}" → "${meant || "(removed)"}".`);
+  },
+  "fix-del": async el => {
+    S.info.settings = await api().set_fixes(S.info.settings.fixes.filter((_, i) => i !== +el.dataset.i));
+    render();
+  },
+  "open-backups": () => api().open_backups(),
   "choose-folder": async () => {
     const found = await api().choose_video_folder();
     if (found && !found.length) toast("No videos or audio in that folder.", true);
@@ -1459,6 +1623,8 @@ function next() {
     // The whole queue is done: show where the subtitles went, if Settings says to
     const first = (S.batch || []).find(Boolean);
     if (first && S.info.settings.open_folder) api().reveal(first);
+    const done = S.queue.filter(q => q.status === "done").length, failed = S.queue.filter(q => q.status === "failed").length;
+    if (done + failed && (S.batch || []).length + failed) api().queue_finished(done, failed);
     S.batch = [];
     render();
     return;
@@ -1476,6 +1642,17 @@ function next() {
    Called from app.py
 --------------------------------------------------------------------- */
 const app = {
+  async openSrt(path) {
+    if (!S.info) { S.pendingSrt = path; return; }  // dropped on the icon: once the page is ready
+    if (S.run) return toast("Wait for the current video to finish first.", true);
+    if (S.review) return toast("Save or close the lines you're checking first.", true);
+    const r = await api().open_srt(path);
+    if (r.error) return toast(r.error, true);
+    S.review = { mode: "file", file: r.file, path: r.path, video: r.video, style: "none", max_chars: r.max_chars, max_lines: r.max_lines,
+      names: {}, hasNames: false, cues: r.cues };
+    if (S.view !== "make") go("make"); else render(true);
+  },
+
   addFiles(paths) {
     let added = 0;
     for (const p of paths || []) {
@@ -1669,11 +1846,13 @@ async function boot() {
 
 async function startApp() {
   applyTheme();
+  if (S.info.unfinished && S.info.unfinished.length && S.info.mode !== "setup") S.unfinished = S.info.unfinished;
   S.multi = !!S.info.settings.multi;
   S.people = S.info.settings.people || 0;
   if (S.info.mode === "setup" || !S.info.configured) startSetup();
   go("make");
   requestAnimationFrame(() => api().page_ready());  // for startup.log
+  if (S.pendingSrt) { app.openSrt(S.pendingSrt); S.pendingSrt = null; }
   if (S.info.mode === "update") openUpdate();  // opened by Update.bat
   // Quietly, and a few seconds in so it doesn't slow the start: only a ready update is shown
   // Even with automatic checks off this looks, but then only speaks up for a security update

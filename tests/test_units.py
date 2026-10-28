@@ -110,6 +110,55 @@ tokens, _ = ms.transcribe(whisper, "base", np.zeros(10 * sr, dtype=np.float32), 
 assert whisper["device"] == "cpu" and cpu_model.calls == [(8.0, "en")]
 assert [(t.word, t.start) for t in tokens] == [(" w0", 0.5), (" w0", 2.5), (" w1", 5.0)]
 
+# Word fixes: on the words as heard, ignoring case and punctuation, several words either side
+toks = [ms.Token(w, i, i + .5, 0) for i, w in enumerate([" So", " Vera,", " said", " dove", " in", " chee.", " Um", ' "vera"', " veranda"])]
+fixed = ms.apply_fixes(toks, paths.clean_fixes([["vera", "Veyra"], ["dove in chee", "DaVinci"], ["um", ""], ["", "x"], ["Same", "same"]]))
+assert [t.word for t in fixed] == [" So", " Veyra,", " said", " DaVinci.", ' "Veyra"', " veranda"], [t.word for t in fixed]
+assert fixed[3].start == 3 and fixed[3].end == 5.5
+assert paths.clean_fixes([["a", "b"], ["A", "c"], "junk", ["x"]]) == [["A", "c"]]
+
+# Fixing an existing .srt: reading it (any line endings, a BOM, tags), finding its video, a clip, saving
+import srtfile  # noqa: E402
+import wave  # noqa: E402
+
+with tempfile.TemporaryDirectory() as d:
+    d = Path(d)
+    with wave.open(str(d / "clip.wav"), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes((np.sin(np.arange(16000 * 6) / 8) * 8000).astype("<i2").tobytes())
+    srt = d / "clip (2).srt"
+    srt.write_bytes("\ufeff1\r\n00:00:01,000 --> 00:00:02,500\r\n<i>Hello</i>\r\nthere\r\n\r\n2\r\n00:00:03.2 --> 00:00:04,000\r\nAgain\r\n".encode())
+    assert srtfile.read_srt(srt) == [{"start": 1.0, "end": 2.5, "text": "Hello there"}, {"start": 3.2, "end": 4.0, "text": "Again"}]
+    assert srtfile.video_for(srt, app.MEDIA_EXTS) == d / "clip.wav"
+    with wave.open(__import__("io").BytesIO(srtfile.clip_wav(d / "clip.wav", 1.0, 2.5))) as w:
+        assert abs(w.getnframes() / 16000 - 1.8) < 0.05
+    (d / "notes.srt").write_bytes(bytes(range(256)))
+    try:
+        srtfile.read_srt(d / "notes.srt")
+        raise AssertionError("a file with no subtitles should be refused")
+    except srtfile.SrtError:
+        pass
+    edit = app.Api()
+    opened = edit.open_srt(str(srt))
+    assert opened["video"] == "clip.wav" and len(opened["cues"]) == 2
+    assert edit.edit_clip(1.0, 2.5).startswith("data:audio/wav;base64,")
+    saved = edit.save_srt([{"start": 1.0, "end": 2.0, "text": "Hello"}, {"start": 2.0, "end": 2.5, "text": " there "},
+                           {"start": 3.2, "end": 4.0, "text": "  "}])
+    assert saved["count"] == 2 and Path(saved["backup"]).read_bytes().startswith(b"\xef\xbb\xbf1")
+    assert [c["text"] for c in srtfile.read_srt(srt)] == ["Hello", "there"]
+
+# A queue cut short is offered again, minus anything that has since gone
+with tempfile.TemporaryDirectory() as d:
+    video = Path(d) / "v.mp4"
+    video.write_bytes(b"x")
+    q = app.Api()
+    q.save_queue([str(video), str(Path(d) / "gone.mp4")])
+    assert q._unfinished() == [str(video)]
+    q.save_queue([])
+    assert q._unfinished() == [] and not app.QUEUE_FILE.exists()
+
 # The page's API must be our own functions only: pywebview walks every public attribute (and
 # theirs) on the window's main thread, and walking into the window froze it for a minute
 api = app.Api()

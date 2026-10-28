@@ -20,6 +20,12 @@ warnings, because nothing is downloaded through the browser. (Prefer double-clic
 (Version to follow: Experimental), and back to Stable the same way. To install it fresh:
 
     $env:SUBTITLE_MAKER_BRANCH = 'experimental'; irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1 | iex
+
+**Fixing subtitles:** every video gets a check screen before saving (fix words, names and timing,
+split or join lines). Drop any .srt on the window, or use "Fix an existing .srt…" or History, to fix
+one later; the old version is kept in a backups folder. Settings > Word fixes corrects words it
+always gets wrong, in every video.
+
 **Uninstalling:** Settings > Uninstall in the window, or `Uninstall.bat`.
 
 The full guide is in [README.txt](README.txt).

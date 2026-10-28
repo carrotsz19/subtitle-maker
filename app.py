@@ -24,8 +24,10 @@ from webview.dom import DOMEventHandler  # noqa: E402
 
 import configure  # noqa: E402
 import models  # noqa: E402
+import srtfile  # noqa: E402
 import uninstall  # noqa: E402
 import update  # noqa: E402
+import winextras  # noqa: E402
 from paths import (DEFAULT_SETTINGS, ERROR_LOG, LEVELS, SETTINGS_FILE, data_dir, load_history,  # noqa: E402
                    load_settings, save_history, save_settings)
 
@@ -48,6 +50,7 @@ def media_in(paths):
     return found
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 STARTUP_LOG = data_dir() / "startup.log"
+QUEUE_FILE = data_dir() / "queue.json"  # what's still waiting, to offer to carry on next time
 
 
 class Timings:
@@ -148,6 +151,8 @@ class Api:
         self._worker = None  # make_subtitles --serve: keeps the model loaded between videos
         self._job = None  # the worker's current job: {"cancelled", "reported"}
         self._lock = threading.Lock()
+        self._taskbar = None  # progress on the taskbar button (Windows)
+        self._edit = None  # the .srt open for fixing: {"path", "video"}
         # Look at the PC (nvidia-smi can take a second or two) while the window is still opening,
         # so the page never waits for it
         self._probe = {}
@@ -173,12 +178,29 @@ class Api:
             self._window.evaluate_js(f"app.onEvent({json.dumps(event)})")
             if event["type"] == "progress" and event.get("total"):
                 self._window.set_title(f"{event['done'] / event['total']:.0%} · Subtitle Maker")
+                self._progress(event["done"] / event["total"])
+            elif event["type"] == "progress":
+                self._progress(state=winextras.INDETERMINATE)
+            elif event["type"] == "error":
+                self._progress(state=winextras.ERROR)
+
+    def _progress(self, fraction=None, state=None):
+        if self._window and winextras.WINDOWS:
+            self._taskbar = self._taskbar or winextras.Taskbar(self._window)
+            self._taskbar.set(fraction, state)
 
     def on_drop(self, event):
         files = event.get("dataTransfer", {}).get("files", [])
-        paths = media_in(f["pywebviewFullPath"] for f in files if f.get("pywebviewFullPath"))
-        if paths:
-            self._window.evaluate_js(f"app.addFiles({json.dumps(paths)})")
+        self._take([f["pywebviewFullPath"] for f in files if f.get("pywebviewFullPath")])
+
+    def _take(self, paths):
+        """Dropped or opened-with files: an .srt opens for fixing; videos join the queue."""
+        srts = [p for p in paths if Path(p).suffix.lower() == ".srt" and Path(p).is_file()]
+        media = media_in(p for p in paths if p not in srts)
+        if media:
+            self._window.evaluate_js(f"app.addFiles({json.dumps(media)})")
+        elif srts:
+            self._window.evaluate_js(f"app.openSrt({json.dumps(srts[0])})")
 
     # ---- state ------------------------------------------------------------------------------
 
@@ -197,14 +219,160 @@ class Api:
             "models": self._probe["models"],
             # Setup.bat opens the window with --setup; Update.bat with --update
             "mode": "setup" if "--setup" in sys.argv else "update" if "--update" in sys.argv else None,
+            "unfinished": self._unfinished(),
         }
+
+    # ---- carrying on with a queue that didn't finish ------------------------------------------
+
+    def save_queue(self, paths):
+        """The page keeps this up to date: the videos still waiting (or being worked on)."""
+        try:
+            if paths:
+                QUEUE_FILE.write_text(json.dumps([str(p) for p in paths], indent=1), encoding="utf-8")
+            else:
+                QUEUE_FILE.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    def _unfinished(self):
+        try:
+            paths = json.loads(QUEUE_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+        return [p for p in paths if isinstance(p, str) and Path(p).is_file()]
+
+    def queue_finished(self, done, failed):
+        """The whole queue is done: say so if you're in another window (Settings > Notify me)."""
+        self._progress(state=winextras.ERROR if failed else winextras.NO_PROGRESS)
+        if not winextras.WINDOWS or not load_settings()["notify"] or not winextras.in_background(self._window):
+            return False
+        if failed:
+            title = f"{failed} of {done + failed} videos didn't work" if done + failed > 1 else "The video didn't work"
+        else:
+            title = f"Subtitles ready for {done} videos" if done > 1 else "Subtitles ready"
+        try:
+            winextras.flash(self._window)
+        except Exception:
+            pass
+        winextras.notify(self._window, HERE / "ui" / "icon.ico", title, "Click to open Subtitle Maker.",
+                         on_click=lambda: winextras.bring_to_front(self._window))
+        return True
+
+    # ---- fixing an existing .srt ---------------------------------------------------------------
+
+    def choose_srt(self):
+        picked = self._window.create_file_dialog(webview.FileDialog.OPEN, file_types=("Subtitles (*.srt)", "All files (*.*)"))
+        return picked[0] if picked else None
+
+    def open_srt(self, path):
+        """The lines of an .srt, to fix in the same screen as new ones."""
+        if self._busy():
+            return {"error": "Wait for the current video to finish first."}
+        try:
+            cues = srtfile.read_srt(path)
+        except srtfile.SrtError as e:
+            return {"error": str(e)}
+        except OSError as e:
+            return {"error": f"Couldn't open {Path(path).name}: {e.strerror or e}"}
+        video = srtfile.video_for(path, MEDIA_EXTS)
+        self._edit = {"path": str(Path(path).absolute()), "video": str(video) if video else None}
+        threading.Thread(target=self._load_writer, daemon=True).start()  # ready by the time you save
+        settings = load_settings()
+        return {"path": self._edit["path"], "file": Path(path).name, "video": video.name if video else None,
+                "cues": cues, "max_chars": settings["max_chars"], "max_lines": settings["max_lines"]}
+
+    def _load_writer(self):
+        try:
+            # A second or two the first time (it loads Whisper's libraries), so do it before Save
+            __import__("make_subtitles")
+        except Exception:
+            pass
+
+    def edit_clip(self, start, end):
+        """That line of the video the open .srt belongs to, as a playable data: URL (or None)."""
+        if not self._edit or not self._edit["video"]:
+            return None
+        import base64
+
+        try:
+            data = srtfile.clip_wav(self._edit["video"], float(start), float(end))
+        except Exception:
+            return None
+        return "data:audio/wav;base64," + base64.b64encode(data).decode("ascii") if data else None
+
+    def save_srt(self, cues):
+        """Save the fixed lines over the .srt (the old one goes to the backups folder first)."""
+        if not self._edit:
+            return {"error": "Nothing is open."}
+        path = Path(self._edit["path"])
+        lines = sorted(([float(c["start"]), float(c["end"]), " ".join(str(c["text"]).split()), None]
+                        for c in cues if str(c["text"]).strip()), key=lambda c: c[0])
+        if not lines:
+            return {"error": "Every line was deleted, so there's nothing to save."}
+        import make_subtitles as ms
+
+        ms.apply_style(load_settings())
+        try:
+            backup = srtfile.back_up(path) if path.exists() else None
+            ms.write_srt(path, lines, None, "none")
+            vtt = path.with_suffix(".vtt")
+            if vtt.exists():  # keep a .vtt made alongside it the same
+                ms.write_vtt(vtt, lines, None, "none")
+        except OSError as e:
+            return {"error": f"Couldn't save {path.name}: {e.strerror or e}. Is it open in another program?"}
+        self._edit = None
+        return {"path": str(path), "count": len(lines), "backup": str(backup) if backup else None}
+
+    def close_srt(self):
+        self._edit = None
+
+    def open_backups(self):
+        srtfile.BACKUPS.mkdir(parents=True, exist_ok=True)
+        open_in_file_manager(srtfile.BACKUPS)
+
+    # ---- word fixes ----------------------------------------------------------------------------
+
+    def set_fixes(self, fixes):
+        settings = load_settings()
+        settings["fixes"] = fixes
+        save_settings(settings)
+        return load_settings()
+
+    def add_fix(self, heard, meant):
+        settings = load_settings()
+        return self.set_fixes(settings["fixes"] + [[heard, meant]])
 
     def page_ready(self):
         """The page has drawn itself: the window is fully open."""
         TIMINGS.mark("window ready to use")
         TIMINGS.save()
         if SMOKE_TEST:
-            threading.Timer(1.0, self._window.destroy).start()
+            threading.Thread(target=self._smoke_test_extras, daemon=True).start()
+
+    def _smoke_test_extras(self):
+        """The Windows-only touches, tried for real in the Windows tests, then close."""
+        if winextras.WINDOWS:
+            import time
+
+            shown = threading.Event()
+            result = {}
+            self._progress(0.5)
+            try:
+                winextras.in_background(self._window)
+                winextras.flash(self._window)
+                TIMINGS.mark("window handle and flashing: ok")
+            except Exception as e:
+                TIMINGS.mark(f"window handle and flashing: {e.__class__.__name__}: {e}")
+            winextras.notify(self._window, HERE / "ui" / "icon.ico", "Subtitle Maker test", "Checking notifications work.",
+                             done=lambda error: (result.update(error=error), shown.set()))
+            shown.wait(10)
+            time.sleep(1)  # the taskbar call runs on the window's thread
+            self._progress(state=winextras.NO_PROGRESS)
+            time.sleep(0.5)
+            TIMINGS.mark(f"taskbar progress: {self._taskbar.error or 'ok'}")
+            TIMINGS.mark(f"notification: {result.get('error') or 'ok' if shown.is_set() else 'never shown'}")
+            TIMINGS.save()
+        self._window.destroy()
 
     def restart_app(self):
         """Close this window and open a fresh one (the page offers this if starting goes wrong)."""
@@ -353,6 +521,7 @@ class Api:
     def _finish_title(self):
         if self._window:
             self._window.set_title("Subtitle Maker")
+            self._progress(state=winextras.NO_PROGRESS)  # the next video, or the end of the queue, sets it again
 
     def stop_worker(self):
         """Stop the worker (and free its memory): before closing, uninstalling or updating."""
@@ -451,7 +620,7 @@ class Api:
     # they can mean a download)
     _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
                "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "review", "done_sound",
-               "open_folder", "theme", "auto_update", "vtt", "multi", "people")
+               "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify")
 
     def save_prefs(self, changes):
         """Save some instant settings; anything not allowed falls back to its default."""
@@ -621,7 +790,7 @@ def main():
         window.dom.document.events.dragover += DOMEventHandler(lambda e: None, prevent_default=True)
         window.dom.document.events.drop += DOMEventHandler(api.on_drop, prevent_default=True, stop_propagation=True)
         if opened_with:
-            window.evaluate_js(f"app.addFiles({json.dumps(media_in(opened_with))})")
+            api._take(opened_with)
 
     window.events.loaded += on_loaded
     window.events.closing += api.shutdown
