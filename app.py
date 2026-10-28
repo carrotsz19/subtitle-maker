@@ -23,6 +23,7 @@ import webview  # noqa: E402
 from webview.dom import DOMEventHandler  # noqa: E402
 
 import configure  # noqa: E402
+import known_voices  # noqa: E402
 import models  # noqa: E402
 import srtfile  # noqa: E402
 import uninstall  # noqa: E402
@@ -330,6 +331,17 @@ class Api:
         srtfile.BACKUPS.mkdir(parents=True, exist_ok=True)
         open_in_file_manager(srtfile.BACKUPS)
 
+    # ---- remembered voices -----------------------------------------------------------------------
+
+    def known_voices(self):
+        return known_voices.listing()
+
+    def forget_voice(self, name):
+        return known_voices.forget(name)
+
+    def forget_all_voices(self):
+        return known_voices.forget_all()
+
     # ---- word fixes ----------------------------------------------------------------------------
 
     def set_fixes(self, fixes):
@@ -622,7 +634,7 @@ class Api:
     # they can mean a download)
     _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
                "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "review", "done_sound",
-               "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify")
+               "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify", "remember_voices")
 
     def save_prefs(self, changes):
         """Save some instant settings; anything not allowed falls back to its default."""

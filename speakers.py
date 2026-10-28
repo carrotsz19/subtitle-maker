@@ -1,23 +1,26 @@
 """Speaker detection for make_subtitles.py: who spoke when, and which voice is whose name."""
 
+import queue
+import threading
 from pathlib import Path
 
 import numpy as np
 import sherpa_onnx
 
-from models import EMB_MODEL, SEG_MODEL, download_speakers, speakers_ready
+from models import EMB_MODEL, SEG_MODEL, SPEAKER_MB, VOICE_MODEL, download_speakers, speakers_ready
 
 SAMPLE_RATE = 16000
 
 AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".mov"}
-MATCH_THRESHOLD = 0.35      # voice similarity needed to trust a name match
+MATCH_THRESHOLD = 0.45      # voice similarity needed to name someone from a Voices clip (a 4 s clip
+                            # against a person measured 0.73+ for them, at most 0.21 for anyone else)
 MAX_EMBED_SECONDS = 30      # how much of each speaker's audio to fingerprint
 THREADS = 4
 
 
 def ensure_models(progress=None):
     if not speakers_ready():
-        print("Downloading the speaker detection models (32 MB, first time only)...")
+        print(f"Downloading the speaker detection models ({SPEAKER_MB} MB, first time only)...")
         download_speakers(progress)
 
 
@@ -41,7 +44,9 @@ class SpeakerDetector:
             clustering=sherpa_onnx.FastClusteringConfig(num_clusters=num_speakers, threshold=0.5),
         )
         self.diarizer = sherpa_onnx.OfflineSpeakerDiarization(config)
-        self.extractor = sherpa_onnx.SpeakerEmbeddingExtractor(embedding)
+        # Fingerprints of whole sentences, voice clips and remembered people: the better model
+        self.extractor = sherpa_onnx.SpeakerEmbeddingExtractor(
+            sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(VOICE_MODEL), num_threads=THREADS))
         self.progress = 0.0
 
     def detect(self, audio):
@@ -114,8 +119,8 @@ MIN_PRINT = 0.8        # shorter sentences don't help decide who the people are.
 SHORTEST = 0.3         # ...but down to this, a clear fingerprint still says which of them it is
 LONGEST = 5.0          # longer "sentences" (Whisper running on into the next person) are split up
 MAX_PRINT = 12.0       # seconds of a long sentence used for its fingerprint
-SAME_GROUP = 0.84      # groups' average voices this alike are one person cut in two (with this
-                       # voice model, different people measured 0.48-0.87, halves of one person 0.85+)
+SAME_GROUP = 0.46      # groups' average voices this alike are one person cut in two (with the
+                       # TitaNet voice model, different people measured up to 0.35, one person 0.56+)
 GROUP_MARGIN = 0.08    # how much closer to its group's voice than the next, to trust a fingerprint
 
 
@@ -153,6 +158,82 @@ def shorter(tokens, span):
     # The longest pause, preferring ones near the middle so the pieces come out even
     cut = max(range(a + 1, b), key=lambda i: (tokens[i].start - tokens[i - 1].end) - abs(tokens[i].start - middle) / 20)
     return shorter(tokens, (a, cut)) + shorter(tokens, (cut, b))
+
+
+def print_window(tokens, span):
+    """The stretch of audio (seconds) a sentence's fingerprint is made from, or None if too short."""
+    a, b = span
+    start, end = tokens[a].start, tokens[b - 1].end
+    if end - start < SHORTEST:
+        return None
+    return start, (min(end, start + MAX_PRINT) if end - start >= MIN_PRINT else end)
+
+
+class Fingerprints:
+    """The detector's fingerprints, remembered, and worked out ahead while Whisper is still
+    transcribing (the processor is mostly idle then, when Whisper is on the graphics card), so
+    the speaker step after the transcript is nearly instant.
+
+    Use it in place of the detector: assign() asks it for fingerprints of stretches of audio.
+    """
+
+    def __init__(self, detector, audio, turns=lambda: None):
+        self.detector, self.audio, self.turns = detector, audio, turns
+        self.cache, self.lock = {}, threading.Lock()
+        self.jobs, self.thread = queue.Queue(), None
+        self.ahead_count = 0  # how many were ready before they were needed (for the log)
+
+    def window(self, start, end):
+        return int(start * SAMPLE_RATE), int(end * SAMPLE_RATE)
+
+    def fingerprint(self, clip):
+        # Clips are slices of the same audio: their place in it identifies them exactly
+        if clip.base is not None and np.shares_memory(clip, self.audio):
+            first = (clip.__array_interface__["data"][0] - self.audio.__array_interface__["data"][0]) // self.audio.itemsize
+            key = (first, len(clip))
+            with self.lock:
+                if key in self.cache:
+                    self.ahead_count += 1
+                    return self.cache[key]
+            value = self.detector.fingerprint(clip)
+            with self.lock:
+                self.cache[key] = value
+            return value
+        return self.detector.fingerprint(clip)
+
+    def ahead(self, tokens):
+        """More words are transcribed: fingerprint the sentences that are now finished."""
+        if self.thread is None:
+            self.thread = threading.Thread(target=self._work, daemon=True)
+            self.thread.start()
+        self.jobs.put(list(tokens))
+
+    def _work(self):
+        while True:
+            tokens = self.jobs.get()
+            while not self.jobs.empty():  # only the newest list of words matters
+                tokens = self.jobs.get()
+            if tokens is None:
+                return
+            turns = self.turns()
+            labels = word_speakers(tokens, turns) if turns else [0] * len(tokens)
+            for span in sentence_spans(tokens, labels)[:-1]:  # the last may still be growing
+                window = print_window(tokens, span)
+                if window:
+                    a, b = self.window(*window)
+                    with self.lock:
+                        known = (a, b - a) in self.cache
+                    if not known:
+                        self.fingerprint(self.audio[a:b])
+                if not self.jobs.empty():
+                    break
+
+    def finish(self):
+        """Stop working ahead (before assign() uses the fingerprints)."""
+        if self.thread is not None:
+            self.jobs.put(None)
+            self.thread.join()
+            self.thread = None
 
 
 def majority(tokens, labels, span):
@@ -269,8 +350,7 @@ def assign(tokens, turns, detector=None, audio=None, count=-1, samples=None):
         long_ones = [k for k, (a, b) in enumerate(spans) if tokens[b - 1].end - tokens[a].start >= MIN_PRINT]
         prints = []
         for k in long_ones:
-            a, b = spans[k]
-            start, end = tokens[a].start, min(tokens[b - 1].end, tokens[a].start + MAX_PRINT)
+            start, end = print_window(tokens, spans[k])
             prints.append(detector.fingerprint(audio[int(start * SAMPLE_RATE):int(end * SAMPLE_RATE)]))
         prints = np.array(prints)
         clip_names = sorted(samples or {})
@@ -319,10 +399,9 @@ def assign(tokens, turns, detector=None, audio=None, count=-1, samples=None):
             for k in range(len(spans)):
                 if k in long_set:
                     continue
-                a, b = spans[k]
-                g = None
-                if tokens[b - 1].end - tokens[a].start >= SHORTEST and len(ids) > 1:
-                    sims = group_prints @ detector.fingerprint(audio[int(tokens[a].start * SAMPLE_RATE):int(tokens[b - 1].end * SAMPLE_RATE)])
+                g, window = None, print_window(tokens, spans[k])
+                if window and len(ids) > 1:
+                    sims = group_prints @ detector.fingerprint(audio[int(window[0] * SAMPLE_RATE):int(window[1] * SAMPLE_RATE)])
                     top = np.sort(sims)
                     if top[-1] - top[-2] >= 2 * GROUP_MARGIN:
                         g = int(ids[np.argmax(sims)])

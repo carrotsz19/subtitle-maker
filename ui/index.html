@@ -945,6 +945,24 @@ function modelsBlock() {
     <p class="foot">${total.toFixed(2)} GB in all. A deleted model downloads again if you switch back to it.</p></div>`;
 }
 
+/* People whose voices are remembered (named in earlier videos), loaded when Settings opens */
+function voicesBlock() {
+  if (!S.voicesKnown) {
+    if (!S.voicesLoading) {
+      S.voicesLoading = true;
+      api().known_voices().then(v => { S.voicesKnown = v; S.voicesLoading = false; if (S.view === "settings" && !S.run) render(); });
+    }
+    return "";
+  }
+  if (!S.voicesKnown.length) return "";
+  const rows = S.voicesKnown.map(v => prefRow(esc(v.name),
+    `In ${v.videos} video${v.videos > 1 ? "s" : ""}${v.seen ? ` · last ${new Date(v.seen).toLocaleDateString(undefined, { day: "numeric", month: "short" })}` : ""}`,
+    `<button class="btn ghost sm" data-act="forget-voice" data-name="${esc(v.name)}">Forget</button>`)).join("");
+  return `<div class="block"><h2>Remembered voices</h2><div class="grp">${rows}</div>
+    <p class="foot">Named in earlier videos. If someone's named wrongly, rename them in the check screen and it learns.
+      <button class="linkbtn" data-act="forget-all-voices">Forget everyone</button></p></div>`;
+}
+
 /* Word fixes: corrections applied to every video, as it's transcribed */
 function fixesBlock() {
   const fixes = S.info.settings.fixes || [];
@@ -1039,7 +1057,9 @@ function prefsBlocks() {
     <div class="block"><h2>Speakers</h2><div class="grp">
         ${prefRow("Name labels", "How each line shows who's talking (with Several people).", segPref("speaker_labels"))}
         ${prefRow("Also save one file per person", "Handy for Resolve's subtitle regions.", switchPref("speaker_files"))}
+        ${prefRow("Remember people I name", "Next time they're in a video, they're named by themselves. Their voice stays on this PC.", switchPref("remember_voices"))}
       </div></div>
+    ${voicesBlock()}
     <div class="block"><h2>Accuracy</h2><div class="grp">
         <div class="grp-row" style="flex-wrap:wrap"><div class="grow" style="min-width:220px"><div class="row-title">Words to spell right</div>
             <div class="row-sub">Names, places and brands it might mishear, separated by commas.</div></div>
@@ -1159,7 +1179,7 @@ function newsList(news) {
 function neededFor(level) {
   const m = S.info.models, lv = S.info.levels[level];
   const items = [{ key: "whisper", label: `Speech model (${lv.name} quality)`, size: lv.download, have: m.whisper[level] }];
-  if (level !== "potato") items.push({ key: "speakers", label: "Speaker detection models", size: "32 MB", have: m.speakers });
+  if (level !== "potato") items.push({ key: "speakers", label: "Speaker detection models", size: "70 MB", have: m.speakers });
   return items;
 }
 
@@ -1620,6 +1640,10 @@ const ACTIONS = {
     render();
   },
   "open-backups": () => api().open_backups(),
+  "forget-voice": el => confirmBox(`Forget ${el.dataset.name}'s voice?`, "They'll be asked about again the next time they're in a video.", "Forget",
+    async () => { S.voicesKnown = await api().forget_voice(el.dataset.name); render(); }),
+  "forget-all-voices": () => confirmBox("Forget everyone's voice?", "Everyone will be asked about again in their next video.", "Forget everyone",
+    async () => { S.voicesKnown = await api().forget_all_voices(); render(); }),
   "choose-folder": async () => {
     const found = await api().choose_video_folder();
     if (found && !found.length) toast("No videos or audio in that folder.", true);
@@ -1791,7 +1815,7 @@ const app = {
           api().models_status().then(m => { S.info.models = m; if (r.after) r.after(!ev.code, r.error); else render(); });
           return;
         }
-        if (r.kind === "make") { S.history = null; if (S.view === "history") loadHistory(); }
+        if (r.kind === "make") { S.history = null; S.voicesKnown = null; if (S.view === "history") loadHistory(); }
         S.run = null;
         S.review = null;
         $("#dialog-root").innerHTML = "";

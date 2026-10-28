@@ -26,6 +26,10 @@ split or join lines). Drop any .srt on the window, or use "Fix an existing .srtâ
 one later; the old version is kept in a backups folder. Settings > Word fixes corrects words it
 always gets wrong, in every video.
 
+**Several people:** pick "Several people" (and how many, if you know) and each line is labelled with
+who said it. People you name are remembered (on this PC only), so later videos name them by
+themselves; Settings > Remembered voices lists and forgets them.
+
 **Uninstalling:** Settings > Uninstall in the window, or `Uninstall.bat`.
 
 The full guide is in [README.txt](README.txt).

@@ -22,7 +22,8 @@ HERE = Path(__file__).parent.resolve()
 # What Subtitle Maker keeps in its data folder; nothing else there is touched
 DATA_DIRS = ("venv", "models", "webview", "backups")
 DATA_FILES = ("settings.json", "history.json", "installed.json", "install-sha.txt", "install-files.txt",
-              "last_error.log", "startup.log", "queue.json", "update-packages.txt", "speed.json")
+              "last_error.log", "startup.log", "queue.json", "update-packages.txt", "speed.json",
+              "known_voices.json")
 
 
 def desktop():

@@ -60,6 +60,8 @@ DEFAULT_SETTINGS = {
     "fixes": [],
     # A Windows notification when the queue finishes while you're in another window
     "notify": True,
+    # Remember the voices of people you name, to name them by themselves next time
+    "remember_voices": True,
 }
 MAX_FIXES = 200
 # The values each setting may take; anything else (a hand-edited file, an old version) goes back to the default
@@ -70,7 +72,7 @@ SETTING_CHOICES = {
     "device": ("auto", "cuda", "cpu"), "transcript": (True, False), "vtt": (True, False), "review": (True, False),
     "done_sound": (True, False), "multi": (True, False), "people": (0, 2, 3, 4, 5, 6),
     "open_folder": (True, False), "theme": ("system", "light", "dark"), "auto_update": (True, False),
-    "notify": (True, False),
+    "notify": (True, False), "remember_voices": (True, False),
     "channel": ("main", "experimental"),
 }
 

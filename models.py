@@ -32,7 +32,12 @@ SEG_MODEL = MODELS_DIR / "sherpa-onnx-pyannote-segmentation-3-0" / "model.onnx"
 EMB_URL = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/"
            "speaker-recongition-models/wespeaker_en_voxceleb_resnet34_LM.onnx")
 EMB_MODEL = MODELS_DIR / "wespeaker_en_voxceleb_resnet34_LM.onnx"
-SPEAKER_MB = 32  # both speaker models together, roughly
+# The voice fingerprints for whole sentences use a better model than the detector's own: on the
+# speaker test set it put 98.6% of words with the right person against about 91% (see speakers.py)
+VOICE_URL = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/"
+             "speaker-recongition-models/nemo_en_titanet_small.onnx")
+VOICE_MODEL = MODELS_DIR / "nemo_en_titanet_small.onnx"
+SPEAKER_MB = 70  # the three speaker models together, roughly
 
 
 def repo_for(model):
@@ -57,7 +62,7 @@ def whisper_path(model):
 
 
 def speakers_ready():
-    return SEG_MODEL.exists() and EMB_MODEL.exists()
+    return SEG_MODEL.exists() and EMB_MODEL.exists() and VOICE_MODEL.exists()
 
 
 def ready(level):
@@ -116,7 +121,7 @@ def download_whisper(model, progress=None):
 
 
 def download_speakers(progress=None):
-    """Download the two speaker detection models if they're missing. progress(done_mb, total_mb)."""
+    """Download the speaker detection models that are missing. progress(done_mb, total_mb)."""
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     done = [0.0]
 
@@ -137,6 +142,8 @@ def download_speakers(progress=None):
         archive.unlink()
     if not EMB_MODEL.exists():
         fetch(EMB_URL, EMB_MODEL)
+    if not VOICE_MODEL.exists():
+        fetch(VOICE_URL, VOICE_MODEL)
     if progress:
         progress(SPEAKER_MB, SPEAKER_MB)
 

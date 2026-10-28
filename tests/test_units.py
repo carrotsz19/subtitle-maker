@@ -94,6 +94,41 @@ spans = speakers.sentence_spans(run_on, [0] * len(run_on))
 assert all(run_on[b - 1].end - run_on[a].start <= speakers.LONGEST for a, b in spans)
 assert speakers.assign(toks, [], FakeDetector(), audio, 2) == (toks, [], None)
 
+# Fingerprints worked out during transcription give the same answer, with the work already done
+class Counting(FakeDetector):
+    calls = 0
+
+    def fingerprint(self, audio):
+        Counting.calls += 1
+        return super().fingerprint(audio)
+
+
+direct = speakers.assign(toks, lumped, FakeDetector(), audio, 2)[0]
+early = speakers.Fingerprints(Counting(), audio, lambda: lumped)
+for n in range(5, len(toks) + 1, 5):  # as Whisper hands over more and more words, now and then
+    early.ahead(toks[:n])
+    __import__("time").sleep(0.05)
+early.finish()
+before = Counting.calls
+assert [t.speaker for t in speakers.assign(toks, lumped, early, audio, 2)[0]] == [t.speaker for t in direct]
+assert early.ahead_count > 0 and Counting.calls - before <= 2, (early.ahead_count, Counting.calls - before)
+
+# Remembered voices: a confident match names someone; a lookalike or a near-tie doesn't
+import known_voices  # noqa: E402
+
+known_voices.forget_all()
+alex, jamie = np.array([1.0, 0, 0, 0]), np.array([0, 1.0, 0, 0])
+known_voices.remember({"Alex": alex, "Jamie": jamie}, "model-a")
+known_voices.remember({"Alex": np.array([0.9, 0.1, 0, 0]) / np.linalg.norm([0.9, 0.1])}, "model-a")
+assert [(r["name"], r["videos"]) for r in sorted(known_voices.listing(), key=lambda r: r["name"])] == [("Alex", 2), ("Jamie", 1)]
+found = known_voices.match({0: np.array([0.95, 0.05, 0.3, 0]) / np.linalg.norm([0.95, 0.05, 0.3]), 1: np.array([0, 0, 0, 1.0])}, "model-a")
+assert {spk: name for spk, (name, _) in found.items()} == {0: "Alex"}, found  # nobody sounds like speaker 1
+assert known_voices.match({0: alex}, "model-b") == {}  # another model's fingerprints don't compare
+assert known_voices.match({0: np.array([1.0, 1.0, 0, 0]) / np.sqrt(2)}, "model-a") == {}  # a tie: ask instead
+assert known_voices.match({0: alex}, "model-a", skip={"Alex"}) == {}
+assert [r["name"] for r in known_voices.forget("Alex")] == ["Jamie"]
+known_voices.forget_all()
+
 # Filler words
 assert ms.is_filler(" Um,") and ms.is_filler("uh.") and not ms.is_filler("umbrella")
 

@@ -25,6 +25,7 @@ import io
 import json
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -692,9 +693,12 @@ def name_speakers(detector, audio, turns, cues, sample_prints, known=None):
     ids = sorted({spk for _, _, spk in turns})
     names = {spk: name for spk, name in (known or {}).items() if name}
     for spk, name in names.items():
-        print(f"Speaker {spk + 1} is {name} (matched line by line to the voice clips)")
-    if sample_prints and not names:
-        matches = speakers.match_names(detector.speaker_fingerprints(audio, turns), sample_prints)
+        print(f"Speaker {spk + 1} is {name} (by voice)")
+    unnamed = [spk for spk in ids if spk not in names]
+    if sample_prints and unnamed:
+        whole = detector.speaker_fingerprints(audio, [t for t in turns if t[2] in unnamed])
+        free = {name: p for name, p in sample_prints.items() if name not in names.values()}
+        matches = speakers.match_names(whole, free) if free else {}
         for spk, (name, score) in matches.items():
             names[spk] = name
             print(f"Speaker {spk + 1} matched to {name} (voice similarity {score:.0%})")
@@ -710,6 +714,36 @@ def name_speakers(detector, audio, turns, cues, sample_prints, known=None):
     finally:
         player.close()
     return names
+
+
+def recognise(detector, audio, turns, known, clip_prints):
+    """{speaker: name} for detected people who clearly sound like someone named in an earlier video."""
+    import known_voices
+    import speakers
+
+    unnamed = sorted({spk for _, _, spk in turns} - set(known))
+    if not unnamed:
+        return {}
+    whole = detector.speaker_fingerprints(audio, [t for t in turns if t[2] in unnamed])
+    found = known_voices.match(whole, speakers.VOICE_MODEL.name, skip=set(known.values()) | set(clip_prints or {}))
+    for spk, (name, score) in found.items():
+        print(f"Speaker {spk + 1} sounds like {name}, from an earlier video (voice similarity {score:.0%})")
+    return {spk: name for spk, (name, _) in found.items()}
+
+
+def remember_people(detector, audio, cues, names):
+    """Keep the voice of everyone given a real name, so later videos name them by themselves."""
+    import known_voices
+    import speakers
+
+    real = {spk: name.strip() for spk, name in names.items()
+            if name and name.strip() and not re.fullmatch(r"Speaker \d+", name.strip())}
+    if not real:
+        return
+    turns = [(c[0], c[1], c[3]) for c in cues if c[3] in real]
+    whole = detector.speaker_fingerprints(audio, turns)
+    known_voices.remember({real[spk]: p for spk, p in whole.items()}, speakers.VOICE_MODEL.name)
+    print(f"Remembered for next time: {', '.join(sorted(set(real.values())))}")
 
 
 def check_space(model_name, potato):
@@ -743,12 +777,12 @@ def get_whisper(model_name, device, potato, quality=""):
     return whisper
 
 
-def transcribe(whisper, model_name, audio, language, beam_size, bar, options=None):
+def transcribe(whisper, model_name, audio, language, beam_size, bar, options=None, on_words=None):
     """Transcribe audio into Tokens, moving to the CPU if the GPU runs out of memory partway through.
 
     whisper is {"model": ..., "device": ...}; it is the only reference to the model, so swapping it
     for a CPU one frees the GPU memory. options go to faster-whisper (vad_filter, hotwords).
-    Returns (tokens, detected language).
+    on_words(tokens so far) hears about each new stretch. Returns (tokens, detected language).
     """
     options = {"vad_filter": True, **(options or {})}
     tokens, done = [], 0.0  # done = seconds of audio fully transcribed so far
@@ -761,6 +795,8 @@ def transcribe(whisper, model_name, audio, language, beam_size, bar, options=Non
             for seg in segments:
                 tokens.extend(Token(w.word, w.start + offset, w.end + offset, None) for w in seg.words)
                 done = seg.end + offset
+                if on_words:
+                    on_words(tokens)
                 bar.update(min(done, bar.total) - bar.n)
                 set_title(f"{bar.n / bar.total:.0%} - Making subtitles")
             return tokens, language
@@ -790,7 +826,7 @@ def make_subtitles(args, level):
             elif models.speakers_ready():
                 print("The speaker detection models are already downloaded.")
             else:
-                print("Downloading the speaker detection models (32 MB, first time only)...")
+                print(f"Downloading the speaker detection models ({models.SPEAKER_MB} MB, first time only)...")
                 models.download_speakers(download_progress("speakers", "the speaker detection models"))
         except Exception as e:  # no internet looks different from each library; the log has the details
             raise FriendlyError("Couldn't finish downloading. Check your internet connection and try again; "
@@ -828,7 +864,7 @@ def make_subtitles(args, level):
         count = args.speakers or len(speakers.voice_samples(args.voices)) or -1
         print(f"Speaker detection on ({count if count > 0 else 'guessing how many'} people).")
         if not models.speakers_ready():
-            print("Downloading the speaker detection models (32 MB, first time only)...")
+            print(f"Downloading the speaker detection models ({models.SPEAKER_MB} MB, first time only)...")
             models.download_speakers(download_progress("speakers", "the speaker detection models"))
         detector = speakers.SpeakerDetector(count)
 
@@ -859,7 +895,11 @@ def make_subtitles(args, level):
         st = args.settings
         options = {"vad_filter": st["vad"], "hotwords": st["hotwords"].strip() or None}
         started = time.perf_counter()
-        tokens, language = transcribe(whisper, model_name, audio, args.language, 1 if potato else 5, bar, options)
+        # Speaker fingerprints for each finished sentence are worked out while Whisper carries on,
+        # when it's on the graphics card (on the processor they would only slow each other down)
+        fingerprints = speakers.Fingerprints(detector, audio, lambda: detection.get("turns")) if detector else None
+        ahead = fingerprints.ahead if fingerprints and loaded_on == "cuda" else None
+        tokens, language = transcribe(whisper, model_name, audio, args.language, 1 if potato else 5, bar, options, ahead)
         bar.update(bar.total - bar.n)
         if detector:
             bar.set_description_str("Finishing speaker detection ")
@@ -893,7 +933,13 @@ def make_subtitles(args, level):
         # to the voice clips), which is much steadier than the detector's word-by-word answer
         emit("progress", done=total, total=total, stage="Matching voices to lines", speakers=None)
         prints = voice_prints(detector, args.voices)
-        tokens, turns, known = speakers.assign(tokens, turns, detector, audio, count, prints)
+        fingerprints.finish()
+        tokens, turns, known = speakers.assign(tokens, turns, fingerprints, audio, count, prints)
+        if fingerprints.ahead_count:
+            print(f"Voice fingerprints ready before the transcript finished: {fingerprints.ahead_count}")
+        known = dict(known or {})
+        if st["remember_voices"]:
+            known.update(recognise(detector, audio, turns, known, prints))
     cues = build_cues(tokens)
     style = st["speaker_labels"]
 
@@ -912,6 +958,8 @@ def make_subtitles(args, level):
         if not cues:
             raise FriendlyError("Every line was deleted in the check, so there was nothing to save.")
 
+    if names and st["remember_voices"] and detector:
+        remember_people(detector, audio, cues, names)
     write_srt(out, cues, names, style)
     print(f"\nWrote {len(cues)} {'labelled ' if names else ''}subtitles to {out}")
     files = [{"path": str(out), "name": None, "count": len(cues)}]
