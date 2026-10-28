@@ -91,7 +91,28 @@ assert all(re.match(r"Speaker [12]: ", c[0]) for c in cues), text
 check_srt(WORK / "two.srt")
 assert list(WORK.glob("two - Speaker *.srt")), "each speaker's own file should be saved too"
 
-# 4. The worker keeps the model loaded between videos
+# 3b. Progress comes window by window from faster-whisper itself: at the 30 s window boundary, not
+# at the end of whichever line of text happened to finish there
+import make_subtitles as ms  # noqa: E402
+
+
+class Progress:
+    total, n, seen = len(two) / 16000, 0.0, []
+
+    def update(self, amount):
+        self.n += amount
+        self.seen.append(round(self.n, 1))
+
+    def write(self, message):
+        print(message)
+
+
+bar = Progress()
+ms.transcribe(ms.get_whisper("base", "cpu", True), "base", two, "en", 1, bar, {"vad_filter": False})
+print("progress reported at:", bar.seen)
+assert any(29.5 <= x <= 30.5 for x in bar.seen) and bar.seen[-1] >= bar.total - 0.5, bar.seen
+
+
 worker = subprocess.Popen([PY, str(ROOT / "make_subtitles.py"), "--serve", "--events"], stdin=subprocess.PIPE,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", bufsize=1, env=ENV)
 log, finished = [], []

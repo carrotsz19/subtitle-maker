@@ -236,6 +236,37 @@ with tempfile.TemporaryDirectory() as d:
     q.save_queue([])
     assert q._unfinished() == [] and not app.QUEUE_FILE.exists()
 
+# Progress goes window by window (as faster-whisper decodes them, silent ones too), not by the
+# end of each line of text: it used to sit still through a window with no words, then jump
+class WindowedModel:
+    def transcribe(self, audio, language, **kw):
+        import faster_whisper.transcribe as fw
+
+        assert kw.get("log_progress"), "faster-whisper only counts windows when asked to"
+
+        def gen():
+            bar = fw.tqdm(total=90.0, unit="seconds", disable=False)  # what faster-whisper does
+            for window, words in enumerate([[(1.0, 2.0)], [], [(70.0, 71.0)]]):  # the middle one is silent
+                for s, e in words:
+                    yield Seg(s, e, "w")
+                bar.update(30.0)
+                seen.append(round(progress.n, 1))
+            bar.close()
+        return gen(), Info()
+
+
+class Progress(Bar):
+    total, n = 90.0, 0.0
+
+
+seen, progress = [], Progress()
+tokens, _ = ms.transcribe({"model": WindowedModel(), "device": "cpu"}, "base", np.zeros(90 * sr, dtype=np.float32), None, 5, progress)
+assert seen == [30.0, 60.0, 90.0], seen
+assert [t.word for t in tokens] == [" w", " w"]
+import faster_whisper.transcribe as fw  # noqa: E402
+
+assert fw.tqdm.__module__.startswith("tqdm"), "faster-whisper's own progress bar is put back afterwards"
+
 # The page's API must be our own functions only: pywebview walks every public attribute (and
 # theirs) on the window's main thread, and walking into the window froze it for a minute
 api = app.Api()

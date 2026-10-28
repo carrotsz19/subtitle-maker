@@ -777,6 +777,41 @@ def get_whisper(model_name, device, potato, quality=""):
     return whisper
 
 
+class WindowProgress:
+    """Stands in for faster-whisper's own console progress bar, which moves after every 30 s
+    window it decodes (silent ones too) in seconds of speech. Going by the end of each line of
+    text instead, the bar sat still through windows with no words, then jumped two at once."""
+
+    def __init__(self, on_fraction):
+        self.on_fraction, self.used = on_fraction, False
+
+    def __call__(self, total=None, **kwargs):  # faster-whisper makes its bar: tqdm(total=..., ...)
+        self.total, self.n = float(total or 0), 0.0
+        return self
+
+    def update(self, amount):
+        self.n += amount
+        if self.total > 0:
+            self.used = True
+            self.on_fraction(min(1.0, self.n / self.total))
+
+    def close(self):
+        pass
+
+
+@contextlib.contextmanager
+def window_progress(on_fraction):
+    """faster-whisper's progress, window by window, while transcribing (see WindowProgress)."""
+    import faster_whisper.transcribe as fw
+
+    progress = WindowProgress(on_fraction)
+    original, fw.tqdm = getattr(fw, "tqdm", None), progress
+    try:
+        yield progress
+    finally:
+        fw.tqdm = original
+
+
 def transcribe(whisper, model_name, audio, language, beam_size, bar, options=None, on_words=None):
     """Transcribe audio into Tokens, moving to the CPU if the GPU runs out of memory partway through.
 
@@ -786,19 +821,28 @@ def transcribe(whisper, model_name, audio, language, beam_size, bar, options=Non
     """
     options = {"vad_filter": True, **(options or {})}
     tokens, done = [], 0.0  # done = seconds of audio fully transcribed so far
+    length = len(audio) / SAMPLE_RATE
+
+    def advance(position):
+        if position > bar.n:
+            bar.update(min(position, bar.total) - bar.n)
+            set_title(f"{bar.n / bar.total:.0%} - Making subtitles")
+
     while True:
         offset = done  # timestamps from this attempt are relative to where it started
         try:
-            segments, info = whisper["model"].transcribe(audio[int(offset * SAMPLE_RATE):], language=language,
-                                              word_timestamps=True, beam_size=beam_size, **options)
-            language = info.language  # keep it the same if we have to resume on the CPU
-            for seg in segments:
-                tokens.extend(Token(w.word, w.start + offset, w.end + offset, None) for w in seg.words)
-                done = seg.end + offset
-                if on_words:
-                    on_words(tokens)
-                bar.update(min(done, bar.total) - bar.n)
-                set_title(f"{bar.n / bar.total:.0%} - Making subtitles")
+            # Progress is the share of the speech decoded so far (the work), window by window
+            with window_progress(lambda fraction: advance(offset + fraction * (length - offset))) as windows:
+                segments, info = whisper["model"].transcribe(audio[int(offset * SAMPLE_RATE):], language=language,
+                                                  word_timestamps=True, beam_size=beam_size, log_progress=True, **options)
+                language = info.language  # keep it the same if we have to resume on the CPU
+                for seg in segments:
+                    tokens.extend(Token(w.word, w.start + offset, w.end + offset, None) for w in seg.words)
+                    done = seg.end + offset
+                    if on_words:
+                        on_words(tokens)
+                    if not windows.used:  # a faster-whisper without that progress: go by the lines
+                        advance(done)
             return tokens, language
         except Exception as e:
             if whisper["device"] == "cpu" or not gpu_failed(e):

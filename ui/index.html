@@ -648,17 +648,41 @@ function etaText(r) {
   const left = secondsLeft(r);
   return left === null ? "" : ` · ${roughly(left)} left`;
 }
-/* The time left counts down between progress updates (which come in jumps) */
+/* Whisper reports progress after each window of up to 30 s of speech, so between reports the
+   bar moves on at the speed the time-left estimate expects. It never runs much more than a
+   window ahead (the last step's size, or 25 s), never goes backwards, and the next real report
+   takes over. */
+const AHEAD_AT_MOST = 25;  // seconds of audio past the last report, at least
+function shownDone(r, now = Date.now()) {
+  // Before the first report, it can only go on how long this PC took last time
+  const points = (r.points || []).length || !r.expect || !r.startedAt ? r.points || [] : [{ t: r.startedAt, done: 0 }];
+  const last = points[points.length - 1], before = points[points.length - 2];
+  if (!r.total || !last || r.done >= r.total) return r.done;
+  const ahead = Math.max(AHEAD_AT_MOST, before ? 0.9 * (last.done - before.done) : 0);
+  const left = (r.points || []).length ? secondsLeft(r, last.t) : r.expect;
+  let shown = r.done;
+  if (left) {
+    const speed = (r.total - last.done) / left;  // seconds of audio per second
+    shown = Math.max(r.done, Math.min(last.done + speed * (now - last.t) / 1000, last.done + ahead, r.total * 0.99));
+  }
+  r.shown = Math.max(r.done, Math.min(Math.max(r.shown || 0, shown), r.total));
+  return r.shown;
+}
+function stageText(r, done) {
+  return `${esc(r.stage || "Starting")}${r.total ? ` · ${clock(done)} of ${clock(r.total)}${etaText(r)}` : ""}`;
+}
 setInterval(() => {
-  const r = S.run, el = $("#run-stage");
-  if (!r || r.kind !== "make" || !el || !r.total) return;
-  el.innerHTML = `${esc(r.stage || "Starting")} · ${clock(r.done)} of ${clock(r.total)}${etaText(r)}`;
-}, 1000);
+  const r = S.run, card = $("#running");
+  if (!r || r.kind !== "make" || !card || !r.total) return;
+  const done = shownDone(r);
+  $("#run-pct", card).textContent = Math.round(Math.min(1, done / r.total) * 100) + "%";
+  card.querySelector(".bar > i").style.width = `${Math.min(1, done / r.total) * 100}%`;
+  $("#run-stage", card).innerHTML = stageText(r, done);
+}, 250);
 
 function viewRunning() {
-  const r = S.run, pct = r.total ? Math.min(1, r.done / r.total) : 0;
+  const r = S.run, done = shownDone(r), pct = r.total ? Math.min(1, done / r.total) : 0;
   const left = queueLeft();
-  const eta = etaText(r);
   const res = r.res || {};
   const meter = (label, value, frac, hot) => `<div class="meter${hot ? " hot" : ""}"><span>${label}</span><b>${value}</b>
       <div class="bar thin"><i style="width:${Math.round(Math.min(1, frac || 0) * 100)}%"></i></div></div>`;
@@ -673,7 +697,7 @@ function viewRunning() {
       <button class="btn ghost sm" data-act="cancel">Cancel</button></div>
     <div><div class="between" style="align-items:flex-end;margin-bottom:8px">
         <div><div class="big-pct mono" id="run-pct">${r.total ? Math.round(pct * 100) + "%" : "…"}</div></div>
-        <div class="sm dim right mono" id="run-stage">${esc(r.stage || "Starting")}${r.total ? ` · ${clock(r.done)} of ${clock(r.total)}${eta}` : ""}</div></div>
+        <div class="sm dim right mono" id="run-stage">${stageText(r, done)}</div></div>
       <div class="bar ${r.total ? "" : "indeterminate"}"><i style="width:${pct * 100}%"></i></div></div>
     ${r.speakers != null ? `<div><div class="between sm"><span class="dim">Working out who's talking</span><span class="mono dim" id="run-spk">${Math.round(r.speakers * 100)}%</span></div>
         <div class="bar thin ok" style="margin-top:6px"><i style="width:${r.speakers * 100}%"></i></div></div>` : ""}
