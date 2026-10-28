@@ -22,6 +22,8 @@ function Install-SubtitleMaker {
     $data = if ($env:SUBTITLE_MAKER_HOME) { $env:SUBTITLE_MAKER_HOME } else { Join-Path $env:USERPROFILE '.subtitle-maker' }
     $branch = if ($env:SUBTITLE_MAKER_BRANCH) { $env:SUBTITLE_MAKER_BRANCH } else { 'main' }
     $headers = @{ 'User-Agent' = 'subtitle-maker-installer'; 'Accept' = 'application/vnd.github+json' }
+    # GitHub limits anonymous requests per network; the Windows tests share theirs, so they pass a token
+    if ($env:SUBTITLE_MAKER_GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $env:SUBTITLE_MAKER_GITHUB_TOKEN" }
 
     Write-Host ''
     Write-Host "Installing Subtitle Maker into $dest" -ForegroundColor Cyan

@@ -91,9 +91,13 @@ assert all(re.match(r"Speaker [12]: ", c[0]) for c in cues), text
 check_srt(WORK / "two.srt")
 assert list(WORK.glob("two - Speaker *.srt")), "each speaker's own file should be saved too"
 
-# 3b. Progress comes window by window from faster-whisper itself: at the 30 s window boundary, not
-# at the end of whichever line of text happened to finish there
+# 3b. Progress comes window by window from faster-whisper's own counter (silent windows too), not
+# from the end of each line of text: check it really calls ours
 import make_subtitles as ms  # noqa: E402
+
+windows = []
+original_update = ms.WindowProgress.update
+ms.WindowProgress.update = lambda self, amount: (windows.append(amount), original_update(self, amount))[1]
 
 
 class Progress:
@@ -109,8 +113,10 @@ class Progress:
 
 bar = Progress()
 ms.transcribe(ms.get_whisper("base", "cpu", True), "base", two, "en", 1, bar, {"vad_filter": False})
-print("progress reported at:", bar.seen)
-assert any(29.5 <= x <= 30.5 for x in bar.seen) and bar.seen[-1] >= bar.total - 0.5, bar.seen
+ms.WindowProgress.update = original_update
+print("progress reported at:", bar.seen, "| faster-whisper's window steps:", [round(x, 1) for x in windows])
+assert windows, "faster-whisper didn't report its windows to us (has its progress bar changed?)"
+assert bar.seen == sorted(bar.seen) and bar.seen[-1] >= bar.total - 0.5, bar.seen
 
 
 worker = subprocess.Popen([PY, str(ROOT / "make_subtitles.py"), "--serve", "--events"], stdin=subprocess.PIPE,

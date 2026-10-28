@@ -67,6 +67,7 @@ jobs:
         shell: powershell
         env:
           SUBTITLE_MAKER_NO_LAUNCH: "1"
+          SUBTITLE_MAKER_GITHUB_TOKEN: ${{ github.token }}
           SUBTITLE_MAKER_BRANCH: ${{ github.event_name == 'push' && github.ref_name || 'main' }}
         run: |
           $env:SUBTITLE_MAKER_INSTALL = "$env:RUNNER_TEMP\Subtitle Maker"
