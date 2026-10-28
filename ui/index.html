@@ -511,6 +511,7 @@ function viewMake() {
       <p>Drop a video and get a .srt you can import into DaVinci Resolve.</p></div>
     <div class="stack">
       ${S.update.state === "available" && !busy && !S.update.data.switch && S.update.data.kind !== "improvement" ? updateBanner(S.update.data.kind) : ""}
+      ${S.update.blocking && busy ? `<div class="banner bad">An important security update installs as soon as this video is done. Nothing else starts until then.</div>` : ""}
       ${S.unfinished && !busy && !S.review ? unfinishedBanner() : ""}
       ${S.review ? viewReview() : busy ? viewRunning() : showResult ? viewResults(last) : ""}
       ${S.review ? "" : busy || showResult ? dropZone(true) : dropZone(false)}
@@ -1161,13 +1162,14 @@ function updatesBlock() {
 }
 
 async function checkUpdate(quiet) {
-  const sheet = S.update.sheet;
-  S.update = { state: "checking", sheet };
+  const sheet = S.update.sheet, locked = S.update.blocking;
+  S.update = { state: "checking", sheet, blocking: locked };
   if (S.view === "settings") render();
   renderUpdateSheet();
-  const r = await api().check_update();
-  if (r.error) S.update = { state: quiet && !sheet ? "idle" : "error", error: r.error, sheet };
-  else S.update = { state: r.update ? "available" : "ok", data: r, sheet };
+  const r = await api().check_update(), blocking = locked;
+  if (r.error) S.update = { state: quiet && !sheet && !blocking ? "idle" : "error", error: r.error, sheet: sheet || blocking, blocking };
+  else S.update = { state: r.update ? "available" : "ok", data: r, sheet, blocking: !!r.required };
+  if (S.update.blocking) return lockForUpdate();
   // Automatic checks off: a quiet check keeps everything but a security update to itself
   if (quiet && r.update && r.kind !== "security" && !S.info.settings.auto_update) S.update = { state: "idle" };
   // A security update doesn't wait to be noticed
@@ -1178,6 +1180,7 @@ async function checkUpdate(quiet) {
 
 /* What kind of update: the most serious waiting change decides how much it speaks up */
 const UPDATE_KINDS = {
+  critical: { pill: "Critical", cls: "bad", banner: "An important security update has to be installed.", title: "Important security update" },
   security: { pill: "Security", cls: "bad", banner: "A security update is ready. Please install it.", title: "Security update ready" },
   hotfix: { pill: "Fix", cls: "accent", banner: "An important fix is ready.", title: "An important fix is ready" },
   feature: { pill: "New", cls: "ok", banner: "New features are ready.", title: "New features are ready" },
@@ -1328,6 +1331,16 @@ async function setupDownload() {
 /* ---------------------------------------------------------------------
    Updating: a sheet that walks through the steps
 --------------------------------------------------------------------- */
+/* An important security update: nothing can be used until it's installed. A video that's
+   already running finishes first (no work is lost); nothing new starts. */
+function lockForUpdate() {
+  S.update.blocking = true;
+  if (S.run) { render(); return; }  // the banner says it's coming; next() shows the lock after this video
+  S.update.sheet = true;
+  if (!S.update.data && S.update.state !== "checking" && S.update.state !== "error") return checkUpdate(false);
+  renderUpdateSheet();
+}
+
 function openUpdate() {
   S.update.sheet = true;
   if (S.update.state === "idle" || S.update.state === "error") checkUpdate(false);
@@ -1346,19 +1359,22 @@ function renderUpdateSheet() {
         <div class="bar thin${detail.frac == null ? " indeterminate" : ""}"><i style="width:${(detail.frac || 0) * 100}%"></i></div>` : ""}</div></div>`;
   };
   let body, actions;
+  const lockNote = `<div class="banner bad">This version has a security problem, so it can't be used until it's updated.${
+    u.blocking && (d.required || S.info.required) ? `<br><b>${esc((d.required || S.info.required).text || "")}</b>` : ""}</div>`;
   switch (u.state) {
     case "checking":
-      body = `<div class="row dim"><div class="bar indeterminate grow"><i></i></div><span class="sm">Checking GitHub…</span></div>`;
-      actions = `<button class="btn sec" data-up="close">Close</button>`; break;
+      body = `${u.blocking ? lockNote : ""}<div class="row dim"><div class="bar indeterminate grow"><i></i></div><span class="sm">Checking GitHub…</span></div>`;
+      actions = u.blocking ? "" : `<button class="btn sec" data-up="close">Close</button>`; break;
     case "ok":
       body = `<div class="row"><span class="pill ok">Up to date</span><span class="sm dim">You have the latest version (${esc(versionText(S.info.version))}).</span></div>`;
       actions = `<div class="grow"></div><button class="btn" data-up="close">Done</button>`; break;
     case "available":
-      body = `<div class="between"><span class="sm dim">${d.switch ? "Version" : "New version"}</span><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
+      body = `${u.blocking ? lockNote : ""}<div class="between"><span class="sm dim">${d.switch ? "Version" : "New version"}</span><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
         ${d.switch ? `<p>${switchNote(d)}</p>` : ""}
         ${d.switch === "main" ? "" : `<div><h2 style="margin-left:0">What's new</h2>${newsList(d.news)}</div>`}
         <p class="sm dim">Takes about a minute. Your voice clips, settings, models and history are kept.</p>`;
-      actions = S.run ? `<span class="sm dim grow">You can update once the current video is finished.</span><button class="btn sec" data-up="close">Later</button>`
+      actions = u.blocking ? `<div class="grow"></div><button class="btn" data-up="install">Update now</button>`
+        : S.run ? `<span class="sm dim grow">You can update once the current video is finished.</span><button class="btn sec" data-up="close">Later</button>`
         : `<button class="btn sec" data-up="close">Later</button><div class="grow"></div><button class="btn" data-up="install">${d.switch ? "Switch now" : "Update now"}</button>`; break;
     case "installing": case "installed": {
       const dl = p.download || {}, ins = p.install || {};
@@ -1369,27 +1385,28 @@ function renderUpdateSheet() {
         </div>
         ${u.state === "installed" ? `<p class="sm dim">${u.packages ? "This update needs new parts, so a small window shows them installing while it restarts (a minute or two)."
           : "Restart to start using the new version."}</p>` : ""}`;
-      actions = u.state === "installed" ? `<button class="btn sec" data-up="close">Later</button><div class="grow"></div><button class="btn" data-up="restart">Restart now</button>`
+      actions = u.state === "installed" ? `${u.blocking ? "" : `<button class="btn sec" data-up="close">Later</button>`}<div class="grow"></div><button class="btn" data-up="restart">Restart now</button>`
         : `<div class="grow"></div><button class="btn" disabled>Updating…</button>`; break;
     }
     default:
-      body = `<div class="banner bad selectable">${esc(u.error || "Something went wrong.")}</div>`;
-      actions = `<button class="btn sec" data-up="close">Close</button><div class="grow"></div><button class="btn" data-up="retry">Try again</button>`;
+      body = `${u.blocking ? lockNote : ""}<div class="banner bad selectable">${esc(u.error || "Something went wrong.")}</div>`;
+      actions = `${u.blocking ? "" : `<button class="btn sec" data-up="close">Close</button>`}<div class="grow"></div><button class="btn" data-up="retry">Try again</button>`;
   }
   const fresh = !root.querySelector("#update-sheet");
   root.innerHTML = `<div class="scrim" id="update-sheet" ${fresh ? "" : 'style="animation:none"'}><div class="dialog stack" role="dialog" aria-modal="true" aria-labelledby="up-title" ${fresh ? "" : 'style="animation:none"'}>
       <div class="row"><div class="tile-icon t-accent">${ICON.again}</div><h3 id="up-title">${
-        { checking: "Checking for updates", ok: "Subtitle Maker is up to date",
-          available: updateTitle(d), installing: "Updating Subtitle Maker",
+        u.blocking && !["installing", "installed"].includes(u.state) ? "Important security update" : { checking: u.blocking ? "Important security update" : "Checking for updates", ok: "Subtitle Maker is up to date",
+          available: u.blocking ? "Important security update" : updateTitle(d), installing: "Updating Subtitle Maker",
           installed: "Update installed" }[u.state] || "The update didn't work"}</h3></div>
       ${body}<div class="row">${actions}</div></div></div>`;
   root.querySelectorAll("[data-up]").forEach(b => b.onclick = () => UPDATE_ACTIONS[b.dataset.up]());
 }
 
 const UPDATE_ACTIONS = {
-  close: () => { S.update.sheet = false; $("#dialog-root").innerHTML = ""; if (S.view === "settings") render(); },
+  close: () => { if (S.update.blocking) return; S.update.sheet = false; $("#dialog-root").innerHTML = ""; if (S.view === "settings") render(); },
   retry: () => checkUpdate(false),
   install: async () => {
+    if (!S.update.data) return checkUpdate(false);  // locked while offline: find the version first
     if (!await api().install_update(S.update.data.latest)) return toast("Wait for the current video to finish.", true);
     Object.assign(S.update, { state: "installing", current: "download", progress: {} });
     renderUpdateSheet();
@@ -1715,6 +1732,7 @@ const ACTIONS = {
 /* Starts the next waiting file, if nothing is running. */
 function next() {
   if (S.run) return;
+  if (S.update.blocking) { lockForUpdate(); render(); return; }
   const item = S.queue.find(q => q.status === "waiting");
   if (!item) {
     // The whole queue is done: show where the subtitles went, if Settings says to
@@ -1741,6 +1759,7 @@ function next() {
 const app = {
   async openSrt(path) {
     if (!S.info) { S.pendingSrt = path; return; }  // dropped on the icon: once the page is ready
+    if (S.update.blocking) return lockForUpdate();
     if (S.run) return toast("Wait for the current video to finish first.", true);
     if (S.review) return toast("Save or close the lines you're checking first.", true);
     const r = await api().open_srt(path);
@@ -1948,12 +1967,14 @@ async function boot() {
 async function startApp() {
   applyTheme();
   if (S.info.unfinished && S.info.unfinished.length && S.info.mode !== "setup") S.unfinished = S.info.unfinished;
+  if (S.info.required) S.update.blocking = true;
   S.multi = !!S.info.settings.multi;
   S.people = S.info.settings.people || 0;
   if (S.info.mode === "setup" || !S.info.configured) startSetup();
   go("make");
   requestAnimationFrame(() => api().page_ready());  // for startup.log
   if (S.pendingSrt) { app.openSrt(S.pendingSrt); S.pendingSrt = null; }
+  if (S.update.blocking) return lockForUpdate();
   if (S.info.mode === "update") openUpdate();  // opened by Update.bat
   // Quietly, and a few seconds in so it doesn't slow the start: only a ready update is shown
   // Even with automatic checks off this looks, but then only speaks up for a security update

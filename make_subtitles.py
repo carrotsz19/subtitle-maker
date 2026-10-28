@@ -1166,6 +1166,15 @@ def main(argv=None):
         args.language = None
     if args.serve:
         return serve()
+    if not args.prepare:
+        import update
+
+        lock = update.required()
+        if lock:
+            message = ("An important security update has to be installed before Subtitle Maker can be used again"
+                       f" ({lock.get('text') or 'a security problem'}). Open Subtitle Maker, or run Update.bat.")
+            emit("error", message=message, log=None)
+            sys.exit(f"\n{message}")
 
     try:
         with keep_awake():

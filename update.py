@@ -80,9 +80,21 @@ def installed():
 
 # What kind of update a change is, from the start of its commit message ("Security: ..."), most
 # serious first. The app makes more noise the more serious the most serious waiting change is.
-KINDS = ("security", "hotfix", "feature", "improvement")
-KIND_WORDS = {"security": "security", "hotfix": "hotfix", "fix": "hotfix", "feature": "feature",
-              "improvement": "improvement"}
+# "Critical:" is a security problem bad enough that older versions lock until they're updated.
+KINDS = ("critical", "security", "hotfix", "feature", "improvement")
+KIND_WORDS = {"critical": "critical", "security": "security", "hotfix": "hotfix", "fix": "hotfix",
+              "feature": "feature", "improvement": "improvement"}
+REQUIRED_FILE = data_dir() / "required_update.json"  # a critical update was found: locked until it's in
+
+
+def required():
+    """{"text", "sha", "found"} while a critical update is waiting to be installed, else None.
+    Kept on disk, so restarting (or being offline) doesn't get round it."""
+    try:
+        data = json.loads(REQUIRED_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
 
 
 def change(message):
@@ -127,9 +139,16 @@ def check(branch=None):
     news = news or [change(latest["message"])]
     # Most serious first, then newest first; ten is plenty to read
     news = sorted(reversed(news), key=lambda n: KINDS.index(n["kind"]))[:10]
-    return {"repo": REPO, "latest": latest, "installed": current, "branch": branch, "switch": switch, "back": back,
-            "update": not current or current["sha"] != latest["sha"] or bool(switch), "news": news,
-            "kind": news[0]["kind"]}
+    status = {"repo": REPO, "latest": latest, "installed": current, "branch": branch, "switch": switch, "back": back,
+              "update": not current or current["sha"] != latest["sha"] or bool(switch), "news": news,
+              "kind": news[0]["kind"]}
+    if status["update"] and status["kind"] == "critical":
+        REQUIRED_FILE.write_text(json.dumps({"text": news[0]["text"], "sha": latest["sha"],
+                                             "found": latest["date"]}), encoding="utf-8")
+    elif not status["update"]:
+        REQUIRED_FILE.unlink(missing_ok=True)  # up to date: nothing can be waiting
+    status["required"] = required()
+    return status
 
 
 def program_files(root):
@@ -171,6 +190,7 @@ def record(sha, date=None, files=None, branch="main"):
     INSTALLED_FILE.write_text(json.dumps({"sha": sha, "date": date, "folder": str(HERE.resolve()), "branch": branch,
                                           "files": files}, indent=2), encoding="utf-8")
     FILES_LIST.unlink(missing_ok=True)
+    REQUIRED_FILE.unlink(missing_ok=True)  # the newest version is in, so whatever was required is too
 
 
 def print_step(step, done=None, total=None):
@@ -321,7 +341,9 @@ def main():
     if status["switch"]:
         print(f"This switches to the {CHANNELS[status['switch']].lower()} version.")
     print("What's new:\n" + "\n".join(f"  - [{n['kind']}] {n['text']}" for n in status["news"]))
-    if status["kind"] == "security":
+    if status["kind"] == "critical":
+        print("This is an important security update: Subtitle Maker can't be used until it's installed.")
+    elif status["kind"] == "security":
         print("This includes a security update: please install it.")
     if args.check:
         return

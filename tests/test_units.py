@@ -137,6 +137,29 @@ assert update.change("Hotfix: Window froze")["kind"] == "hotfix"
 assert update.change("Security: x")["kind"] == "security"
 assert update.change("Just tidying")["kind"] == "improvement"
 
+# An important ("Critical:") security update locks this version until it's installed: the lock is
+# kept on disk (restarts and being offline don't lift it), and making subtitles refuses meanwhile
+assert update.change("Critical: Unsafe model download")["kind"] == "critical"
+replies = {"/commits/main": {"sha": "new", "commit": {"message": "Tidy", "committer": {"date": "2026-10-29"}}},
+           "/compare/old...new": {"status": "ahead", "commits": [{"commit": {"message": "Critical: Unsafe download"}},
+                                                                  {"commit": {"message": "Tidy"}}]}}
+real_fetch, real_installed = update.fetch_json, update.installed
+update.fetch_json = lambda path: replies[path]
+update.installed = lambda: {"sha": "old", "date": None, "files": []}
+status = update.check("main")
+assert status["kind"] == "critical" and status["required"]["text"] == "Unsafe download", status
+update.fetch_json = lambda path: (_ for _ in ()).throw(update.UpdateError("offline"))
+assert update.required(), "the lock stays when the next check can't reach GitHub"
+try:
+    ms.main(["clip.mp4"])
+    raise AssertionError("making subtitles should refuse while locked")
+except SystemExit as e:
+    assert "security update" in str(e.code), e.code
+update.record("new", files=[])  # installing the update lifts it
+assert update.required() is None
+update.fetch_json, update.installed = real_fetch, real_installed
+update.INSTALLED_FILE.unlink(missing_ok=True)
+
 # The GPU runs out of memory partway: carry on with the CPU from where it stopped
 sr = ms.SAMPLE_RATE
 

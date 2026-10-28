@@ -33,3 +33,18 @@ themselves; Settings > Remembered voices lists and forgets them.
 **Uninstalling:** Settings > Uninstall in the window, or `Uninstall.bat`.
 
 The full guide is in [README.txt](README.txt).
+
+## Releasing updates
+
+Installed copies follow `main` (or `experimental`, if they chose it). The start of each commit
+message decides how an update is announced in the app:
+
+| Commit message starts with | What people see |
+|---|---|
+| `Critical:` | **Locks older versions** until they update: a window that can't be closed. Only for security problems serious enough to stop people using it. |
+| `Security:` | The update window opens by itself (it can be closed). |
+| `Hotfix:` or `Fix:` | A banner: an important fix is ready. |
+| `Feature:` | A banner: new features are ready. |
+| anything else | Shown in Settings > Updates only. |
+
+Push to `experimental` first and let the Windows tests pass (Actions tab) before bringing `main` up to it.

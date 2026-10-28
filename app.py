@@ -221,6 +221,7 @@ class Api:
             # Setup.bat opens the window with --setup; Update.bat with --update
             "mode": "setup" if "--setup" in sys.argv else "update" if "--update" in sys.argv else None,
             "unfinished": self._unfinished(),
+            "required": update.required(),  # an important security update must go in first
         }
 
     # ---- carrying on with a queue that didn't finish ------------------------------------------

@@ -23,7 +23,7 @@ HERE = Path(__file__).parent.resolve()
 DATA_DIRS = ("venv", "models", "webview", "backups")
 DATA_FILES = ("settings.json", "history.json", "installed.json", "install-sha.txt", "install-files.txt",
               "last_error.log", "startup.log", "queue.json", "update-packages.txt", "speed.json",
-              "known_voices.json")
+              "known_voices.json", "required_update.json")
 
 
 def desktop():
