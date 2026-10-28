@@ -50,6 +50,7 @@ class Taskbar:
         self._last = None
         self._requests = queue.Queue()
         self.error = None
+        self.step = "starting"
         self.ok = False  # a call has gone through (the Windows tests check this)
         threading.Thread(target=self._run, daemon=True).start()
 
@@ -60,26 +61,30 @@ class Taskbar:
         clsid = ctypes.create_string_buffer(uuid.UUID("56FDF344-FD6D-11d0-958A-006097C9A090").bytes_le, 16)
         iid = ctypes.create_string_buffer(uuid.UUID("ea1afb91-9e28-4b86-90e9-9e9f8a5eee6d").bytes_le, 16)
         ptr = ctypes.c_void_p()
+        self.step = "creating the taskbar object"
         ctypes.oledll.ole32.CoCreateInstance(clsid, None, 1, iid, ctypes.byref(ptr))  # CLSCTX_INPROC_SERVER
         table = ctypes.cast(ctypes.cast(ptr, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
 
         def method(index, *args):
             return ctypes.WINFUNCTYPE(ctypes.HRESULT, ctypes.c_void_p, *args)(table[index])
 
+        self.step = "HrInit"
         method(3)(ptr)  # HrInit
         value = method(9, wintypes.HWND, ctypes.c_ulonglong, ctypes.c_ulonglong)  # SetProgressValue
         state = method(10, wintypes.HWND, ctypes.c_int)  # SetProgressState
+        self.step = "reading the window handle"
         hwnd = hwnd_of(self._window)
+        self.step = "setting the progress"
         return lambda done: value(ptr, hwnd, int(done * 1000), 1000), lambda s: state(ptr, hwnd, s)
 
     def _run(self):
         import ctypes
 
         try:
-            ctypes.windll.ole32.CoInitializeEx(None, 0x2)  # COINIT_APARTMENTTHREADED
+            self.step = f"CoInitializeEx returned {ctypes.windll.ole32.CoInitializeEx(None, 0x2) & 0xFFFFFFFF:#x}"  # COINIT_APARTMENTTHREADED
             set_value, set_state = self._connect()
         except Exception as e:  # an old Windows, a locked-down PC: just no taskbar progress
-            self.error = f"{e.__class__.__name__}: {e}"
+            self.error = f"{e.__class__.__name__}: {e} (while {self.step})"
             return
         while True:
             fraction, state = self._requests.get()
@@ -91,7 +96,7 @@ class Taskbar:
                     set_state(state if state is not None else NO_PROGRESS)
                 self.ok = True
             except Exception as e:
-                self.error = f"{e.__class__.__name__}: {e}"
+                self.error = f"{e.__class__.__name__}: {e} (while {self.step})"
                 return
 
     def set(self, fraction=None, state=None):
