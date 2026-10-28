@@ -36,10 +36,16 @@
   --ease-out:cubic-bezier(.16,1,.3,1); --ease-standard:cubic-bezier(.25,.1,.25,1);
   --spring-snappy:cubic-bezier(.32,.72,0,1); --spring-default:cubic-bezier(.32,.72,0,1);
   --spring-snappy-ms:369ms; --spring-default-ms:585ms;
+  --spring-spatial:cubic-bezier(.16,1,.3,1); --spring-bouncy:cubic-bezier(.34,1.56,.64,1); --spring-overscroll:cubic-bezier(.32,.72,0,1);
+  --spring-spatial-ms:574ms; --spring-bouncy-ms:734ms; --spring-overscroll-ms:471ms;
+  --ease-sheet:cubic-bezier(.32,.72,0,1);
   color-scheme:light;
 }
 @supports (transition-timing-function:linear(0,1)){
   :root{
+    --spring-spatial:linear(0,0.0056,0.0209,0.044,0.0732,0.1072,0.1446,0.1844,0.2258,0.268,0.3104,0.3526,0.3941,0.4346,0.4738,0.5115,0.5477,0.5822,0.6149,0.6458,0.6749,0.7022,0.7277,0.7516,0.7738,0.7944,0.8134,0.831,0.8473,0.8622,0.8759,0.8884,0.8999,0.9103,0.9199,0.9285,0.9364,0.9435,0.9499,0.9557,0.9609,0.9656,0.9698,0.9736,0.9769,0.9799,0.9826,0.985,0.9871,0.989,0.9906,0.992,0.9933,0.9944,0.9954,0.9962,0.9969,0.9976,0.9981,0.9986,1);
+    --spring-bouncy:linear(0,0.0136,0.0504,0.1052,0.1729,0.2494,0.331,0.4146,0.4976,0.5779,0.6539,0.7246,0.7889,0.8465,0.8972,0.9408,0.9777,1.0082,1.0326,1.0515,1.0654,1.075,1.0807,1.0833,1.0832,1.0809,1.0769,1.0717,1.0656,1.0589,1.052,1.045,1.0382,1.0317,1.0256,1.0199,1.0149,1.0104,1.0065,1.0032,1.0004,0.9981,0.9963,0.995,0.994,0.9934,0.9931,0.993,0.9931,0.9934,0.9938,0.9943,0.9948,0.9954,0.996,0.9966,0.9971,0.9976,0.9981,0.9986,1);
+    --spring-overscroll:linear(0,0.0107,0.0388,0.079,0.1274,0.1807,0.2366,0.2933,0.3493,0.4037,0.4559,0.5053,0.5518,0.595,0.635,0.6719,0.7057,0.7365,0.7645,0.7899,0.8129,0.8335,0.8521,0.8688,0.8837,0.8971,0.909,0.9196,0.929,0.9374,0.9448,0.9514,0.9572,0.9624,0.9669,0.971,0.9745,0.9776,0.9804,0.9828,0.9849,0.9868,0.9885,0.9899,0.9912,0.9923,0.9933,0.9941,0.9949,0.9955,0.9961,0.9966,0.997,0.9974,0.9977,0.998,0.9983,0.9985,0.9987,0.9989,1);
     --spring-snappy:linear(0,0.0089,0.033,0.0689,0.1139,0.1653,0.221,0.2792,0.3385,0.3977,0.4557,0.5117,0.5653,0.6159,0.6633,0.7073,0.7477,0.7847,0.8181,0.8482,0.8751,0.8989,0.9198,0.938,0.9538,0.9673,0.9788,0.9884,0.9963,1.0027,1.0079,1.0119,1.015,1.0172,1.0187,1.0195,1.0199,1.0199,1.0195,1.0188,1.018,1.017,1.0159,1.0148,1.0136,1.0124,1.0113,1.0101,1.0091,1.008,1.0071,1.0062,1.0053,1.0046,1.0039,1.0032,1.0027,1.0022,1.0017,1.0014,1);
     --spring-default:linear(0,0.0098,0.036,0.0745,0.1218,0.1752,0.2322,0.2909,0.35,0.4081,0.4645,0.5184,0.5694,0.6172,0.6616,0.7024,0.7398,0.7738,0.8045,0.8321,0.8567,0.8785,0.8978,0.9147,0.9294,0.9422,0.9533,0.9628,0.9709,0.9777,0.9834,0.9882,0.9921,0.9953,0.9979,1,1.0016,1.0028,1.0037,1.0043,1.0047,1.0049,1.005,1.005,1.0049,1.0047,1.0045,1.0042,1.0039,1.0036,1.0033,1.003,1.0027,1.0025,1.0022,1.002,1.0017,1.0015,1.0013,1.0012,1);
   }
@@ -184,7 +190,7 @@ input[type=text]:focus{ outline:none; border-color:var(--accent); box-shadow:0 0
   transition:transform var(--spring-snappy-ms) var(--spring-snappy), filter .16s var(--ease-standard),
              background-color .16s var(--ease-standard), color .16s var(--ease-standard), box-shadow .2s var(--ease-standard);
 }
-.btn:active:not([disabled]), .iconbtn:active, .seg button:active{ transform:scale(.96); filter:brightness(.94); }
+.btn:active:not([disabled]), .iconbtn:active, .seg button:active{ transform:scale(.96); }
 .navbtn:active, .sidecard:active, .grp-row.tap:active{ transform:scale(.985); }
 
 /* ---------- drop zone ---------- */
@@ -336,62 +342,110 @@ body.wizard aside.side{ display:none; }
 .step:not(.active):not(.done) .grow > b{ color:var(--dim); font-weight:500; }
 
 /* =================================================================
-   MOTION (IronLog's, ported)
-   Press: everything compresses under the pointer (above). Depth: a
-   dialog lifts off the app, which sinks back behind it. Curves: the
-   spring tokens at the top. And motion only answers what changed:
-   switching page plays the entrance once; a redraw replays nothing.
+   MOTION: IronLog's phone app, ported (live/index-iron.html and its
+   ui-standard / hig-pass notes). Spring tokens only. Motion answers what
+   changed: arriving on a screen animates, a redraw caused by a click
+   doesn't replay anything.
    ================================================================= */
-/* --- page changes: the old page leaves, the new one's sections arrive in turn --- */
-.view-exit{ animation:veyraViewOut .11s var(--ease-standard) both; }
-.view-enter > *{ animation:veyraViewIn var(--spring-default-ms) var(--spring-default) both; }
-.view-enter > *:nth-child(2){ animation-delay:18ms } .view-enter > *:nth-child(3){ animation-delay:36ms }
-.view-enter > *:nth-child(4){ animation-delay:54ms } .view-enter > *:nth-child(5){ animation-delay:72ms }
-.view-enter > *:nth-child(6){ animation-delay:90ms } .view-enter > *:nth-child(7){ animation-delay:108ms }
-.view-enter > *:nth-child(8){ animation-delay:126ms } .view-enter > *:nth-child(n+9){ animation:none }
-@keyframes veyraViewOut{ to{ opacity:0; transform:translateY(-4px) } }
-@keyframes veyraViewIn{ from{ opacity:0; transform:translateY(10px) } to{ opacity:1; transform:none } }
-@keyframes veyraFade{ from{ opacity:0 } to{ opacity:1 } }
-/* cards inside a section rise one after another (45 ms apart, the first eight, above the fold) */
-.mot-rise{ animation:motRise .46s var(--ease-out) both; animation-delay:calc(var(--si, 0) * 45ms); }
-@keyframes motRise{ from{ opacity:0; transform:translateY(10px) scale(.992) } to{ opacity:1; transform:none } }
-/* --- dialogs: grow out of what opened them; the app sinks back behind; both leave too --- */
-.shell{ transform-origin:50% 40%; transition:transform var(--spring-default-ms) var(--spring-default),
-  opacity var(--spring-default-ms) var(--spring-default), border-radius var(--spring-default-ms) var(--spring-default); }
-body.dialog-open .shell{ transform:scale(.94); opacity:.82; border-radius:28px; overflow:hidden; }
-.dialog.from-origin{ animation:veyraDialogFrom var(--spring-default-ms) var(--spring-default) both; }
-@keyframes veyraDialogFrom{ from{ opacity:0; transform:scale(.88) } to{ opacity:1; transform:none } }
-.scrim.is-closing{ animation:veyraScrimOut .18s var(--ease-standard) both; }
-.dialog.is-closing{ animation:veyraDialogOut .19s var(--ease-standard) both; }
-.toast.is-leaving{ animation:veyraToastOut .22s var(--ease-standard) both; }
-@keyframes veyraScrimOut{ to{ opacity:0 } }
-@keyframes veyraDialogOut{ to{ opacity:0; transform:translateY(8px) scale(.985) } }
-@keyframes veyraToastOut{ to{ opacity:0; transform:translateY(8px) } }
+/* --- screens: drilling in slides from the right, going back from the left, tabs crossfade --- */
+.screen-visible > *{ animation:navEnter var(--spring-spatial-ms) var(--spring-spatial) backwards; }
+.screen-visible.nav-back > *{ animation-name:navEnterBack; }
+.screen-visible.nav-tab > *{ animation:fadeIn var(--spring-snappy-ms) var(--ease-standard) backwards; }
+@keyframes navEnter{ from{ opacity:0; transform:translateX(14px) } to{ opacity:1; transform:translateX(0) } }
+@keyframes navEnterBack{ from{ opacity:0; transform:translateX(-14px) } to{ opacity:1; transform:translateX(0) } }
+/* --- lists and cards arrive in turn: 18 ms apart, the ninth on all together --- */
+.anim-card{ animation:fadeSlideIn var(--spring-spatial-ms) var(--spring-spatial) backwards; animation-delay:calc(min(var(--i, 0), 8) * 18ms); }
+@keyframes fadeSlideIn{ from{ opacity:0; transform:translateY(10px) } to{ opacity:1; transform:translateY(0) } }
+/* bars grow in when they appear; a tick pops */
+.screen-visible .bar:not(.indeterminate) > i{ transform-origin:left center; animation:barGrow var(--spring-spatial-ms) var(--spring-spatial) backwards; }
+@keyframes barGrow{ from{ transform:scaleX(0) } }
+.success, .step.done .dot{ animation:checkIconIn var(--spring-bouncy-ms) var(--spring-bouncy) both; }
+@keyframes checkIconIn{ from{ opacity:0; transform:scale(.5) } to{ opacity:1; transform:scale(1) } }
+
+/* --- press: buttons compress, rows highlight instead of shrinking --- */
+.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .switch, .playbtn{
+  transition:transform var(--spring-snappy-ms) var(--spring-snappy), background-color .2s var(--ease-standard), filter .2s var(--ease-standard), color .2s var(--ease-standard); }
+.btn:active:not([disabled]), .seg button:active, .chip:active{ transform:scale(.96); filter:none; }
+.btn.big:active:not([disabled]){ transform:scale(.97); }
+.iconbtn:active, .playbtn:active{ transform:scale(.9); }
+.navbtn:active, .sidecard:active{ transform:scale(.97); }
+.drop:active{ transform:scale(.985); }
+.grp-row.tap{ transition:background-color .12s var(--ease-standard); }
+.grp-row.tap:active{ transform:none; background:var(--fill-secondary, var(--fill-tertiary)); }
+.btn[disabled]:active{ transform:none; }
+
+/* --- sheets: rise from the bottom with a grabber, follow a drag, fling away; the app behind
+   shrinks back and dims. Confirmations are action sheets. Blocking ones can't be dismissed. --- */
+.scrim{ align-items:flex-end; padding:0; background:rgba(0,0,0,.45); animation:fadeIn var(--spring-default-ms) var(--ease-out); }
+.dialog{ max-width:560px; border-radius:var(--r-sheet) var(--r-sheet) 0 0; max-height:88vh; padding:20px 22px 26px;
+  animation:sheetUp var(--spring-default-ms) var(--spring-default); touch-action:pan-y; }
+.dialog:not(.blocking)::before{ content:""; display:block; width:36px; height:5px; border-radius:3px; background:var(--line); margin:-8px auto 6px; cursor:grab; }
+@keyframes sheetUp{ from{ transform:translateY(100%) } to{ transform:translateY(0) } }
+.shell{ transform-origin:center top; transition:transform var(--spring-default-ms) var(--spring-default), filter var(--spring-default-ms) var(--spring-default); }
+body.dialog-open .shell{ transform:scale(.94); filter:brightness(.92); }
+.dialog.is-dragged, .scrim.is-dragged{ animation:none; }
+.dialog.is-dragging, .scrim.is-dragging{ animation:none !important; transition:none !important; }
+.dialog.is-settling{ animation:none !important; transition:transform var(--sheet-settle-ms, var(--spring-overscroll-ms)) var(--spring-overscroll); }
+.scrim.is-settling{ animation:none !important; transition:opacity var(--sheet-settle-ms, 240ms) var(--ease-standard); }
+.scrim.is-closing{ animation:veyraFadeOut var(--sheet-exit-ms, 340ms) var(--ease-standard) both; }
+.dialog.is-closing{ animation:veyraSheetOut var(--sheet-exit-ms, 340ms) var(--ease-sheet) both; }
+@keyframes veyraFadeOut{ to{ opacity:0 } }
+@keyframes veyraSheetOut{ to{ transform:translateY(var(--sheet-exit-to, calc(100% + 24px))) } }
+/* an action sheet: the message, the action named by its verb, and Cancel on its own */
+.dialog.action-sheet{ background:transparent; box-shadow:none; padding:0 12px 14px; max-width:440px; overflow:visible; }
+.dialog.action-sheet::before{ background:rgba(255,255,255,.6); margin:0 auto 8px; }
+.as-group{ background:var(--panel); border-radius:var(--r-card); overflow:hidden; box-shadow:var(--elev-3); }
+.as-msg{ padding:16px 18px 14px; text-align:center; font-size:13px; color:var(--dim); line-height:1.45; }
+.as-msg b{ display:block; color:var(--ink); font-size:14px; margin-bottom:3px; }
+.as-btn{ all:unset; box-sizing:border-box; display:flex; width:100%; justify-content:center; align-items:center; min-height:52px;
+  font-size:16px; font-weight:600; color:var(--accent); cursor:pointer; position:relative; transition:background-color .12s var(--ease-standard); }
+.as-btn::before{ content:""; position:absolute; top:0; left:0; right:0; height:1px; background:var(--line); }
+.as-btn:active, .as-btn:focus-visible{ background:var(--fill-tertiary); }
+.as-btn.destructive{ color:var(--bad); }
+.as-cancel{ margin-top:8px; background:var(--panel); border-radius:var(--r-card); box-shadow:var(--elev-3); font-weight:700; }
+.as-cancel::before{ display:none; }
+
+/* --- toasts drop in from the top, with a close button --- */
+#toast-root{ top:16px; bottom:auto; right:auto; left:50%; transform:translateX(-50%); align-items:center; }
+.toast{ display:flex; align-items:center; gap:10px; padding:10px 12px 10px 16px; border-radius:14px; pointer-events:auto;
+  box-shadow:0 2px 8px rgba(0,0,0,.08), 0 12px 28px rgba(0,0,0,.16); animation:toastSlideIn var(--spring-snappy-ms) var(--spring-snappy); }
+.toast-dismiss{ all:unset; box-sizing:border-box; flex-shrink:0; width:20px; height:20px; border-radius:99px; display:flex; align-items:center; justify-content:center; opacity:.7; font-size:11px; cursor:pointer; position:relative; }
+.toast-dismiss::after{ content:""; position:absolute; inset:-12px; }
+.toast-dismiss:hover{ opacity:1; }
+.toast.is-leaving{ animation:toastOut .22s var(--ease-standard) both; pointer-events:none; }
+@keyframes toastSlideIn{ from{ opacity:0; transform:translateY(-12px) scale(.97) } to{ opacity:1; transform:translateY(0) scale(1) } }
+@keyframes toastOut{ to{ opacity:0; transform:translateY(-8px) } }
+
 /* --- segmented controls: the selection slides (only when it changes) --- */
 .seg.has-pill{ position:relative; }
 .seg.has-pill button{ position:relative; z-index:1; }
 .seg.has-pill button[aria-selected="true"]{ background:transparent; box-shadow:none; }
 .seg-pill{ position:absolute; top:3px; left:0; height:calc(100% - 6px); width:0; z-index:0; pointer-events:none;
-  border-radius:7px; background:var(--bg-elevated); box-shadow:var(--elev-1);
+  border-radius:7px; background:var(--bg-elevated); box-shadow:0 1px 2px rgba(0,0,0,.1), 0 3px 8px rgba(0,0,0,.06);
   transition:transform var(--spring-snappy-ms) var(--spring-snappy), width var(--spring-snappy-ms) var(--spring-snappy); }
-/* --- less motion: the system setting, or Settings > Less animations. Things still appear and
-   leave (a quick cross-fade moves nothing on screen); they just stop travelling to get there. --- */
+/* the switch knob springs across */
+.switch span{ transition:transform var(--spring-snappy-ms) var(--spring-snappy) !important; }
+
+/* --- less motion: Windows' setting or Settings > Less animations. Things still appear and go
+   (a short cross-fade moves nothing on screen); dragging a sheet still works, it just doesn't settle. --- */
 @media (prefers-reduced-motion:reduce){
   *{ transition:none !important; }
-  .scrim, .dialog, .toast, .view-exit, .view-enter > *, .dialog.from-origin{
-    animation-name:veyraFade !important; animation-duration:.12s !important; animation-delay:0ms !important; animation-timing-function:linear !important; }
-  .mot-rise{ animation:none !important; }
-  body.dialog-open .shell{ transform:none; border-radius:0; opacity:1; }
-  .btn:active:not([disabled]), .iconbtn:active, .seg button:active, .navbtn:active, .sidecard:active, .grp-row.tap:active{ transform:none !important; }
+  .screen-visible > *, .anim-card, .scrim, .dialog, .toast, .dialog.is-closing, .scrim.is-closing, .toast.is-leaving{
+    animation-name:fadeIn !important; animation-duration:.12s !important; animation-delay:0ms !important; animation-timing-function:linear !important; }
+  .dialog.is-closing, .scrim.is-closing, .toast.is-leaving{ animation-name:veyraFadeOut !important; }
+  .screen-visible .bar > i, .success, .step.done .dot{ animation:none !important; }
+  body.dialog-open .shell{ transform:none; filter:none; }
+  .btn:active, .iconbtn:active, .seg button:active, .navbtn:active, .sidecard:active, .drop:active, .chip:active, .playbtn:active{ transform:none !important; }
 }
 html.reduce-motion *{ transition:none !important; }
-html.reduce-motion .scrim, html.reduce-motion .dialog, html.reduce-motion .toast, html.reduce-motion .view-exit,
-html.reduce-motion .view-enter > *, html.reduce-motion .dialog.from-origin{
-  animation-name:veyraFade !important; animation-duration:.12s !important; animation-delay:0ms !important; animation-timing-function:linear !important; }
-html.reduce-motion .mot-rise{ animation:none !important; }
-html.reduce-motion body.dialog-open .shell{ transform:none; border-radius:0; opacity:1; }
-html.reduce-motion .btn:active:not([disabled]), html.reduce-motion .iconbtn:active, html.reduce-motion .seg button:active,
-html.reduce-motion .navbtn:active, html.reduce-motion .sidecard:active, html.reduce-motion .grp-row.tap:active{ transform:none !important; }
+html.reduce-motion .screen-visible > *, html.reduce-motion .anim-card, html.reduce-motion .scrim, html.reduce-motion .dialog, html.reduce-motion .toast{
+  animation-name:fadeIn !important; animation-duration:.12s !important; animation-delay:0ms !important; animation-timing-function:linear !important; }
+html.reduce-motion .dialog.is-closing, html.reduce-motion .scrim.is-closing, html.reduce-motion .toast.is-leaving{
+  animation-name:veyraFadeOut !important; animation-duration:.12s !important; animation-timing-function:linear !important; }
+html.reduce-motion .screen-visible .bar > i, html.reduce-motion .success, html.reduce-motion .step.done .dot{ animation:none !important; }
+html.reduce-motion body.dialog-open .shell{ transform:none; filter:none; }
+html.reduce-motion .btn:active, html.reduce-motion .iconbtn:active, html.reduce-motion .seg button:active, html.reduce-motion .navbtn:active,
+html.reduce-motion .sidecard:active, html.reduce-motion .drop:active, html.reduce-motion .chip:active, html.reduce-motion .playbtn:active{ transform:none !important; }
 </style>
 </head>
 <body>
@@ -502,17 +556,24 @@ function copyText(text) {
 function toast(text, bad) {
   const t = document.createElement("div");
   t.className = "toast" + (bad ? " bad" : "");
-  t.textContent = text;
+  t.setAttribute("role", bad ? "alert" : "status");
+  const words = document.createElement("span");
+  words.textContent = text;
+  const close = document.createElement("button");
+  close.className = "toast-dismiss"; close.type = "button"; close.setAttribute("aria-label", "Dismiss"); close.textContent = "✕";
+  close.onclick = () => animateOut(t, "is-leaving", 400);
+  t.append(words, close);
   $("#toast-root").append(t);
-  setTimeout(() => animateOut(t, "is-leaving", 400), 3200);
+  setTimeout(() => animateOut(t, "is-leaving", 400), bad ? 5000 : 3200);
 }
 
 /* ---------------------------------------------------------------------
    Navigation
 --------------------------------------------------------------------- */
 /* ---------------------------------------------------------------------
-   Motion (IronLog's): only what changed moves. A page switch plays its
-   entrance once; render() on its own replays nothing.
+   Motion: IronLog's phone app. Arriving on a screen animates (from the
+   right when drilling in, the left going back, a crossfade between tabs);
+   a redraw caused by a click replays nothing.
 --------------------------------------------------------------------- */
 const LESS_MOTION = () => S.info && S.info.settings && S.info.settings.less_motion;
 function applyLessMotion() { document.documentElement.classList.toggle("reduce-motion", !!LESS_MOTION()); }
@@ -532,28 +593,134 @@ function animateOut(el, cls, maxMs) {
   el.addEventListener("animationend", finish, { once: true });
   setTimeout(finish, maxMs || 400);
 }
+
+/* Arriving: the screen's sections come in from the side it was reached from, and its lists and
+   cards rise one after another. Only this arrival animates: the classes come off afterwards. */
+function arrive(el, dir) {
+  if (prefersReducedMotion()) return;
+  el.classList.remove("screen-visible", "nav-back", "nav-tab");
+  if (dir === "back") el.classList.add("nav-back"); else if (dir === "tab") el.classList.add("nav-tab");
+  void el.offsetWidth;
+  el.classList.add("screen-visible");
+  clearTimeout(el.arrived);
+  el.arrived = setTimeout(() => el.classList.remove("screen-visible", "nav-back", "nav-tab"), 900);
+  let i = 0;
+  for (const item of el.querySelectorAll(".grp > .grp-row, .rv-row, .card, .drop, .banner")) {
+    if (item.parentElement.closest(".card") && !item.matches(".grp-row")) continue;
+    if (item.getBoundingClientRect().top > window.innerHeight) break;  // below the fold: no waiting for it
+    item.style.setProperty("--i", i++);
+    item.classList.add("anim-card");
+    item.addEventListener("animationend", function done(e) {
+      if (e.target !== item) return;
+      item.classList.remove("anim-card"); item.style.removeProperty("--i"); item.removeEventListener("animationend", done);
+    });
+  }
+}
+
+/* ---------- sheets ---------- */
+/* Closing: the sheet carries on down and off the screen (at the speed it was flung, if it was),
+   the backdrop fades, and the app behind comes forward again. */
+let sheetFling = null;
+function settleMs(remaining, velocity, base) {
+  const v = Math.abs(velocity);
+  if (v < 0.05 || remaining <= 0) return base;
+  return Math.max(140, Math.min(base, Math.round(remaining / v) + 120));
+}
 function closeDialogs() {
   const root = $("#dialog-root"), scrim = root.querySelector(".scrim:not(.is-closing)");
+  const fling = sheetFling; sheetFling = null;
+  document.body.classList.remove("dialog-open");
   if (!scrim) { root.innerHTML = ""; return; }
-  const dialog = scrim.querySelector(".dialog");
-  if (dialog && !prefersReducedMotion()) dialog.classList.add("is-closing");
-  document.body.classList.remove("dialog-open");  // the app comes forward as the dialog leaves
-  animateOut(scrim, "is-closing", 360);
-}
-/* The app sinks back while a dialog is open, and a new dialog grows out of what was pressed */
-let lastPress = { x: 0, y: 0, t: 0 };
-document.addEventListener("pointerdown", e => { lastPress = { x: e.clientX, y: e.clientY, t: Date.now() }; }, true);
-new MutationObserver(() => {
-  const root = $("#dialog-root");
-  document.body.classList.toggle("dialog-open", !!root.querySelector(".scrim:not(.is-closing)"));
-  const fresh = root.querySelector(".scrim:not(.is-closing) .dialog:not([data-seen])");
-  if (!fresh) return;
-  fresh.dataset.seen = "1";
-  if (Date.now() - lastPress.t < 1000 && fresh.style.animation !== "none" && !prefersReducedMotion()) {
-    const r = fresh.getBoundingClientRect();
-    fresh.style.transformOrigin = `${lastPress.x - r.left}px ${lastPress.y - r.top}px`;
-    fresh.classList.add("from-origin");
+  if (prefersReducedMotion()) { scrim.remove(); return; }
+  const sheet = scrim.querySelector(".dialog");
+  let ms = 340;
+  if (sheet && fling && fling.height) ms = settleMs(Math.max(0, fling.height - fling.from), Math.max(0, fling.velocity), 340);
+  scrim.style.setProperty("--sheet-exit-ms", ms + "ms");
+  scrim.style.pointerEvents = "none";
+  if (sheet) {
+    sheet.style.setProperty("--sheet-exit-ms", ms + "ms");
+    sheet.style.setProperty("--sheet-exit-to", Math.max(sheet.getBoundingClientRect().height + 24, ((fling && fling.from) || 0) + 24) + "px");
+    sheet.classList.remove("is-dragging", "is-settling");
+    sheet.classList.add("is-closing");
   }
+  scrim.classList.remove("is-dragging", "is-settling");
+  animateOut(scrim, "is-closing", ms + 80);
+}
+/* Dismissing (a drag down, a click on the backdrop, Escape) does what the sheet's own Cancel,
+   Later or Close does. A sheet without one (the security lock) can't be dismissed. */
+function dismissSheet(fling) {
+  const button = document.querySelector("#dialog-root .scrim:not(.is-closing) [data-dismiss], #dialog-root .scrim:not(.is-closing) [data-up=\"close\"]");
+  if (!button) return false;
+  sheetFling = fling || null;
+  button.click();
+  return true;
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") dismissSheet(); });
+function rubberBand(d, max) {
+  const c = 0.55, m = Math.abs(d), r = (m * c) / (1 + (m * c) / max);
+  return d < 0 ? -r : r;
+}
+/* The sheet follows the pointer 1:1 downward and resists upward. Let go and it reads where the
+   sheet would come to rest (120 ms of projection, so a flick counts), then either leaves at that
+   speed or springs back. */
+function bindSheet(scrim) {
+  const sheet = scrim.querySelector(".dialog");
+  if (!sheet || scrim.dataset.bound) return;
+  scrim.dataset.bound = "1";
+  scrim.addEventListener("click", e => { if (e.target === scrim) dismissSheet(); });
+  let g = null;
+  sheet.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || e.target.closest("button, input, textarea, select, a, label, audio, .player, .quote, .selectable")) return;
+    g = { y0: e.clientY, lastY: e.clientY, lastT: Date.now(), v: 0, live: false, id: e.pointerId,
+          h: Math.max(120, sheet.getBoundingClientRect().height), dismissible: !!scrim.querySelector("[data-dismiss], [data-up=\"close\"]") };
+  });
+  sheet.addEventListener("pointermove", e => {
+    if (!g || e.pointerId !== g.id) return;
+    const raw = e.clientY - g.y0;
+    if (!g.live) {
+      if (Math.abs(raw) < 8) return;  // a click inside the sheet stays a click
+      if (sheet.scrollTop > 0) { g = null; return; }
+      g.live = true;
+      sheet.setPointerCapture(e.pointerId);
+      sheet.classList.remove("is-settling"); scrim.classList.remove("is-settling");
+      sheet.classList.add("is-dragging", "is-dragged"); scrim.classList.add("is-dragging", "is-dragged");
+    }
+    const now = Date.now();
+    g.v = (e.clientY - g.lastY) / Math.max(1, now - g.lastT);  // px/ms
+    g.lastY = e.clientY; g.lastT = now;
+    // Down is the dismissal, so it travels 1:1 (unless it can't be dismissed); up resists
+    const d = raw >= 0 && g.dismissible ? raw : rubberBand(raw, g.h * 0.12);
+    sheet.style.transform = `translateY(${d}px)`;
+    scrim.style.opacity = String(Math.max(0, Math.min(1, 1 - (Math.max(0, d) / g.h) * 0.9)));
+  });
+  const release = e => {
+    if (!g || e.pointerId !== g.id) return;
+    const drag = g; g = null;
+    if (!drag.live) return;
+    const d = Math.max(0, drag.lastY - drag.y0);
+    sheet.classList.remove("is-dragging"); scrim.classList.remove("is-dragging");
+    if (drag.dismissible && (d + drag.v * 120 > drag.h * 0.35 || drag.v > 0.5) && e.type !== "pointercancel") {
+      if (dismissSheet({ velocity: drag.v, from: d, height: drag.h })) return;
+    }
+    // Springs back; under less motion the drag still works, it just doesn't settle
+    const ms = prefersReducedMotion() ? 0 : settleMs(d, drag.v, 471);
+    sheet.style.setProperty("--sheet-settle-ms", ms + "ms"); scrim.style.setProperty("--sheet-settle-ms", ms + "ms");
+    sheet.classList.add("is-settling"); scrim.classList.add("is-settling");
+    requestAnimationFrame(() => { sheet.style.transform = "translateY(0)"; scrim.style.opacity = ""; });
+    setTimeout(() => {
+      if (!sheet.isConnected) return;
+      sheet.classList.remove("is-settling", "is-dragged"); scrim.classList.remove("is-settling", "is-dragged");
+      sheet.style.transform = ""; scrim.style.opacity = "";
+    }, ms + 60);
+  };
+  sheet.addEventListener("pointerup", release);
+  sheet.addEventListener("pointercancel", release);
+}
+/* Every new sheet: the app behind shrinks back and dims, and the sheet becomes draggable */
+new MutationObserver(() => {
+  const root = $("#dialog-root"), open = root.querySelector(".scrim:not(.is-closing)");
+  document.body.classList.toggle("dialog-open", !!open);
+  if (open) bindSheet(open);
 }).observe(document.getElementById("dialog-root"), { childList: true, subtree: true });
 
 /* Segmented controls get a pill that slides to the selection, and only when it changes:
@@ -584,43 +751,27 @@ function syncSegs(root) {
   });
 }
 
-/* Arriving on a page: its cards rise one after another (the first eight above the fold) */
-function motArrive(root) {
-  if (prefersReducedMotion()) return;
-  let i = 0;
-  for (const el of root.querySelectorAll(".card, .grp, .drop")) {
-    if (i >= 8) break;
-    if (el.parentElement.closest(".card, .grp, .drop") || getComputedStyle(el).animationName !== "none") continue;
-    if (el.getBoundingClientRect().top > window.innerHeight) continue;
-    el.style.setProperty("--si", i++);
-    el.classList.add("mot-rise");
-    el.addEventListener("animationend", function done(e) {
-      if (e.target !== el) return;
-      el.classList.remove("mot-rise"); el.style.removeProperty("--si"); el.removeEventListener("animationend", done);
-    });
-  }
-}
-
-let viewSwap = null;
-function go(view) {
+/* Switching page (the sidebar is the tab bar) crossfades; dir "in" or "back" slides instead.
+   A screen arrives with its data, as IronLog's do: drawing it and then redrawing it a moment
+   later (when its list came in) restarted the arrival halfway through. */
+let goSeq = 0;
+async function go(view, dir = "tab") {
   if (S.view === "settings" && view !== "settings") S.draft = null;
-  if (viewSwap) { clearTimeout(viewSwap); viewSwap = null; }
   document.querySelectorAll(".navbtn").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
   const btn = $(`.navbtn[data-view="${view}"]`);
   $("#nav-pill").style.transform = `translateY(${btn.offsetTop}px)`;
-  const el = $("#view"), changing = S.view !== view && el.childElementCount && !prefersReducedMotion();
+  const seq = ++goSeq;
+  try {
+    if (view === "history") S.history = await api().history();
+    if (view === "settings") {
+      const [m, v] = await Promise.all([S.models ? null : api().models_list(), S.voicesKnown ? null : api().known_voices()]);
+      if (m) S.models = m;
+      if (v) S.voicesKnown = v;
+    }
+  } catch (e) { /* drawn without it; it loads in afterwards */ }
+  if (seq !== goSeq) return;  // another page was picked meanwhile
   S.view = view;
-  const arrive = () => {
-    viewSwap = null;
-    el.classList.remove("view-exit");
-    render(true);
-    if (view === "history") loadHistory();
-  };
-  if (!changing) return arrive();
-  // The old page leaves first (110 ms), then the new one arrives
-  el.classList.remove("view-enter");
-  el.classList.add("view-exit");
-  viewSwap = setTimeout(arrive, 110);
+  render(dir);
 }
 document.querySelectorAll(".navbtn").forEach(b => b.onclick = () => go(b.dataset.view));
 $("#pc-card").onclick = () => go("settings");
@@ -629,15 +780,9 @@ function render(animate) {
   const el = $("#view");
   document.body.classList.toggle("wizard", !!S.setup);
   el.innerHTML = S.setup ? viewSetup() : { make: viewMake, history: viewHistory, settings: viewSettings, help: viewHelp }[S.view]();
-  if (animate && !prefersReducedMotion()) {
-    // Only this arrival animates: #view outlives every render, so a class left on it would
-    // replay the entrance on the next redraw
-    el.classList.remove("view-enter"); void el.offsetWidth; el.classList.add("view-enter");
-    clearTimeout(el.enterDone);
-    el.enterDone = setTimeout(() => el.classList.remove("view-enter"), 900);
-    motArrive(el);
-  }
   bind(el);
+  if (animate) arrive(el, animate === true ? "in" : animate);
+  else el.classList.remove("screen-visible", "nav-back", "nav-tab");
   renderSide();
 }
 
@@ -1574,7 +1719,7 @@ function renderUpdateSheet() {
       actions = `${u.blocking ? "" : `<button class="btn sec" data-up="close">Close</button>`}<div class="grow"></div><button class="btn" data-up="retry">Try again</button>`;
   }
   const fresh = !root.querySelector("#update-sheet");
-  root.innerHTML = `<div class="scrim" id="update-sheet" ${fresh ? "" : 'style="animation:none"'}><div class="dialog stack" role="dialog" aria-modal="true" aria-labelledby="up-title" ${fresh ? "" : 'style="animation:none"'}>
+  root.innerHTML = `<div class="scrim" id="update-sheet" ${fresh ? "" : 'style="animation:none"'}><div class="dialog stack${u.blocking ? " blocking" : ""}" role="dialog" aria-modal="true" aria-labelledby="up-title" ${fresh ? "" : 'style="animation:none"'}>
       <div class="row"><div class="tile-icon t-accent">${ICON.again}</div><h3 id="up-title">${
         u.blocking && !["installing", "installed"].includes(u.state) ? "Important security update" : { checking: u.blocking ? "Important security update" : "Checking for updates", ok: "Subtitle Maker is up to date",
           available: u.blocking ? "Important security update" : updateTitle(d), installing: "Updating Subtitle Maker",
@@ -1636,7 +1781,7 @@ function showAsk(ev) {
         ${ev.lines.map(l => `<div class="quote"><span class="t">${clock(l.start)}</span><span class="selectable">“${esc(l.text)}”</span></div>`).join("")}</div>
       <div><input type="text" id="ask-name" placeholder="Their name" autocomplete="off" maxlength="40">
         ${voices.length ? `<div class="chips" style="margin-top:8px">${voices.map(v => `<button class="chip" data-name="${esc(v)}">${esc(v)}</button>`).join("")}</div>` : ""}</div>
-      <div class="row"><button class="btn ghost" id="ask-keep">Keep “${esc(ev.label)}”</button><div class="grow"></div>
+      <div class="row"><button class="btn ghost" id="ask-keep" data-dismiss>Keep “${esc(ev.label)}”</button><div class="grow"></div>
         <button class="btn" id="ask-save">Save name</button></div>
     </div></div>`;
   const audio = $("#ask-audio"), play = $("#ask-play"), bars_ = [...document.querySelectorAll("#ask-wave i")];
@@ -1658,10 +1803,14 @@ function showAsk(ev) {
   setTimeout(() => $("#ask-name").focus(), 50);
 }
 
+/* A confirmation is an action sheet, the way the phone asks: what happens, the action named by
+   its verb (red only when it destroys something), and Cancel on its own underneath */
+const DESTRUCTIVE = /^(delete|remove|forget|discard|reset|clear|uninstall)\b/i;
 function confirmBox(title, text, action, onYes) {
-  $("#dialog-root").innerHTML = `<div class="scrim"><div class="dialog stack" role="alertdialog" aria-modal="true" aria-labelledby="cf-title" style="max-width:400px">
-      <div><h3 id="cf-title">${esc(title)}</h3><div class="sm dim" style="margin-top:4px">${esc(text)}</div></div>
-      <div class="row"><button class="btn sec" id="cf-no">Cancel</button><div class="grow"></div><button class="btn dan" id="cf-yes">${esc(action)}</button></div>
+  $("#dialog-root").innerHTML = `<div class="scrim"><div class="dialog action-sheet" role="alertdialog" aria-modal="true" aria-labelledby="cf-title">
+      <div class="as-group"><div class="as-msg"><b id="cf-title">${esc(title)}</b>${esc(text)}</div>
+        <button class="as-btn${DESTRUCTIVE.test(action) ? " destructive" : ""}" id="cf-yes">${esc(action)}</button></div>
+      <button class="as-btn as-cancel" id="cf-no" data-dismiss>Cancel</button>
     </div></div>`;
   const close = () => { closeDialogs(); };
   $("#cf-no").onclick = close;
@@ -1686,7 +1835,7 @@ function showUninstall(p) {
           <span>Keep my ${p.voices.length} voice clip${p.voices.length > 1 ? "s" : ""}<br><span class="sm dim">Moved to <span class="selectable">${esc(p.voices_to)}</span></span></span></label>` : ""}
       <p class="sm dim">Your videos and .srt files are not touched.${p.program ? "" : " This Tools folder stays too, since the installer didn't make it."}
         The window closes and a small window finishes the removal.</p>
-      <div class="row"><button class="btn sec" id="un-cancel">Cancel</button><div class="grow"></div>
+      <div class="row"><button class="btn sec" id="un-cancel" data-dismiss>Cancel</button><div class="grow"></div>
         <button class="btn dan" id="un-go">Uninstall</button></div>
     </div></div>`;
   $("#un-cancel").onclick = () => { closeDialogs(); };
@@ -1787,21 +1936,25 @@ const ACTIONS = {
       const res = await api().save_srt(r.cues.filter(c => !c.gone).map(({ start, end, text }) => ({ start, end, text })));
       if (res.error) return toast(res.error, true);
       S.review = null;
-      render();
+      render("back");
       return toast(`Saved ${res.count} lines to ${baseName(res.path)}.${res.backup ? " The old version is backed up." : ""}`);
     }
     api().review_done(r.cues.filter(c => !c.gone).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })), r.names);
     S.review = null;
     S.run.stage = "Saving";
-    render();
+    render("back");
   },
   "rv-discard": () => S.review.mode === "file"
     ? confirmBox("Close without saving?", "Any changes you made to this file are lost. The file stays as it was.", "Close",
-      () => { S.review = null; api().close_srt(); render(); })
+      () => { S.review = null; api().close_srt(); render("back"); })
     : confirmBox("Discard these subtitles?", "Nothing for this video is saved. The next video in the queue starts.", "Discard",
     () => { S.review = null; api().cancel(); }),
   pref: async el => {
     const key = el.dataset.k;
+    if (el.classList.contains("switch")) {
+      el.setAttribute("aria-checked", String(el.getAttribute("aria-checked") !== "true"));
+      if (!prefersReducedMotion()) await new Promise(done => setTimeout(done, 300));
+    }
     S.info.settings = await api().save_prefs({ [key]: JSON.parse(el.dataset.v) });
     if (key === "theme") applyTheme();
     if (key === "less_motion") applyLessMotion();
@@ -1836,7 +1989,7 @@ const ACTIONS = {
     if (w.step === 2 && w.language === "other") return toast("Type a language code, or pick English or Auto-detect.", true);
     w.step++; render(true);
   },
-  "wiz-back": () => { S.setup.step = Math.max(0, S.setup.step - 1); S.setup.error = null; render(true); },
+  "wiz-back": () => { S.setup.step = Math.max(0, S.setup.step - 1); S.setup.error = null; render("back"); },
   "wiz-level": el => { S.setup.level = el.dataset.v; render(); },
   "wiz-lang": el => { const v = el.dataset.v; S.setup.language = v === "null" ? null : v; render(); if (v === "other") $("#wiz-code").focus(); },
   "wiz-out-here": () => { S.setup.output_dir = null; render(); },
@@ -1949,7 +2102,7 @@ const app = {
     if (r.error) return toast(r.error, true);
     S.review = { mode: "file", file: r.file, path: r.path, video: r.video, style: "none", max_chars: r.max_chars, max_lines: r.max_lines,
       names: {}, hasNames: false, cues: r.cues };
-    if (S.view !== "make") go("make"); else render(true);
+    if (S.view !== "make") go("make", "in"); else render(true);
   },
 
   addFiles(paths) {
