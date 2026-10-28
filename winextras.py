@@ -3,6 +3,7 @@ notification when the queue is done. Everything here is best effort: on any prob
 another OS) it quietly does nothing, since none of it is needed to make subtitles.
 """
 
+import queue
 import sys
 import threading
 import uuid
@@ -37,15 +38,22 @@ def hwnd_of(window):
 
 
 class Taskbar:
-    """The progress bar drawn over the app's taskbar button. Call set() from any thread."""
+    """The progress bar drawn over the app's taskbar button. Call set() from any thread.
+
+    The taskbar's COM object only works from a single-threaded COM apartment, and the window's
+    own thread isn't one under pywebview ("No such interface supported"), so a small thread of
+    its own makes every call.
+    """
 
     def __init__(self, window):
         self._window = window
-        self._com = None
         self._last = None
+        self._requests = queue.Queue()
         self.error = None
+        self.ok = False  # a call has gone through (the Windows tests check this)
+        threading.Thread(target=self._run, daemon=True).start()
 
-    def _connect(self):  # on the window's thread
+    def _connect(self):
         import ctypes
         from ctypes import wintypes
 
@@ -62,34 +70,38 @@ class Taskbar:
         value = method(9, wintypes.HWND, ctypes.c_ulonglong, ctypes.c_ulonglong)  # SetProgressValue
         state = method(10, wintypes.HWND, ctypes.c_int)  # SetProgressState
         hwnd = hwnd_of(self._window)
-        self._com = (ptr, lambda done: value(ptr, hwnd, int(done * 1000), 1000), lambda s: state(ptr, hwnd, s))
+        return lambda done: value(ptr, hwnd, int(done * 1000), 1000), lambda s: state(ptr, hwnd, s)
 
-    def set(self, fraction=None, state=None):
-        """fraction 0-1 shows progress; state=INDETERMINATE, ERROR or NO_PROGRESS instead."""
-        if not WINDOWS or self.error:
-            return
-        wanted = (state, None if fraction is None else round(fraction, 3))
-        if wanted == self._last:
-            return
-        self._last = wanted
+    def _run(self):
+        import ctypes
 
-        def apply():
+        try:
+            ctypes.windll.ole32.CoInitializeEx(None, 0x2)  # COINIT_APARTMENTTHREADED
+            set_value, set_state = self._connect()
+        except Exception as e:  # an old Windows, a locked-down PC: just no taskbar progress
+            self.error = f"{e.__class__.__name__}: {e}"
+            return
+        while True:
+            fraction, state = self._requests.get()
             try:
-                if not self._com:
-                    self._connect()
-                _, set_value, set_state = self._com
                 if fraction is not None:
                     set_state(NORMAL)
                     set_value(max(0.0, min(1.0, fraction)))
                 else:
                     set_state(state if state is not None else NO_PROGRESS)
-            except Exception as e:  # an old Windows, a locked-down PC: just no taskbar progress
+                self.ok = True
+            except Exception as e:
                 self.error = f"{e.__class__.__name__}: {e}"
+                return
 
-        try:
-            ui_thread(self._window, apply)
-        except Exception as e:
-            self.error = f"{e.__class__.__name__}: {e}"
+    def set(self, fraction=None, state=None):
+        """fraction 0-1 shows progress; state=INDETERMINATE, ERROR or NO_PROGRESS instead."""
+        if not WINDOWS or self.error:
+            return
+        wanted = (None if fraction is None else round(fraction, 3), state)
+        if wanted != self._last:
+            self._last = wanted
+            self._requests.put(wanted)
 
 
 def in_background(window):

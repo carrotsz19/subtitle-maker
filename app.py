@@ -369,7 +369,7 @@ class Api:
             time.sleep(1)  # the taskbar call runs on the window's thread
             self._progress(state=winextras.NO_PROGRESS)
             time.sleep(0.5)
-            TIMINGS.mark(f"taskbar progress: {self._taskbar.error or 'ok'}")
+            TIMINGS.mark(f"taskbar progress: {self._taskbar.error or ('ok' if self._taskbar.ok else 'nothing happened')}")
             TIMINGS.mark(f"notification: {result.get('error') or 'ok' if shown.is_set() else 'never shown'}")
             TIMINGS.save()
         self._window.destroy()
