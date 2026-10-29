@@ -2,6 +2,7 @@
 # release page. Either push a version tag (git tag v0.1.0 && git push origin v0.1.0), or run it from
 # the Actions tab (Release > Run workflow) with a version name, and the tag is made on main.
 # v0.x tags and tags with a dash (v1.2.0-beta.1) become pre-releases; others are full releases.
+# The version needs a "## 0.3.0 · date" section in CHANGELOG.md: it goes at the top of the notes.
 name: Release
 
 on:
@@ -29,7 +30,17 @@ jobs:
         run: |
           prerelease=""
           case "$TAG" in v0.*|*-*) prerelease="--prerelease" ;; esac
-          cat > notes.md <<'NOTES'
+          # What's new in this version, from its section in CHANGELOG.md (the app shows the same)
+          version="${TAG#v}"; version="${version%%-*}"
+          awk -v v="$version" '
+            /^## / { on = ($2 == v || $2 == "v" v); next }
+            on' CHANGELOG.md > changes.md
+          if ! grep -q '^- ' changes.md; then
+            echo "::error::CHANGELOG.md has no '## $version' section. Add what's new in $version there, then release again."
+            exit 1
+          fi
+          { echo "## What's new in $version"; echo; cat changes.md; echo; } > notes.md
+          cat >> notes.md <<'NOTES'
           **To install on a Windows PC** (no security warnings): open PowerShell or Terminal, paste this and press Enter:
 
           ```powershell

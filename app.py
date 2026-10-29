@@ -22,6 +22,7 @@ import psutil  # noqa: E402
 import webview  # noqa: E402
 from webview.dom import DOMEventHandler  # noqa: E402
 
+import changelog  # noqa: E402
 import configure  # noqa: E402
 import known_voices  # noqa: E402
 import models  # noqa: E402
@@ -333,12 +334,26 @@ class Api:
             "voices": self.voices(),
             "platform": sys.platform,
             "version": update.installed(),
+            "release": changelog.current(),  # "0.2.0", from CHANGELOG.md
+            # What's new since the version last opened: shown once, after an update
+            "news": changelog.news(first_run=not SETTINGS_FILE.exists()),
             "models": self._probe["models"],
             # Setup.bat opens the window with --setup; Update.bat with --update
             "mode": "setup" if "--setup" in sys.argv else "update" if "--update" in sys.argv else None,
             "unfinished": self._unfinished(),
             "required": update.required(),  # an important security update must go in first
         }
+
+    # ---- what's new ------------------------------------------------------------------------
+
+    def all_news(self):
+        """Every version's changes, newest first (Settings > Updates > What's new)."""
+        return changelog.versions()
+
+    def news_seen(self):
+        """The What's new sheet was shown: don't show it again until the next version."""
+        changelog.mark_seen()
+        return True
 
     # ---- carrying on with a queue that didn't finish ------------------------------------------
 

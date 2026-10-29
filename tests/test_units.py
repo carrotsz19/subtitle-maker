@@ -353,6 +353,26 @@ ms.clear_incoming()
 assert not ms.INCOMING.exists()
 ms.cloud_place = real_place
 
+# What's new: versions from CHANGELOG.md, shown once after an update, never on a new install
+import changelog  # noqa: E402
+
+listed = changelog.versions()
+assert listed and listed[0]["version"] == changelog.current() and listed[0]["changes"], listed[:1]
+assert all(v["changes"] for v in listed), "every version needs at least one change"
+parsed = changelog.versions("## 1.2.0 · 1 May\n- One\n  more\n- Two\n\n## 1.1.0\n- Old\n")
+assert parsed == [{"version": "1.2.0", "date": "1 May", "changes": ["One more", "Two"]},
+                  {"version": "1.1.0", "date": None, "changes": ["Old"]}], parsed
+changelog.SEEN_FILE = Path(tempfile.mkdtemp()) / "seen_version.txt"
+assert changelog.news(first_run=True) == [] and changelog.SEEN_FILE.read_text() == changelog.current()
+assert changelog.news() == []  # already seen
+changelog.SEEN_FILE.unlink()
+assert [v["version"] for v in changelog.news()] == [changelog.current()]  # updated from before 0.2.0
+if len(listed) > 2:
+    changelog.mark_seen(listed[2]["version"])
+    assert [v["version"] for v in changelog.news()] == [listed[0]["version"], listed[1]["version"]]
+changelog.mark_seen()
+assert changelog.news() == []
+
 # The page's API must be our own functions only: pywebview walks every public attribute (and
 # theirs) on the window's main thread, and walking into the window froze it for a minute
 api = app.Api()

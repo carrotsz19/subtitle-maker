@@ -231,6 +231,9 @@ details[open] summary::before{ transform:rotate(90deg); }
 
 /* ---------- dialog ---------- */
 .scrim{ position:fixed; inset:0; background:rgba(0,0,0,.42); display:flex; align-items:center; justify-content:center; z-index:60; padding:20px; animation:fadeIn var(--spring-default-ms) var(--ease-out) both; }
+.news-version + .news-version{ border-top:1px solid var(--line); padding-top:12px; }
+.news-list{ margin:6px 0 0; }
+.news-list li{ margin:6px 0; line-height:1.45; }
 .dialog{ background:var(--panel); border-radius:var(--r-sheet); padding:22px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; box-shadow:var(--elev-3); animation:dialogIn var(--spring-default-ms) var(--spring-default) both; }
 @keyframes fadeIn{ from{ opacity:0 } to{ opacity:1 } }
 @keyframes dialogIn{ from{ opacity:0; transform:translateY(12px) scale(.985) } to{ opacity:1; transform:none } }
@@ -1448,6 +1451,37 @@ function versionText(v) {
     + (v.branch === "experimental" ? " · Experimental" : "");
 }
 
+/* This PC's version: "0.2.0 · 61017ed · 29 Oct 2026" */
+function installedText() {
+  return (S.info.release ? S.info.release + " · " : "") + versionText(S.info.version);
+}
+
+/* What's new: each version's changes from CHANGELOG.md. After an update it opens once by itself
+   with the versions since the last one opened; Settings > Updates shows them all. */
+function newsHtml(text) {
+  return esc(text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+}
+async function showNews(list, fresh) {
+  if (!list) {
+    try { list = await api().all_news(); } catch (e) { list = []; }
+  }
+  if (!list.length) return toast("There's no list of changes in this copy of Subtitle Maker.", true);
+  const title = fresh ? `What's new in ${esc(list[0].version)}` : "What's new";
+  $("#dialog-root").innerHTML = `
+    <div class="scrim"><div class="dialog stack" role="dialog" aria-modal="true" aria-labelledby="nw-title">
+      <h3 id="nw-title">${title}</h3>
+      ${list.map((v, i) => `<div class="news-version">
+        ${fresh && i === 0 ? "" : `<div class="between"><b>${esc(v.version)}</b><span class="sm dim">${esc(v.date || "")}</span></div>`}
+        <ul class="list sm news-list">${v.changes.map(c => `<li>${newsHtml(c)}</li>`).join("")}</ul></div>`).join("")}
+      <div class="row"><div class="grow"></div><button class="btn" id="nw-done" data-dismiss>${fresh ? "Got it" : "Done"}</button></div>
+    </div></div>`;
+  $("#nw-done").onclick = () => {
+    closeDialogs();
+    if (fresh) api().news_seen();
+  };
+  $("#nw-done").focus();
+}
+
 /* Stable is the main branch everybody gets; Experimental has new things first, less tested */
 const CHANNELS = [["main", "Stable"], ["experimental", "Experimental"]];
 function updateTitle(d) {
@@ -1480,7 +1514,10 @@ function updatesBlock() {
   }
   const ch = S.info.settings.channel || "main", locked = !!S.run || u.state === "installing" || u.state === "checking";
   return `<div class="block" id="updates"><h2>Updates</h2><div class="card stack">
-      <div class="between"><span class="row-title">Installed version</span><span class="sm dim mono">${esc(versionText(S.info.version))}</span></div>
+      <div class="between"><span class="row-title">Installed version</span><span class="sm dim mono">${esc(installedText())}</span></div>
+      <div class="between"><div><div class="row-title">What's new</div>
+          <div class="row-sub">What changed in each version.</div></div>
+        <button class="btn sec sm" data-act="news">See what's new</button></div>
       <div class="between"><div><div class="row-title">Version to follow</div>
           <div class="row-sub">Experimental gets new features first, before they're fully tested.</div></div>
         <div class="seg">${CHANNELS.map(([v, l]) => `<button data-act="channel" data-v="${v}" aria-selected="${ch === v}" ${locked ? "disabled" : ""}>${l}</button>`).join("")}</div></div>
@@ -1692,7 +1729,7 @@ function renderUpdateSheet() {
       body = `${u.blocking ? lockNote : ""}<div class="row dim"><div class="bar indeterminate grow"><i></i></div><span class="sm">Checking GitHub…</span></div>`;
       actions = u.blocking ? "" : `<button class="btn sec" data-up="close">Close</button>`; break;
     case "ok":
-      body = `<div class="row"><span class="pill ok">Up to date</span><span class="sm dim">You have the latest version (${esc(versionText(S.info.version))}).</span></div>`;
+      body = `<div class="row"><span class="pill ok">Up to date</span><span class="sm dim">You have the latest version (${esc(installedText())}).</span></div>`;
       actions = `<div class="grow"></div><button class="btn" data-up="close">Done</button>`; break;
     case "available":
       body = `${u.blocking ? lockNote : ""}<div class="between"><span class="sm dim">${d.switch ? "Version" : "New version"}</span><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
@@ -1976,6 +2013,7 @@ const ACTIONS = {
     "Clear history", async () => { S.history = await api().clear_history(); render(); }),
   "open-update": () => openUpdate(),
   "check-update": () => checkUpdate(false),
+  news: () => showNews(null, false),
   channel: async el => {
     if (el.dataset.v === (S.info.settings.channel || "main")) return;
     S.info.settings = await api().set_channel(el.dataset.v);
@@ -2314,6 +2352,9 @@ async function startApp() {
   requestAnimationFrame(() => api().page_ready());  // for startup.log
   if (S.pendingSrt) { app.openSrt(S.pendingSrt); S.pendingSrt = null; }
   if (S.update.blocking) return lockForUpdate();
+  // Just updated: say what's new (once), unless the window was opened to set up or update
+  if (S.info.news && S.info.news.length && !S.info.mode && S.info.configured)
+    setTimeout(() => { if (!$("#dialog-root").innerHTML.trim()) showNews(S.info.news, true); }, 700);
   if (S.info.mode === "update") openUpdate();  // opened by Update.bat
   // Quietly, and a few seconds in so it doesn't slow the start: only a ready update is shown
   // Even with automatic checks off this looks, but then only speaks up for a security update
