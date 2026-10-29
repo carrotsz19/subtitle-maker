@@ -1020,7 +1020,7 @@ def make_subtitles(args, level):
 
         def detect():
             try:
-                detection["turns"] = detector.detect(audio)
+                detection["turns"] = detector.detect_apart(audio)  # see detect_apart
             except Exception as e:
                 detection["error"] = e
 
@@ -1228,6 +1228,8 @@ def serve():
                 log_error(e)
                 emit("error", message=f"Something went wrong: {e.__class__.__name__}: {e}", log=str(ERROR_LOG))
                 code = 1
+            if "speakers" in sys.modules:
+                sys.modules["speakers"].stop_all()  # a video that failed partway leaves none running
             emit("finished", code=code)
 
 

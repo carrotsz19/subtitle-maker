@@ -1,6 +1,7 @@
 """Speaker detection for make_subtitles.py: who spoke when, and which voice is whose name."""
 
 import queue
+import sys
 import threading
 from pathlib import Path
 
@@ -31,33 +32,98 @@ def voice_samples(folder):
     return {p.stem: p for p in sorted(Path(folder).iterdir()) if p.suffix.lower() in AUDIO_EXTS}
 
 
+RUNNING = set()  # detect_apart()'s processes still working
+
+
+def stop_all():
+    """End any speaker detection still running for a video that has stopped."""
+    for child in list(RUNNING):
+        if child.poll() is None:
+            child.kill()
+        RUNNING.discard(child)
+
+
 class SpeakerDetector:
     def __init__(self, num_speakers=-1):
         ensure_models()
-        embedding = sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(EMB_MODEL), num_threads=THREADS)
-        config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
-            segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
-                pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(model=str(SEG_MODEL)),
-                num_threads=THREADS,
-            ),
-            embedding=embedding,
-            clustering=sherpa_onnx.FastClusteringConfig(num_clusters=num_speakers, threshold=0.5),
-        )
-        self.diarizer = sherpa_onnx.OfflineSpeakerDiarization(config)
+        self.num_speakers = num_speakers
+        self._diarizer = None  # made when first needed: detect_apart() does without it here
         # Fingerprints of whole sentences, voice clips and remembered people: the better model
         self.extractor = sherpa_onnx.SpeakerEmbeddingExtractor(
             sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(VOICE_MODEL), num_threads=THREADS))
         self.progress = 0.0
 
-    def detect(self, audio):
-        """[(start, end, speaker_id)] for 16 kHz mono float32 audio."""
+    @property
+    def diarizer(self):
+        if self._diarizer is None:
+            embedding = sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(EMB_MODEL), num_threads=THREADS)
+            config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
+                segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
+                    pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(model=str(SEG_MODEL)),
+                    num_threads=THREADS,
+                ),
+                embedding=embedding,
+                clustering=sherpa_onnx.FastClusteringConfig(num_clusters=self.num_speakers, threshold=0.5),
+            )
+            self._diarizer = sherpa_onnx.OfflineSpeakerDiarization(config)
+        return self._diarizer
+
+    def detect(self, audio, report=None):
+        """[(start, end, speaker_id)] for 16 kHz mono float32 audio.
+
+        This holds Python's lock (the GIL) the whole time it runs, so every other thread in
+        the process stands still meanwhile: use detect_apart() alongside other work."""
         def on_progress(done, total):
             self.progress = done / total if total else 1.0
+            if report:
+                report(self.progress)
             return 0
 
         result = self.diarizer.process(audio, callback=on_progress).sort_by_start_time()
         self.progress = 1.0
         return [(seg.start, seg.end, seg.speaker) for seg in result]
+
+    def detect_apart(self, audio):
+        """detect(), run in a process of its own so it can't stall this one.
+
+        In a thread it held the GIL for its whole run: Whisper, in the thread beside it, only
+        crept on in the moments the progress callback let go, and toward the end (no callbacks)
+        everything stopped, so a long video seemed to freeze partway through transcribing."""
+        import json
+        import subprocess
+        import sys
+        import tempfile
+
+        folder = Path(tempfile.mkdtemp(prefix="subtitle-maker-"))
+        try:
+            np.save(folder / "audio.npy", np.ascontiguousarray(audio, dtype=np.float32))
+            child = subprocess.Popen(
+                [sys.executable, str(Path(__file__).resolve()), "--detect", str(folder / "audio.npy"),
+                 str(self.num_speakers)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                creationflags=0x08000000 if sys.platform == "win32" else 0,  # no console window
+            )
+            RUNNING.add(child)  # stop_all() ends it if the video fails partway
+            errors = []
+            threading.Thread(target=lambda: errors.extend(child.stderr), daemon=True).start()
+            turns = None
+            for line in child.stdout:
+                kind, _, value = line.strip().partition(" ")
+                if kind == "progress":
+                    self.progress = float(value)
+                elif kind == "turns":
+                    turns = [tuple(t) for t in json.loads(value)]
+            code = child.wait()
+            RUNNING.discard(child)
+            if turns is None:
+                tail = "".join(errors).strip().splitlines()
+                raise RuntimeError(f"Speaker detection stopped (code {code}): " + (tail[-1] if tail else "no message"))
+            self.progress = 1.0
+            return turns
+        finally:
+            import shutil
+
+            shutil.rmtree(folder, ignore_errors=True)
 
     def fingerprint(self, audio):
         stream = self.extractor.create_stream()
@@ -432,3 +498,12 @@ def assign(tokens, turns, detector=None, audio=None, count=-1, samples=None, pro
             out[i] = tokens[i]._replace(speaker=numbering[f])
         new_turns.append((tokens[a].start, tokens[b - 1].end, numbering[f]))
     return out, new_turns, names
+
+
+if __name__ == "__main__" and sys.argv[1:2] == ["--detect"]:
+    # detect_apart(): "progress 0.42" lines as it goes, then "turns [[start, end, speaker], ...]"
+    import json
+
+    found = SpeakerDetector(int(sys.argv[3])).detect(
+        np.load(sys.argv[2]), report=lambda done: print(f"progress {done:.4f}", flush=True))
+    print("turns " + json.dumps([[round(a, 3), round(b, 3), int(c)] for a, b, c in found]), flush=True)

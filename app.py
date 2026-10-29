@@ -78,6 +78,20 @@ class Timings:
 TIMINGS = Timings()
 
 
+def kill_tree(process):
+    """Stop a process and the ones it started (the worker runs speaker detection in its own)."""
+    try:
+        children = psutil.Process(process.pid).children(recursive=True)
+    except psutil.Error:
+        children = []
+    process.kill()
+    for child in children:
+        try:
+            child.kill()
+        except psutil.Error:
+            pass
+
+
 def log_startup(note):
     """Note something that went wrong with the window in startup.log (sent along with problems)."""
     TIMINGS.mark(note)
@@ -645,7 +659,7 @@ class Api:
         if self._worker and self._worker.poll() is None:
             if self._job:
                 self._job["cancelled"] = True
-            self._worker.kill()
+            kill_tree(self._worker)
             self._worker.wait(timeout=10)
 
     def prepare(self):
