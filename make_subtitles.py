@@ -770,6 +770,75 @@ def remember_people(detector, audio, cues, names):
     print(f"Remembered for next time: {', '.join(sorted(set(real.values())))}")
 
 
+# ---- videos kept in the cloud ---------------------------------------------------------------------
+# A video in Google Drive for desktop (or OneDrive, Dropbox's online-only files, a network drive)
+# isn't really on this PC: reading the sound from it pulls the file over the internet bit by bit,
+# with no sign of progress, and a hiccup in the connection stalls it. So it's copied here first,
+# in big pieces with a counter on screen, and the sound is read from the copy.
+
+INCOMING = data_dir() / "incoming"
+CLOUD_LABELS = ("google drive", "googledrive", "onedrive", "dropbox", "icloud", "box")
+CLOUD_ATTRIBUTES = 0x1000 | 0x40000 | 0x400000  # offline, recall on open, recall on data access
+COPY_PIECE = 8 * 2**20
+
+
+def cloud_place(path):
+    """Where a file lives if it isn't really on this PC ("Google Drive", "a network drive"), else None."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+
+    try:
+        k32 = ctypes.windll.kernel32
+        attributes = k32.GetFileAttributesW(str(path))
+        root = os.path.splitdrive(os.path.abspath(path))[0] + "\\"
+        if root.startswith("\\\\"):  # \\server\share
+            return "a network folder"
+        label, fs = ctypes.create_unicode_buffer(261), ctypes.create_unicode_buffer(261)
+        k32.GetVolumeInformationW(root, label, 261, None, None, None, fs, 261)
+        name = label.value.lower().replace(" ", "")
+        for cloud in CLOUD_LABELS:
+            if cloud.replace(" ", "") in name:
+                return label.value
+        if attributes != 0xFFFFFFFF and attributes & CLOUD_ATTRIBUTES:
+            return "the cloud"
+        if k32.GetDriveTypeW(root) == 4:  # DRIVE_REMOTE
+            return "a network drive"
+    except Exception:
+        pass
+    return None
+
+
+def clear_incoming():
+    shutil.rmtree(INCOMING, ignore_errors=True)
+
+
+def local_copy(path):
+    """A copy of a cloud file on this PC to read the sound from (or the file itself if it's local,
+    or there isn't room for a copy). Delete it with clear_incoming()."""
+    place = cloud_place(path)
+    if not place:
+        return path
+    size = path.stat().st_size
+    INCOMING.mkdir(parents=True, exist_ok=True)
+    if shutil.disk_usage(INCOMING).free < size + 2**30:
+        print(f"Reading it straight from {place} (not enough free space to copy it here first).")
+        return path
+    print(f"Copying it from {place} first...")
+    copy = INCOMING / path.name
+    progress = download_progress("video", f"the video from {place}")
+    done = 0
+    with open(path, "rb") as source, open(copy, "wb") as target:
+        while True:
+            piece = source.read(COPY_PIECE)
+            if not piece:
+                break
+            target.write(piece)
+            done += len(piece)
+            progress(done / 2**20, size / 2**20)
+    return copy
+
+
 def check_space(model_name, potato):
     """Say so before downloading if the disk is too full, rather than failing halfway through."""
     need_mb = 0 if models.whisper_path(model_name) else models.download_mb(model_name)
@@ -917,10 +986,20 @@ def make_subtitles(args, level):
 
     set_title(f"Loading - {args.input.name}")
     try:
-        audio = decode_audio(str(args.input), sampling_rate=SAMPLE_RATE)
+        source = local_copy(args.input)
+    except OSError as e:
+        clear_incoming()
+        raise FriendlyError(f"Couldn't copy '{args.input.name}' to this PC: {e.strerror or e}.\n"
+                            "If it's in Google Drive, check your internet connection, or right-click it and pick "
+                            "'Available offline', then try again.") from e
+    print("Reading the sound from the video...")
+    try:
+        audio = decode_audio(str(source), sampling_rate=SAMPLE_RATE)
     except Exception as e:
         raise FriendlyError(f"Couldn't read the sound in '{args.input.name}'. Is it a video or audio file?\n"
                             "If it plays fine elsewhere, try exporting it again as an .mp4 or .wav.") from e
+    finally:
+        clear_incoming()  # the sound is in memory now; the copy isn't needed
     if not len(audio):
         raise FriendlyError(f"'{args.input.name}' has no sound in it.")
     quality = "" if args.model else f" ({LEVELS[level]['name']} quality)"
@@ -1115,6 +1194,7 @@ def serve():
     """
     global SERVE, read_line
     SERVE = True
+    clear_incoming()  # a copy of a cloud video left behind by one cancelled while it was copying
     lines = queue.Queue()
 
     def reader():

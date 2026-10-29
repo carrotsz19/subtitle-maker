@@ -2155,12 +2155,13 @@ const app = {
         break;
       case "resources": r.res = ev; break;
       case "download":
-        if (r.kind === "make") { r.stage = `Downloading ${ev.label}${ev.total ? ` · ${Math.round(ev.done)} of ${Math.round(ev.total)} MB` : ""}`; break; }
+        if (r.kind === "make") { r.stage = `${ev.item === "video" ? "Copying" : "Downloading"} ${ev.label}${ev.total ? ` · ${Math.round(ev.done)} of ${Math.round(ev.total)} MB` : ""}`; break; }
         r.downloads[ev.item] = { done: ev.done, total: ev.total, finished: ev.total && ev.done >= ev.total };
         { const box = $("#downloads"); if (box) box.innerHTML = downloadRows(r.level); }
         return;
       case "log":
         r.log.push(ev.text);
+        if (/^Reading the sound/.test(ev.text)) r.stage = "Reading the video";
         if (/^Loading/.test(ev.text)) r.stage = "Loading the model";
         if (/^Speaker detection on/.test(ev.text)) r.stage = "Starting speaker detection";
         break;

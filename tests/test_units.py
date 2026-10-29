@@ -301,6 +301,58 @@ steps = [ms.overall_progress("transcribe", 0.5, 0.9), ms.overall_progress("trans
 assert steps == sorted(steps) and max(steps) < 1 and steps[1] == round(ms.TRANSCRIBED_AT * 0.6, 4), steps
 assert ms.overall_progress("transcribe", 1.0) == ms.TRANSCRIBED_AT
 
+# A window that stops answering mustn't stop the video: send() never waits for it, later events
+# still reach the page, and only the newest progress is kept while it's busy
+import threading  # noqa: E402
+import time  # noqa: E402
+
+
+class StuckWindow:
+    def __init__(self):
+        self.scripts, self.release = [], threading.Event()
+
+    def evaluate_js(self, script):
+        if not self.scripts:
+            self.scripts.append(script)
+            self.release.wait()  # the first call never comes back, as evaluate_js sometimes doesn't
+            return
+        self.scripts.append(script)
+
+    def set_title(self, title):
+        pass
+
+
+mail_api = app.Api()
+mail_api._outbox.WAIT = 0.3
+mail_api._window = StuckWindow()
+began = time.monotonic()
+mail_api.send({"type": "log", "text": "first"})
+for n in range(50):
+    mail_api.send({"type": "progress", "done": n, "total": 0})
+mail_api.send({"type": "done", "files": []})
+assert time.monotonic() - began < 0.2, "send() waited for the window"
+assert mail_api._outbox.flush(5)
+sent = mail_api._window.scripts
+assert '"first"' in sent[0] and '"done"' in sent[-1], sent
+progress = [x for x in sent if '"progress"' in x]
+assert progress and len(progress) < 50 and '"done": 49' in progress[-1], progress
+assert mail_api._outbox.given_up == 1
+mail_api._window.release.set()
+
+# A video in Google Drive is copied here first (with a counter), read from the copy, and the copy goes
+cloud_dir = Path(tempfile.mkdtemp())
+ms.INCOMING = cloud_dir / "incoming"
+video = cloud_dir / "talk.wav"
+video.write_bytes(b"x" * (3 * ms.COPY_PIECE + 5))
+real_place = ms.cloud_place
+assert ms.local_copy(video) == video  # a local file is read where it is
+ms.cloud_place = lambda path: "Google Drive"
+copy = ms.local_copy(video)
+assert copy.parent == ms.INCOMING and copy.read_bytes() == video.read_bytes()
+ms.clear_incoming()
+assert not ms.INCOMING.exists()
+ms.cloud_place = real_place
+
 # The page's API must be our own functions only: pywebview walks every public attribute (and
 # theirs) on the window's main thread, and walking into the window froze it for a minute
 api = app.Api()

@@ -76,6 +76,12 @@ class Timings:
 
 
 TIMINGS = Timings()
+
+
+def log_startup(note):
+    """Note something that went wrong with the window in startup.log (sent along with problems)."""
+    TIMINGS.mark(note)
+    TIMINGS.save()
 READY_WITHIN = 40  # seconds before the watchdog says something
 # --smoke-test (the Windows tests on GitHub): open, wait until ready, close; fail if it never gets ready
 SMOKE_TEST = "--smoke-test" in sys.argv
@@ -140,6 +146,86 @@ def open_in_file_manager(path, select=False):
         subprocess.Popen(["xdg-open", str(path.parent if select else path)])
 
 
+class PageMail:
+    """Delivers events to the page on a thread of its own, so nothing else ever waits for the window.
+
+    pywebview's evaluate_js (and set_title) wait for the window's thread with no time limit, and
+    sometimes never come back. When the thread reading the worker's output was the one waiting,
+    the worker's output pipe filled up and it stopped dead mid-video: transcription and speaker
+    detection both froze, with the graphics card idle. Now the reader only drops events here.
+    A newer progress or resources event replaces one still waiting (only the latest matters),
+    and a delivery the window doesn't answer within WAIT seconds is given up on, so one stuck
+    call doesn't stop the page getting the rest.
+    """
+
+    WAIT = 10
+    LATEST_ONLY = ("progress", "resources", "update_progress")
+    MAX_STUCK = 3  # deliveries left waiting before the next one waits for one of them instead
+
+    def __init__(self, api):
+        self._api = api
+        self._waiting = deque()
+        self._ready = threading.Condition()
+        self._stuck = []
+        self.given_up = 0  # deliveries the window never answered (tests and the log read this)
+        threading.Thread(target=self._run, daemon=True, name="page mail").start()
+
+    def post(self, event):
+        with self._ready:
+            if event["type"] in self.LATEST_ONLY:
+                for i, waiting in enumerate(self._waiting):
+                    if waiting["type"] == event["type"]:
+                        self._waiting[i] = event
+                        return
+            self._waiting.append(event)
+            self._ready.notify()
+
+    def flush(self, timeout=5.0):
+        """Wait until everything posted so far has been delivered (tests)."""
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            with self._ready:
+                if not self._waiting and not self._busy:
+                    return True
+            time.sleep(0.01)
+        return False
+
+    _busy = False
+
+    def _run(self):
+        while True:
+            with self._ready:
+                while not self._waiting:
+                    self._ready.wait()
+                event = self._waiting.popleft()
+                self._busy = True
+            try:
+                self._send(event)
+            finally:
+                self._busy = False
+
+    def _send(self, event):
+        self._stuck = [d for d in self._stuck if not d.is_set()]
+        while len(self._stuck) >= self.MAX_STUCK:  # the window isn't answering at all: wait for it
+            self._stuck[0].wait(self.WAIT)
+            self._stuck = [d for d in self._stuck if not d.is_set()]
+        delivered = threading.Event()
+
+        def deliver():
+            try:
+                self._api._deliver(event)
+            except Exception as e:  # the window is closing, or the page threw: the next event still goes
+                log_startup(f"Couldn't pass an event to the page: {e.__class__.__name__}: {e}")
+            finally:
+                delivered.set()
+
+        threading.Thread(target=deliver, daemon=True).start()
+        if not delivered.wait(self.WAIT):
+            self.given_up += 1
+            self._stuck.append(delivered)
+            log_startup(f"The window didn't take a '{event['type']}' event within {self.WAIT} s; carrying on")
+
+
 class Api:
     """Everything the page can ask for. Each method is window.pywebview.api.<name>() in the page."""
 
@@ -154,6 +240,7 @@ class Api:
         self._lock = threading.Lock()
         self._taskbar = None  # progress on the taskbar button (Windows)
         self._edit = None  # the .srt open for fixing: {"path", "video"}
+        self._outbox = PageMail(self)  # everything for the page goes through here (see PageMail)
         # Look at the PC (nvidia-smi can take a second or two) while the window is still opening,
         # so the page never waits for it
         self._probe = {}
@@ -175,7 +262,20 @@ class Api:
     # ---- talking to the page ----------------------------------------------------------------
 
     def send(self, event):
-        if self._window:
+        """Pass an event to the page. Never waits for the window (see PageMail)."""
+        self._outbox.post(event)
+
+    def _show(self, script):
+        """Run a call in the page, without waiting for the window."""
+        self._outbox.post({"type": "_script", "script": script})
+
+    def _deliver(self, event):
+        """Called by PageMail, on its own thread: this one may wait for the window."""
+        if not self._window:
+            return
+        if event["type"] == "_script":
+            self._window.evaluate_js(event["script"])
+        else:
             self._window.evaluate_js(f"app.onEvent({json.dumps(event)})")
             if event["type"] == "progress" and event.get("total"):
                 # The whole video's progress (transcribing is only most of it); never 100% until saved
@@ -201,9 +301,9 @@ class Api:
         srts = [p for p in paths if Path(p).suffix.lower() == ".srt" and Path(p).is_file()]
         media = media_in(p for p in paths if p not in srts)
         if media:
-            self._window.evaluate_js(f"app.addFiles({json.dumps(media)})")
+            self._show(f"app.addFiles({json.dumps(media)})")
         elif srts:
-            self._window.evaluate_js(f"app.openSrt({json.dumps(srts[0])})")
+            self._show(f"app.openSrt({json.dumps(srts[0])})")
 
     # ---- state ------------------------------------------------------------------------------
 
