@@ -29,6 +29,7 @@ import models  # noqa: E402
 import srtfile  # noqa: E402
 import uninstall  # noqa: E402
 import update  # noqa: E402
+import winapp  # noqa: E402
 import winextras  # noqa: E402
 from paths import (DEFAULT_SETTINGS, ERROR_LOG, LANGUAGES, LEVELS, SETTINGS_FILE, data_dir, load_history,  # noqa: E402
                    load_settings, save_history, save_settings)
@@ -342,7 +343,8 @@ class Api:
             "news": changelog.news(first_run=not SETTINGS_FILE.exists()),
             "models": self._probe["models"],
             # Setup.bat opens the window with --setup; Update.bat with --update
-            "mode": "setup" if "--setup" in sys.argv else "update" if "--update" in sys.argv else None,
+            # Settings > Apps > Uninstall opens it with --uninstall
+            "mode": next((m for m in ("setup", "update", "uninstall") if f"--{m}" in sys.argv), None),
             "unfinished": self._unfinished(),
             "required": update.required(),  # an important security update must go in first
         }
@@ -495,6 +497,8 @@ class Api:
         """The page has drawn itself: the window is fully open."""
         TIMINGS.mark("window ready to use")
         TIMINGS.save()
+        # A Start menu entry and Settings > Apps (only does anything the first time, or after moving or updating)
+        threading.Thread(target=lambda: (TIMINGS.mark(winapp.ensure()), TIMINGS.save()), daemon=True).start()
         if SMOKE_TEST:
             threading.Thread(target=self._smoke_test_extras, daemon=True).start()
 

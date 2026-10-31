@@ -103,6 +103,10 @@ function Install-SubtitleMaker {
     $shortcut.Description = 'Make subtitles for DaVinci Resolve'
     $shortcut.Save()
 
+    # ---- 4. A proper Windows app: Start menu entry and Settings > Apps -------------------------
+    & $python (Join-Path $dest 'winapp.py')
+    if ($LASTEXITCODE -ne 0) { Write-Host "Couldn't add it to the Start menu; it does that itself the first time it opens." -ForegroundColor Yellow }
+
     Write-Host ''
     Write-Host 'Installed. There''s a "Subtitle Maker" shortcut on your desktop.' -ForegroundColor Green
     if ($env:SUBTITLE_MAKER_NO_LAUNCH) { return $true }  # the Windows tests on GitHub

@@ -261,6 +261,18 @@ with tempfile.TemporaryDirectory() as tmp:
     app.forget_old_page(storage)
     assert not cache.exists()
 
+# A proper Windows app: a copy that isn't installed (this one, in the tests) doesn't register,
+# and Uninstall takes away the Start menu entry and Settings > Apps' entry
+import uninstall  # noqa: E402
+import winapp  # noqa: E402
+
+if sys.platform == "win32":
+    assert "not an installed copy" in winapp.ensure(), "only the installed copy registers"
+    assert winapp.start_menu_link().name == "Subtitle Maker.lnk" and "Start Menu" in str(winapp.start_menu_link())
+    removal = uninstall.script({"data": str(Path(tempfile.gettempdir()) / "x"), "program": None, "shortcut": None,
+                                "program_files": [], "voices": [], "voices_to": ""}, True, 1)
+    assert str(winapp.start_menu_link()) in removal and f'reg delete "HKCU\\{winapp.KEY}" /f' in removal, removal
+
 # Languages: the window's list is exactly Whisper's, and a code it doesn't know is never saved
 from faster_whisper.tokenizer import _LANGUAGE_CODES  # noqa: E402
 

@@ -2494,6 +2494,7 @@ async function startApp() {
   if (S.info.news && S.info.news.length && !S.info.mode && S.info.configured)
     setTimeout(() => { if (!$("#dialog-root").innerHTML.trim()) showNews(S.info.news, true); }, 700);
   if (S.info.mode === "update") openUpdate();  // opened by Update.bat
+  else if (S.info.mode === "uninstall") { go("settings"); ACTIONS.uninstall(); }  // Settings > Apps > Uninstall
   // Quietly, and a few seconds in so it doesn't slow the start: only a ready update is shown
   // Even with automatic checks off this looks, but then only speaks up for a security update
   else setTimeout(() => checkUpdate(true), 4000);
