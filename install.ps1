@@ -18,10 +18,16 @@ function Install-SubtitleMaker {
 
     $repo = 'carrotsz19/subtitle-maker'
     $api = if ($env:SUBTITLE_MAKER_API) { $env:SUBTITLE_MAKER_API } else { 'https://api.github.com' }  # override for testing
+    # GitHub's API allows 60 requests an hour per internet address, shared by everybody on a school or
+    # office network, so the latest version is found from the commits feed and downloaded from
+    # codeload (ordinary GitHub pages, no such limit). The API is only the fallback.
+    $web = if ($env:SUBTITLE_MAKER_WEB) { $env:SUBTITLE_MAKER_WEB } else { 'https://github.com' }
+    $codeload = if ($env:SUBTITLE_MAKER_CODELOAD) { $env:SUBTITLE_MAKER_CODELOAD } else { 'https://codeload.github.com' }
     $dest = if ($env:SUBTITLE_MAKER_INSTALL) { $env:SUBTITLE_MAKER_INSTALL } else { Join-Path $env:USERPROFILE 'Subtitle Maker' }
     $data = if ($env:SUBTITLE_MAKER_HOME) { $env:SUBTITLE_MAKER_HOME } else { Join-Path $env:USERPROFILE '.subtitle-maker' }
     $branch = if ($env:SUBTITLE_MAKER_BRANCH) { $env:SUBTITLE_MAKER_BRANCH } else { 'main' }
     $headers = @{ 'User-Agent' = 'subtitle-maker-installer'; 'Accept' = 'application/vnd.github+json' }
+    $plain = @{ 'User-Agent' = 'subtitle-maker-installer' }
     # GitHub limits anonymous requests per network; the Windows tests share theirs, so they pass a token
     if ($env:SUBTITLE_MAKER_GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $env:SUBTITLE_MAKER_GITHUB_TOKEN" }
 
@@ -31,18 +37,29 @@ function Install-SubtitleMaker {
     New-Item -ItemType Directory -Force -Path $data | Out-Null
 
     # ---- 1. The latest version from GitHub ----------------------------------------------------
+    $sha = $null
     try {
-        $commit = Invoke-RestMethod -Headers $headers -Uri "$api/repos/$repo/commits/$branch" -UseBasicParsing
-    } catch {
-        Write-Host "Couldn't reach GitHub: $($_.Exception.Message)" -ForegroundColor Red
-        return $false
+        [xml]$feed = (Invoke-WebRequest -Headers $plain -Uri "$web/$repo/commits/$branch.atom" -UseBasicParsing).Content
+        $sha = (@($feed.feed.entry)[0].id -split '/')[-1]
+        if ($sha -notmatch '^[0-9a-f]{40}$') { $sha = $null }
+    } catch { }
+    if (-not $sha) {
+        try {
+            $sha = (Invoke-RestMethod -Headers $headers -Uri "$api/repos/$repo/commits/$branch" -UseBasicParsing).sha
+        } catch {
+            Write-Host "Couldn't reach GitHub: $($_.Exception.Message)" -ForegroundColor Red
+            return $false
+        }
     }
-    $sha = $commit.sha
     $which = if ($branch -eq 'main') { '' } else { "$branch " }
     Write-Host "Downloading the latest ${which}version ($($sha.Substring(0, 7)))..."
     $zip = Join-Path $env:TEMP "subtitle-maker-$sha.zip"
     $unpacked = Join-Path $env:TEMP "subtitle-maker-$sha"
-    Invoke-WebRequest -Headers $headers -Uri "$api/repos/$repo/zipball/$sha" -OutFile $zip -UseBasicParsing
+    try {
+        Invoke-WebRequest -Headers $plain -Uri "$codeload/$repo/zip/$sha" -OutFile $zip -UseBasicParsing
+    } catch {
+        Invoke-WebRequest -Headers $headers -Uri "$api/repos/$repo/zipball/$sha" -OutFile $zip -UseBasicParsing
+    }
     if (Test-Path $unpacked) { Remove-Item -LiteralPath $unpacked -Recurse -Force }
     Expand-Archive -LiteralPath $zip -DestinationPath $unpacked -Force
     $root = (Get-ChildItem -LiteralPath $unpacked -Directory | Select-Object -First 1).FullName

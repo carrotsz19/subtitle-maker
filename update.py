@@ -12,6 +12,7 @@ never touched. The repo is public, so no GitHub account is needed.
 
 import argparse
 import hashlib
+import html
 import io
 import json
 import re
@@ -22,6 +23,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ElementTree
 import zipfile
 from pathlib import Path
 
@@ -33,6 +35,12 @@ REPO = os.environ.get("SUBTITLE_MAKER_REPO", "carrotsz19/subtitle-maker")
 # tested). Each is a branch of the repo; Settings > Updates switches between them.
 CHANNELS = {"main": "Stable", "experimental": "Experimental"}
 API = os.environ.get("SUBTITLE_MAKER_API", "https://api.github.com") + "/repos/" + REPO  # override for testing
+# GitHub's API allows 60 requests an hour per internet address without signing in, and a school or
+# office network shares one address between everybody on it, so there it often runs out. The
+# commits feed and the zip downloads are ordinary GitHub pages without that limit; the API is
+# only the fallback if they fail.
+WEB = os.environ.get("SUBTITLE_MAKER_WEB", "https://github.com") + "/" + REPO
+CODELOAD = os.environ.get("SUBTITLE_MAKER_CODELOAD", "https://codeload.github.com") + "/" + REPO
 INSTALLED_FILE = data_dir() / "installed.json"
 
 
@@ -66,6 +74,30 @@ def fetch(url, accept="application/vnd.github+json", progress=None):
 
 def fetch_json(path):
     return json.loads(fetch(API + path))
+
+
+ATOM = "{http://www.w3.org/2005/Atom}"
+
+
+def recent_commits(branch):
+    """The branch's latest commits, newest first, from its feed (about 20, no API limit):
+    [{"sha", "date", "message"}], message being the first line. Raises UpdateError."""
+    data = fetch(f"{WEB}/commits/{branch}.atom", accept="application/atom+xml")
+    try:
+        feed = ElementTree.fromstring(data)
+    except ElementTree.ParseError as e:
+        raise UpdateError("GitHub sent something unexpected. Try again later.") from e
+    commits = []
+    for entry in feed.iter(ATOM + "entry"):
+        sha = (entry.findtext(ATOM + "id") or "").rsplit("/", 1)[-1]
+        # The title is cut short at 80 characters; the content has the whole message (as HTML)
+        body = html.unescape(re.sub(r"<[^>]+>", "", entry.findtext(ATOM + "content") or ""))
+        message = (body.strip().splitlines() or [""])[0].strip() or (entry.findtext(ATOM + "title") or "").strip()
+        if re.fullmatch(r"[0-9a-f]{40}", sha):
+            commits.append({"sha": sha, "date": entry.findtext(ATOM + "updated"), "message": message})
+    if not commits:
+        raise UpdateError(f"There's no {branch} version on GitHub right now.")
+    return commits
 
 
 def installed():
@@ -119,23 +151,35 @@ def check(branch=None):
     """
     branch = branch or channel()
     try:
-        commit = fetch_json(f"/commits/{branch}")
+        commits = recent_commits(branch)
+        latest = {**commits[0], "branch": branch}
     except UpdateError:
-        if branch == "main":
-            raise
-        raise UpdateError("There's no experimental version on GitHub right now. Switch back to Stable in Settings.") from None
-    latest = {"sha": commit["sha"], "date": commit["commit"]["committer"]["date"],
-              "message": commit["commit"]["message"].splitlines()[0], "branch": branch}
+        commits = None  # the feed didn't work: ask the API instead
+        try:
+            commit = fetch_json(f"/commits/{branch}")
+        except UpdateError:
+            if branch == "main":
+                raise
+            raise UpdateError("There's no experimental version on GitHub right now. Switch back to Stable in Settings.") from None
+        latest = {"sha": commit["sha"], "date": commit["commit"]["committer"]["date"],
+                  "message": commit["commit"]["message"].splitlines()[0], "branch": branch}
     current = installed()
     switch = branch if current and current.get("branch", "main") != branch else None
     news, back = [], False
     if current and current["sha"] != latest["sha"]:
-        try:
-            compare = fetch_json(f"/compare/{current['sha']}...{latest['sha']}")
-            news = [change(c["commit"]["message"]) for c in compare.get("commits", [])]
-            back = compare.get("status") == "behind"
-        except UpdateError:
-            pass  # the list of changes is a nicety; the update itself still works
+        shas = [c["sha"] for c in commits or []]
+        if current["sha"] in shas:  # usual: the installed version is among the latest few
+            news = [change(c["message"]) for c in reversed(commits[:shas.index(current["sha"])])]
+        else:
+            try:
+                compare = fetch_json(f"/compare/{current['sha']}...{latest['sha']}")
+                news = [change(c["commit"]["message"]) for c in compare.get("commits", [])]
+                back = compare.get("status") == "behind"
+            except UpdateError:
+                # Further back than the feed goes (and no API): everything the feed has, so a
+                # "Critical:" among them still counts. Not when switching: those aren't news.
+                if commits and not switch:
+                    news = [change(c["message"]) for c in reversed(commits)]
     news = news or [change(latest["message"])]
     # Most serious first, then newest first; ten is plenty to read
     news = sorted(reversed(news), key=lambda n: KINDS.index(n["kind"]))
@@ -273,8 +317,11 @@ def apply(latest, report=print_step, packages=True):
     requirements files whose packages still need installing.
     """
     report("download")
-    data = fetch(f"{API}/zipball/{latest['sha']}", accept="application/vnd.github+json",
-                 progress=lambda done, total: report("download", done, total))
+    progress = lambda done, total: report("download", done, total)  # noqa: E731
+    try:
+        data = fetch(f"{CODELOAD}/zip/{latest['sha']}", accept="application/zip", progress=progress)
+    except UpdateError:  # codeload didn't work: the API's copy
+        data = fetch(f"{API}/zipball/{latest['sha']}", accept="application/vnd.github+json", progress=progress)
     old_requirements = {name: file_hash(HERE / name) for name in ("requirements.txt", "requirements-gpu.txt")}
     with tempfile.TemporaryDirectory() as tmp:
         with zipfile.ZipFile(io.BytesIO(data)) as z:

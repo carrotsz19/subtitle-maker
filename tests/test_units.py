@@ -143,7 +143,9 @@ assert update.change("Critical: Unsafe model download")["kind"] == "critical"
 replies = {"/commits/main": {"sha": "new", "commit": {"message": "Tidy", "committer": {"date": "2026-10-29"}}},
            "/compare/old...new": {"status": "ahead", "commits": [{"commit": {"message": "Critical: Unsafe download"}},
                                                                   {"commit": {"message": "Tidy"}}]}}
-real_fetch, real_installed = update.fetch_json, update.installed
+real_fetch, real_installed, real_recent = update.fetch_json, update.installed, update.recent_commits
+# (These go through the API: the commits feed, tried first, isn't there)
+update.recent_commits = lambda branch: (_ for _ in ()).throw(update.UpdateError("no feed"))
 update.fetch_json = lambda path: replies[path]
 update.installed = lambda: {"sha": "old", "date": None, "files": []}
 status = update.check("main")
@@ -172,7 +174,52 @@ update.fetch_json = lambda path: replies[path]
 update.installed = lambda: {"sha": "old", "date": None, "files": []}
 status = update.check("main")
 assert len(status["news"]) == 10 and status["more"] == 4, status
-update.fetch_json, update.installed = real_fetch, real_installed
+update.fetch_json, update.installed, update.recent_commits = real_fetch, real_installed, real_recent
+
+# Usually updates come from the commits feed (no API limit, which a shared network runs out of):
+# the version, its date, and what's new since the installed one, with each whole first line
+# (the feed's titles are cut at 80 characters, so they come from the content)
+SHA = {name: (name * 40)[:40] for name in "abc"}
+feed = f"""<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry><id>tag:github.com,2008:Grit::Commit/{SHA['c']}</id><title>Feature: A very long title that GitHub cuts…</title>
+    <updated>2026-11-01T10:00:00Z</updated>
+    <content type="html">&lt;pre&gt;Feature: A very long title that GitHub cuts short, but the content doesn&amp;#39;t
+
+More words.&lt;/pre&gt;</content></entry>
+  <entry><id>tag:github.com,2008:Grit::Commit/{SHA['b']}</id><title>Critical: Bad thing</title>
+    <updated>2026-10-31T10:00:00Z</updated><content type="html">&lt;pre&gt;Critical: Bad thing&lt;/pre&gt;</content></entry>
+  <entry><id>tag:github.com,2008:Grit::Commit/{SHA['a']}</id><title>Tidy</title>
+    <updated>2026-10-30T10:00:00Z</updated><content type="html">&lt;pre&gt;Tidy&lt;/pre&gt;</content></entry>
+</feed>""".encode()
+asked = []
+real_raw_fetch = update.fetch
+update.fetch = lambda url, accept=None, progress=None: (asked.append(url), feed)[1]
+update.fetch_json = lambda path: (_ for _ in ()).throw(AssertionError(f"the API shouldn't be needed: {path}"))
+update.installed = lambda: {"sha": SHA["a"], "date": None, "files": []}
+commits = update.recent_commits("main")
+assert [c["sha"] for c in commits] == [SHA["c"], SHA["b"], SHA["a"]]
+assert commits[0]["message"] == "Feature: A very long title that GitHub cuts short, but the content doesn't", commits[0]
+status = update.check("main")
+assert status["latest"]["sha"] == SHA["c"] and status["latest"]["date"] == "2026-11-01T10:00:00Z"
+assert [n["kind"] for n in status["news"]] == ["critical", "feature"] and status["required"], status
+assert all("api.github.com" not in u for u in asked), asked
+update.record(SHA["c"], files=[])
+# Installed further back than the feed goes, and no API: everything the feed has counts
+update.fetch_json = lambda path: (_ for _ in ()).throw(update.UpdateError("rate limited"))
+update.installed = lambda: {"sha": "0" * 40, "date": None, "files": []}
+assert len(update.check("main")["news"]) == 3
+# The download comes from codeload, and the API's copy only if that fails
+asked.clear()
+update.fetch = lambda url, accept=None, progress=None: (asked.append(url), (_ for _ in ()).throw(update.UpdateError("x")))[1]
+try:
+    update.apply({"sha": SHA["c"]})
+except update.UpdateError:
+    pass
+assert "codeload.github.com" in asked[0] and "api.github.com" in asked[1], asked
+update.fetch, update.fetch_json, update.installed = real_raw_fetch, real_fetch, real_installed
+update.REQUIRED_FILE.unlink(missing_ok=True)
+update.INSTALLED_FILE.unlink(missing_ok=True)
 
 # A model name can't point outside the models folder (delete_model deletes that folder)
 import models  # noqa: E402

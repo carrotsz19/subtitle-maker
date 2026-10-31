@@ -9,6 +9,8 @@ A release (see "Releasing a new version" in the README) needs its section here f
 - **Undo when fixing lines.** Ctrl+Z and Ctrl+Y (or the buttons next to Save) undo and redo any change: typing, splitting, joining, deleting, Replace all, times and speakers.
 - **Subtitles in English.** Settings > Language has a switch that translates videos in another language into English as it goes. High quality can't translate, so it uses Balanced's model for that (a 1.5 GB download the first time).
 - **More languages.** English, Chinese, Malay, Tamil and Auto-detect are one click away, and More… lists every language it knows (100) by name, instead of typing a code.
+- **Updates now show their new screens.** The window kept showing a saved copy of the 0.2.0 screens after every update.
+- **Installing and updating work on school and office Wi-Fi.** GitHub only allows 60 update checks an hour per network without signing in, and a shared network runs out fast. Subtitle Maker now uses GitHub's ordinary pages, which don't have that limit.
 - Fixed: a models folder that's a link to another drive was refused.
 
 ## 0.2.1 · 31 October 2026
