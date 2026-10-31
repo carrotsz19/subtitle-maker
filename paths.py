@@ -71,6 +71,16 @@ DEFAULT_SETTINGS = {
 # language anyway (OpenAI's Whisper README says so). The level with it translates with this one.
 TRANSLATE_WITH = {"large-v3-turbo": "medium"}
 MAX_FIXES = 200
+# Every language Whisper knows (faster_whisper.tokenizer._LANGUAGE_CODES; a test checks they match).
+# The window lists them by name; anything else in the settings goes back to the default.
+LANGUAGES = (
+    "af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br", "bs", "ca", "cs", "cy", "da", "de", "el", "en",
+    "es", "et", "eu", "fa", "fi", "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr", "ht", "hu", "hy", "id", "is",
+    "it", "ja", "jw", "ka", "kk", "km", "kn", "ko", "la", "lb", "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn",
+    "mr", "ms", "mt", "my", "ne", "nl", "nn", "no", "oc", "pa", "pl", "ps", "pt", "ro", "ru", "sa", "sd", "si", "sk",
+    "sl", "sn", "so", "sq", "sr", "su", "sv", "sw", "ta", "te", "tg", "th", "tk", "tl", "tr", "tt", "uk", "ur", "uz",
+    "vi", "yi", "yo", "zh", "yue",
+)
 # The values each setting may take; anything else (a hand-edited file, an old version) goes back to the default
 SETTING_CHOICES = {
     "max_chars": (32, 37, 42, 50), "max_lines": (1, 2), "min_seconds": (0.7, 1.0, 1.5),
@@ -91,6 +101,8 @@ def load_settings():
         settings = dict(DEFAULT_SETTINGS)
     if settings["level"] not in LEVELS:
         settings["level"] = DEFAULT_SETTINGS["level"]
+    if settings["language"] is not None and settings["language"] not in LANGUAGES:
+        settings["language"] = DEFAULT_SETTINGS["language"]
     for key, allowed in SETTING_CHOICES.items():
         if settings[key] not in allowed:
             settings[key] = DEFAULT_SETTINGS[key]

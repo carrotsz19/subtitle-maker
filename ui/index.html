@@ -296,6 +296,8 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 .rv-timing .nudge{ display:flex; align-items:center; gap:4px; }
 .rv-timing input{ width:92px; font-size:13px; padding:5px 8px; text-align:center; font-variant-numeric:tabular-nums; }
 .rv-timing .btn{ padding:4px 9px; min-width:0; }
+.seg.langs button{ padding:6px 10px; white-space:nowrap; }  /* six choices fit at the narrowest window */
+.lang-list{ font:inherit; font-size:14px; padding:8px 10px; border-radius:var(--r-control); border:1px solid var(--line); background:var(--panel-2); color:var(--ink); max-width:300px; }
 .rv-row select{ font:inherit; font-size:13px; padding:6px 8px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--ink); max-width:150px; }
 .rv-row textarea{ font:inherit; font-size:14.5px; line-height:1.4; width:100%; resize:none; border:1px solid transparent; border-radius:8px; padding:6px 8px;
   background:transparent; color:var(--ink); overflow:hidden; field-sizing:content; min-height:34px; }
@@ -503,7 +505,22 @@ html.reduce-motion .sidecard:active, html.reduce-motion .drop:active, html.reduc
    State. The Python side (app.py) pushes events in with app.onEvent();
    everything the page asks for goes through window.pywebview.api.
 --------------------------------------------------------------------- */
-const LANGS = [["en", "English"], [null, "Auto-detect"], ["other", "Other"]];
+/* The quick choices (the languages most videos here are in), then "More" for every other one Whisper knows */
+const LANGS = [["en", "English"], ["zh", "Chinese"], ["ms", "Malay"], ["ta", "Tamil"], [null, "Auto-detect"], ["other", "More…"]];
+const QUICK_LANGS = LANGS.map(([v]) => v).filter(v => v && v !== "other");
+/* Every language Whisper knows, by name (the web view's own names miss some, like Bashkir) */
+const LANG_NAMES = { af: "Afrikaans", am: "Amharic", ar: "Arabic", as: "Assamese", az: "Azerbaijani", ba: "Bashkir", be: "Belarusian", bg: "Bulgarian", bn: "Bengali", bo: "Tibetan", br: "Breton", bs: "Bosnian", ca: "Catalan", cs: "Czech", cy: "Welsh", da: "Danish", de: "German", el: "Greek", en: "English", es: "Spanish", et: "Estonian", eu: "Basque", fa: "Persian", fi: "Finnish", fo: "Faroese", fr: "French", gl: "Galician", gu: "Gujarati", ha: "Hausa", haw: "Hawaiian", he: "Hebrew", hi: "Hindi", hr: "Croatian", ht: "Haitian Creole", hu: "Hungarian", hy: "Armenian", id: "Indonesian", is: "Icelandic", it: "Italian", ja: "Japanese", jw: "Javanese", ka: "Georgian", kk: "Kazakh", km: "Khmer", kn: "Kannada", ko: "Korean", la: "Latin", lb: "Luxembourgish", ln: "Lingala", lo: "Lao", lt: "Lithuanian", lv: "Latvian", mg: "Malagasy", mi: "Maori", mk: "Macedonian", ml: "Malayalam", mn: "Mongolian", mr: "Marathi", ms: "Malay", mt: "Maltese", my: "Burmese", ne: "Nepali", nl: "Dutch", nn: "Norwegian Nynorsk", no: "Norwegian", oc: "Occitan", pa: "Punjabi", pl: "Polish", ps: "Pashto", pt: "Portuguese", ro: "Romanian", ru: "Russian", sa: "Sanskrit", sd: "Sindhi", si: "Sinhala", sk: "Slovak", sl: "Slovenian", sn: "Shona", so: "Somali", sq: "Albanian", sr: "Serbian", su: "Sundanese", sv: "Swedish", sw: "Swahili", ta: "Tamil", te: "Telugu", tg: "Tajik", th: "Thai", tk: "Turkmen", tl: "Tagalog", tr: "Turkish", tt: "Tatar", uk: "Ukrainian", ur: "Urdu", uz: "Uzbek", vi: "Vietnamese", yi: "Yiddish", yo: "Yoruba", zh: "Chinese (Mandarin)", yue: "Cantonese" };
+function langName(code) { return code ? LANG_NAMES[code] || code : "Auto-detect"; }
+/* Which button is lit: a quick one, Auto-detect, or More (for any other language, or none picked yet) */
+function langKeyOf(language) { return language === null || QUICK_LANGS.includes(language) ? language : "other"; }
+function langPicker(language, act, id) {
+  const key = langKeyOf(language);
+  const all = (S.info.languages || []).map(c => [c, langName(c)]).sort((a, b) => a[1].localeCompare(b[1]));
+  return `<div class="seg langs">${LANGS.map(([v, l]) => `<button data-act="${act}" data-v="${v}" aria-selected="${key === v}">${l}</button>`).join("")}</div>
+    ${key === "other" ? `<select id="${id}" class="lang-list" aria-label="Language">
+      <option value="" ${language === "other" ? "selected" : ""} disabled>Pick a language…</option>
+      ${all.map(([c, n]) => `<option value="${c}" ${c === language ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}`;
+}
 const S = {
   view: "make",
   info: null,                 // from api.init(): settings, levels, hardware, voices
@@ -808,7 +825,7 @@ function renderSide() {
   c.textContent = waiting; c.classList.toggle("hide", !waiting);
   if (!S.info) return;
   const { settings, levels, hardware: hw } = S.info;
-  const lang = settings.language === "en" ? "English" : settings.language ? settings.language : "Auto-detect";
+  const lang = langName(settings.language);
   $("#pc-level").textContent = `${levels[settings.level].name} quality · ${lang}${settings.translate && settings.language !== "en" ? " → English" : ""}`;
   $("#pc-detail").textContent = hw.gpu ? `${hw.gpu} · ${gb(hw.vram_mb)} GB` : `No NVIDIA GPU · runs on the CPU`;
 }
@@ -1300,8 +1317,8 @@ function viewSettings() {
   if (!S.info) return "";
   const { levels, recommended, hardware: hw } = S.info;
   const d = S.draft || (S.draft = { level: S.info.settings.level, language: S.info.settings.language });
-  const langKey = d.language === "en" || d.language === null ? d.language : "other";
-  const changed = d.level !== S.info.settings.level || d.language !== S.info.settings.language;
+  // "More…" with no language picked from its list yet isn't a change
+  const changed = d.language !== "other" && (d.level !== S.info.settings.level || d.language !== S.info.settings.language);
   const saving = S.run && S.run.kind === "prepare";
   const rows = Object.entries(levels).map(([key, lv]) => `
     <div class="grp-row tap" role="radio" tabindex="0" aria-checked="${d.level === key}" data-act="level" data-v="${key}">
@@ -1320,9 +1337,7 @@ function viewSettings() {
         This PC: ${hw.gpu ? `${esc(hw.gpu)} (${gb(hw.vram_mb)} GB)` : "no NVIDIA GPU, so it runs on the CPU"} · ${hw.ram_gb} GB RAM · ${hw.cores} CPU cores.
         ${d.level === "potato" ? " Potato turns off speaker names and the resource meters." : ""}</p></div>
     <div class="block"><h2>Language spoken in your videos</h2>
-      <div class="card stack"><div class="seg">${LANGS.map(([v, l]) => `<button data-act="lang" data-v="${v}" aria-selected="${langKey === v}">${l}</button>`).join("")}</div>
-        ${langKey === "other" ? `<div><input type="text" id="lang-code" placeholder="Language code, e.g. zh, ms, ta, ja" value="${esc(d.language === "other" ? "" : d.language)}" maxlength="8" style="max-width:280px"></div>` : ""}
-      </div>
+      <div class="card stack">${langPicker(d.language, "lang", "lang-code")}</div>
       <p class="foot">Auto-detect works for most videos. Picking the language is a little more accurate.</p>
       <div class="grp" style="margin-top:12px">${prefRow("Subtitles in English",
         S.info.settings.language === "en"
@@ -1335,7 +1350,7 @@ function viewSettings() {
       ${saving ? `<h2>Downloading what ${esc(levels[S.run.level].name)} needs</h2><div id="downloads">${downloadRows(S.run.level)}</div>
           <p class="foot">First time only. Levels marked Downloaded switch instantly.</p>`
         : S.run ? `<button class="btn big" disabled>Save</button><p class="foot">You can save once the current video is finished.</p>`
-        : `<button class="btn big" data-act="save" ${changed || !S.info.configured ? "" : "disabled"}>${S.info.configured ? "Save" : "Save and download"}</button>`}
+        : `<button class="btn big" data-act="save" ${changed || (!S.info.configured && d.language !== "other") ? "" : "disabled"}>${S.info.configured ? "Save" : "Save and download"}</button>`}
     </div>
     ${prefsBlocks()}
     ${modelsBlock()}
@@ -1701,12 +1716,9 @@ function viewSetup() {
               <div class="right sm dim mono">${lv.download}</div></div>`).join("")}</div></div>${nav("wiz-next")}`;
       break;
     case 2: {
-      const key = w.language === "en" || w.language === null ? w.language : "other";
       body = `<div class="wiz-body"><h1>What language do your videos use?</h1>
           <p class="lede">Picking it is a little more accurate than letting it guess.</p>
-          <div class="card stack"><div class="seg">${LANGS.map(([v, l]) => `<button data-act="wiz-lang" data-v="${v}" aria-selected="${key === v}">${l}</button>`).join("")}</div>
-            ${key === "other" ? `<input type="text" id="wiz-code" placeholder="Language code, e.g. zh, ms, ta, ja" value="${esc(w.language === "other" ? "" : w.language)}" maxlength="8" style="max-width:300px">` : ""}
-          </div></div>${nav("wiz-next")}`;
+          <div class="card stack">${langPicker(w.language, "wiz-lang", "wiz-code")}</div></div>${nav("wiz-next")}`;
       break;
     }
     case 3:
@@ -1972,14 +1984,14 @@ function bind(root) {
   const hot = $("#hotwords", root);
   if (hot) hot.onchange = async () => { S.info.settings = await api().save_prefs({ hotwords: hot.value.trim() }); toast("Saved."); };
   const wizCode = $("#wiz-code", root);
-  if (wizCode) wizCode.oninput = () => { S.setup.language = wizCode.value.trim().toLowerCase() || "other"; };
+  if (wizCode) wizCode.onchange = () => { S.setup.language = wizCode.value || "other"; };
   const code = $("#lang-code", root);
-  if (code) code.oninput = () => { S.draft.language = code.value.trim().toLowerCase() || "other"; updateSave(); };
+  if (code) code.onchange = () => { S.draft.language = code.value || "other"; updateSave(); };
 }
 
 function updateSave() {
   const b = $('[data-act="save"]');
-  if (b) b.disabled = S.info.configured && S.draft.level === S.info.settings.level && S.draft.language === S.info.settings.language;
+  if (b) b.disabled = S.draft.language === "other" || (S.info.configured && S.draft.level === S.info.settings.level && S.draft.language === S.info.settings.language);
 }
 
 const ACTIONS = {
@@ -2101,12 +2113,12 @@ const ACTIONS = {
   restart: () => api().restart(),
   "wiz-next": () => {
     const w = S.setup;
-    if (w.step === 2 && w.language === "other") return toast("Type a language code, or pick English or Auto-detect.", true);
+    if (w.step === 2 && w.language === "other") return toast("Pick a language from the list, or Auto-detect.", true);
     w.step++; render(true);
   },
   "wiz-back": () => { S.setup.step = Math.max(0, S.setup.step - 1); S.setup.error = null; render("back"); },
   "wiz-level": el => { S.setup.level = el.dataset.v; render(); },
-  "wiz-lang": el => { const v = el.dataset.v; S.setup.language = v === "null" ? null : v; render(); if (v === "other") $("#wiz-code").focus(); },
+  "wiz-lang": el => { const v = el.dataset.v; S.setup.language = v === "null" ? null : v === "other" && langKeyOf(S.setup.language) === "other" ? S.setup.language : v; render(); if (v === "other") $("#wiz-code").focus(); },
   "wiz-out-here": () => { S.setup.output_dir = null; render(); },
   "wiz-out-folder": async () => { const dir = await api().choose_folder(); if (dir) { S.setup.output_dir = dir; render(); } },
   "wiz-download": () => setupDownload(),
@@ -2164,9 +2176,10 @@ const ACTIONS = {
   clear: () => { S.queue = S.queue.filter(q => q.status === "waiting"); render(); },
   log: el => { if (S.run) S.run.logOpen = el.open; },
   level: el => { S.draft.level = el.dataset.v; render(); },
-  lang: el => { const v = el.dataset.v; S.draft.language = v === "null" ? null : v; render(); if (v === "other") $("#lang-code").focus(); },
+  lang: el => { const v = el.dataset.v; S.draft.language = v === "null" ? null : v === "other" && langKeyOf(S.draft.language) === "other" ? S.draft.language : v; render(); if (v === "other") $("#lang-code").focus(); },
   save: async () => {
-    const lang = S.draft.language === "other" ? null : S.draft.language, level = S.draft.level;
+    if (S.draft.language === "other") return toast("Pick a language from the list, or Auto-detect.", true);
+    const lang = S.draft.language, level = S.draft.level;
     S.info.settings = await api().save_settings(level, lang);
     S.info.configured = true;
     S.draft = null;

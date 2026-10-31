@@ -197,6 +197,21 @@ for bad in ("C:x", "a:b"):
     except ValueError:
         pass
 
+# Languages: the window's list is exactly Whisper's, and a code it doesn't know is never saved
+from faster_whisper.tokenizer import _LANGUAGE_CODES  # noqa: E402
+
+assert set(paths.LANGUAGES) == set(_LANGUAGE_CODES), set(paths.LANGUAGES) ^ set(_LANGUAGE_CODES)
+paths.save_settings({**paths.load_settings(), "language": "zz"})
+assert paths.load_settings()["language"] == paths.DEFAULT_SETTINGS["language"], "an unknown code goes back to the default"
+paths.save_settings({**paths.load_settings(), "language": "ta"})
+assert paths.load_settings()["language"] == "ta"
+paths.save_settings({**paths.load_settings(), "language": None})
+assert paths.load_settings()["language"] is None, "Auto-detect stays Auto-detect"
+saver = app.Api.__new__(app.Api)
+assert saver.save_settings("high", "yue")["language"] == "yue"
+assert saver.save_settings("high", "klingon")["language"] is None, "an unknown code becomes Auto-detect"
+paths.save_settings(paths.DEFAULT_SETTINGS)
+
 # Subtitles in English: off by default, only true/false, and the turbo model (which can't
 # translate) hands over to one that can
 assert paths.DEFAULT_SETTINGS["translate"] is False

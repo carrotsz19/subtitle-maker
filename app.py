@@ -30,7 +30,7 @@ import srtfile  # noqa: E402
 import uninstall  # noqa: E402
 import update  # noqa: E402
 import winextras  # noqa: E402
-from paths import (DEFAULT_SETTINGS, ERROR_LOG, LEVELS, SETTINGS_FILE, data_dir, load_history,  # noqa: E402
+from paths import (DEFAULT_SETTINGS, ERROR_LOG, LANGUAGES, LEVELS, SETTINGS_FILE, data_dir, load_history,  # noqa: E402
                    load_settings, save_history, save_settings)
 
 HERE = Path(__file__).parent
@@ -331,6 +331,7 @@ class Api:
             "settings": load_settings(),
             "configured": SETTINGS_FILE.exists(),
             "levels": LEVELS,
+            "languages": LANGUAGES,
             "recommended": self._probe["recommended"],
             "hardware": self._probe["hardware"],
             "voices": self.voices(),
@@ -788,9 +789,9 @@ class Api:
 
     def save_settings(self, level, language):
         settings = load_settings()
-        settings.update(level=level, language=language or None)
+        settings.update(level=level, language=language if language in LANGUAGES else None)
         save_settings(settings)
-        return settings
+        return load_settings()
 
     # ---- where subtitles go ------------------------------------------------------------------
 
