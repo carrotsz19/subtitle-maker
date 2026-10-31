@@ -173,6 +173,7 @@ button{ font:inherit; cursor:pointer; }
 .btn.big{ min-height:50px; width:100%; font-size:15px; border-radius:var(--r-card); }
 .iconbtn{ border:0; background:transparent; color:var(--dim); width:32px; height:32px; border-radius:99px; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
 .iconbtn:hover{ color:var(--ink); background:var(--fill-tertiary); }
+.iconbtn:disabled{ opacity:.35; pointer-events:none; }
 .linkbtn{ border:0; background:none; padding:0; color:var(--accent); font-weight:600; }
 .linkbtn:hover{ text-decoration:underline; }
 input[type=text]{ font:inherit; font-size:15px; width:100%; padding:10px 12px; border-radius:var(--r-control); border:1px solid var(--line); background:var(--panel); color:var(--ink); transition:border-color .16s var(--ease-standard), box-shadow .16s var(--ease-standard); }
@@ -525,6 +526,8 @@ const gb = mb => (mb / 1024).toFixed(1);
 const api = () => window.pywebview.api;
 
 const ICON = {
+  undo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  redo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>',
   split: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg>',
   merge: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v7M12 20v-7M8 7l4 4 4-4M8 17l4-4 4 4"/></svg>',
   film: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/></svg>',
@@ -806,7 +809,7 @@ function renderSide() {
   if (!S.info) return;
   const { settings, levels, hardware: hw } = S.info;
   const lang = settings.language === "en" ? "English" : settings.language ? settings.language : "Auto-detect";
-  $("#pc-level").textContent = `${levels[settings.level].name} quality · ${lang}`;
+  $("#pc-level").textContent = `${levels[settings.level].name} quality · ${lang}${settings.translate && settings.language !== "en" ? " → English" : ""}`;
   $("#pc-detail").textContent = hw.gpu ? `${hw.gpu} · ${gb(hw.vram_mb)} GB` : `No NVIDIA GPU · runs on the CPU`;
 }
 
@@ -1080,6 +1083,58 @@ function rvTiming(c, i) {
       <button class="btn sec sm" data-act="rv-nudge" data-i="${i}" data-k="${key}" data-d="0.1" title="0.1 s later">+</button></span>`;
   return `<div class="rv-timing">Shows ${nudge("start")} Goes ${nudge("end")} <span>${(c.end - c.start).toFixed(1)} s on screen</span></div>`;
 }
+/* Undo and redo: every change to the lines first saves how they were (with what it was, for the
+   toast). Typing in one line counts as one change until you move to another line or do something else. */
+const RV_UNDO_LIMIT = 200;
+function rvSnap(what, focus = null) {
+  const r = S.review;
+  r.undo = r.undo || [];
+  r.undo.push({ what, focus, cues: JSON.parse(JSON.stringify(r.cues)), names: { ...r.names } });
+  if (r.undo.length > RV_UNDO_LIMIT) r.undo.shift();
+  r.redo = [];
+  r.typing = null;
+}
+function rvTyping(i) {
+  const r = S.review;
+  if (r.typing === i) return;
+  rvSnap("typing", i);
+  r.typing = i;
+  rvUndoButtons();
+}
+function rvStep(back) {
+  const r = S.review, from = back ? r.undo : r.redo, to = back ? r.redo : r.undo;
+  if (!from || !from.length) return;
+  const step = from.pop();
+  to.push({ what: step.what, focus: step.focus, cues: JSON.parse(JSON.stringify(r.cues)), names: { ...r.names } });
+  r.cues = step.cues; r.names = step.names;
+  r.typing = null; r.timing = null; r.caret = null;
+  render();
+  if (step.focus != null) {
+    const box = $(`#review textarea[data-i="${step.focus}"]`);
+    if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+  }
+  toast(`${back ? "Undid" : "Redid"}: ${RV_WHAT[step.what] || step.what}.`);
+}
+const RV_WHAT = { typing: "typing", split: "split line", join: "joined lines", delete: "deleted line", restore: "brought back line",
+  replace: "replace all", time: "time change", speaker: "speaker change", name: "speaker name" };
+function rvUndoButtons() {
+  const r = S.review, u = $("#rv-undo"), d = $("#rv-redo");
+  if (u) u.disabled = !(r.undo && r.undo.length);
+  if (d) d.disabled = !(r.redo && r.redo.length);
+}
+// Ctrl+Z / Ctrl+Y (and Ctrl+Shift+Z) while the lines are open. The find, replace, time and name
+// boxes keep their own undo; the lines themselves use this one, so a join or split undoes too.
+document.addEventListener("keydown", e => {
+  if (!S.review || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const key = e.key.toLowerCase();
+  if (key !== "z" && key !== "y") return;
+  const t = e.target;
+  if (t && t.matches && t.matches("input, select, textarea") && !t.matches('textarea[data-rv="text"]')) return;
+  if ($("#dialog-root") && $("#dialog-root").innerHTML.trim()) return;
+  e.preventDefault();
+  rvStep(key === "z" && !e.shiftKey);
+});
+
 /* A new time for one end of a line, kept between its neighbours and at least 0.2 s long */
 function rvSetTime(i, key, t) {
   const cues = S.review.cues, c = cues[i];
@@ -1103,6 +1158,8 @@ function viewReview() {
             ? (r.video ? `Fixing an existing file · plays from ${esc(r.video)}` : "Fixing an existing file · no video with the same name next to it, so lines can't play")
             : `Check before saving${queueLeft() ? ` · ${queueLeft()} more after this` : ""}`}</div>
           <h3 class="trunc">${esc(r.file)}</h3></div>
+        <button class="iconbtn" id="rv-undo" data-act="rv-undo" title="Undo (Ctrl+Z)" aria-label="Undo" ${S.review.undo && S.review.undo.length ? "" : "disabled"}>${ICON.undo}</button>
+        <button class="iconbtn" id="rv-redo" data-act="rv-redo" title="Redo (Ctrl+Y)" aria-label="Redo" ${S.review.redo && S.review.redo.length ? "" : "disabled"}>${ICON.redo}</button>
         <button class="btn ghost sm" data-act="rv-discard">${r.mode === "file" ? "Close" : "Discard"}</button>
         <button class="btn" data-act="rv-save">${r.mode === "file" ? "Save changes" : "Save subtitles"}</button></div>
       ${r.mode === "file" && r.formatted ? `<div class="banner">This file has formatting, like italics, colours or positions. Saving keeps the words and timing but not the formatting, and splits lines the way Settings says. The original is kept as a backup.</div>` : ""}
@@ -1126,6 +1183,7 @@ function bindReview(root) {
     const i = +el.dataset.i;
     if (el.dataset.rv === "text") {
       el.oninput = () => {
+        rvTyping(i);
         S.review.cues[i].text = el.value.replace(/\n/g, " ");
         $("#rv-warn-" + i).innerHTML = rvTooLong(i) ? '<span class="pill bad">Too long</span>' : "";
         rvCount();
@@ -1142,14 +1200,14 @@ function bindReview(root) {
       el.onchange = () => {
         const t = unstamp(el.value);
         if (t === null) toast("Type a time like 1:02.35", true);
-        else rvSetTime(i, el.dataset.rv, t);
+        else { rvSnap("time"); rvSetTime(i, el.dataset.rv, t); }
         render();
       };
       el.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } };
     } else if (el.dataset.rv === "speaker") {
-      el.onchange = () => { S.review.cues[i].speaker = +el.value; $("#rv-warn-" + i).innerHTML = rvTooLong(i) ? '<span class="pill bad">Too long</span>' : ""; rvCount(); };
+      el.onchange = () => { rvSnap("speaker"); rvUndoButtons(); S.review.cues[i].speaker = +el.value; $("#rv-warn-" + i).innerHTML = rvTooLong(i) ? '<span class="pill bad">Too long</span>' : ""; rvCount(); };
     } else if (el.dataset.rv === "name") {
-      el.onchange = () => { S.review.names[el.dataset.k] = el.value.trim() || `Speaker ${+el.dataset.k + 1}`; render(); };
+      el.onchange = () => { rvSnap("name"); S.review.names[el.dataset.k] = el.value.trim() || `Speaker ${+el.dataset.k + 1}`; render(); };
     }
   });
 }
@@ -1265,7 +1323,14 @@ function viewSettings() {
       <div class="card stack"><div class="seg">${LANGS.map(([v, l]) => `<button data-act="lang" data-v="${v}" aria-selected="${langKey === v}">${l}</button>`).join("")}</div>
         ${langKey === "other" ? `<div><input type="text" id="lang-code" placeholder="Language code, e.g. zh, ms, ta, ja" value="${esc(d.language === "other" ? "" : d.language)}" maxlength="8" style="max-width:280px"></div>` : ""}
       </div>
-      <p class="foot">Auto-detect works for most videos. Picking the language is a little more accurate.</p></div>
+      <p class="foot">Auto-detect works for most videos. Picking the language is a little more accurate.</p>
+      <div class="grp" style="margin-top:12px">${prefRow("Subtitles in English",
+        S.info.settings.language === "en"
+          ? (S.info.settings.translate ? "On, but your videos are set to English, so there's nothing to translate. Pick the language they're in, or Auto-detect."
+            : "For videos in another language. Pick the language they're in above (or Auto-detect) first.")
+          : `Translates as it goes, for videos in another language.${S.info.settings.level === "high"
+            ? ` High can't translate, so this uses Balanced's model${S.info.models.whisper.balanced ? "" : " (a 1.5 GB download the first time)"}.` : ""}`,
+        switchPref("translate"))}</div></div>
     <div class="block">
       ${saving ? `<h2>Downloading what ${esc(levels[S.run.level].name)} needs</h2><div id="downloads">${downloadRows(S.run.level)}</div>
           <p class="foot">First time only. Levels marked Downloaded switch instantly.</p>`
@@ -1931,6 +1996,7 @@ const ACTIONS = {
   "rv-timing": el => { const i = +el.dataset.i; S.review.timing = S.review.timing === i ? null : i; render(); },
   "rv-nudge": el => {
     const i = +el.dataset.i, key = el.dataset.k, c = S.review.cues[i];
+    rvSnap("time");
     rvSetTime(i, key, c[key] + parseFloat(el.dataset.d));
     render();
   },
@@ -1947,6 +2013,7 @@ const ACTIONS = {
     if (!left || !right) return toast("Put the cursor where the line should be split.", true);
     // The time is shared out by length, which is close to how long each part takes to say
     const cut = Math.round((c.start + (c.end - c.start) * left.length / (left.length + right.length)) * 100) / 100;
+    rvSnap("split", i);
     r.cues.splice(i, 1, { ...c, text: left, end: cut }, { ...c, text: right, start: cut });
     r.timing = null; r.caret = null;
     render();
@@ -1955,16 +2022,20 @@ const ACTIONS = {
     const r = S.review, i = +el.dataset.i, c = r.cues[i], next = r.cues[i + 1];
     if (!next || next.gone) return;
     if (r.hasNames && next.speaker !== c.speaker) toast(`Joined into ${r.names[c.speaker] || "the first speaker"}'s line.`);
+    rvSnap("join", i);
     r.cues.splice(i, 2, { ...c, text: `${c.text.trim()} ${next.text.trim()}`, end: next.end });
     r.timing = null; r.caret = null;
     render();
   },
-  "rv-del": el => { const c = S.review.cues[+el.dataset.i]; c.gone = !c.gone; render(); },
+  "rv-del": el => { const c = S.review.cues[+el.dataset.i]; rvSnap(c.gone ? "restore" : "delete"); c.gone = !c.gone; render(); },
+  "rv-undo": () => rvStep(true),
+  "rv-redo": () => rvStep(false),
   "rv-replace": async () => {
     const find = $("#rv-find").value, repl = $("#rv-repl").value;
     if (!find) return;
     const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
     let n = 0;
+    if (S.review.cues.some(c => !c.gone && c.text.search(re) >= 0)) rvSnap("replace");  // nothing to undo if nothing matches
     S.review.cues.forEach(c => { if (c.gone) return; c.text = c.text.replace(re, () => { n++; return repl; }); });
     const remember = $("#rv-remember") && $("#rv-remember").checked;
     render();

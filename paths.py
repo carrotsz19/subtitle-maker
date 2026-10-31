@@ -64,7 +64,12 @@ DEFAULT_SETTINGS = {
     "remember_voices": True,
     # Things appear and go without moving (Windows' own "Show animations" setting counts too)
     "less_motion": False,
+    # Subtitles in English whatever language is spoken (Whisper translates as it goes)
+    "translate": False,
 }
+# large-v3-turbo was only trained to transcribe: asked to translate, it writes the original
+# language anyway (OpenAI's Whisper README says so). The level with it translates with this one.
+TRANSLATE_WITH = {"large-v3-turbo": "medium"}
 MAX_FIXES = 200
 # The values each setting may take; anything else (a hand-edited file, an old version) goes back to the default
 SETTING_CHOICES = {
@@ -75,7 +80,7 @@ SETTING_CHOICES = {
     "done_sound": (True, False), "multi": (True, False), "people": (0, 2, 3, 4, 5, 6),
     "open_folder": (True, False), "theme": ("system", "light", "dark"), "auto_update": (True, False),
     "notify": (True, False), "remember_voices": (True, False), "less_motion": (True, False),
-    "channel": ("main", "experimental"),
+    "channel": ("main", "experimental"), "translate": (True, False),
 }
 
 

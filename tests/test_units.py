@@ -188,6 +188,24 @@ assert set(models.WHISPER_REVISIONS) == set(models.WHISPER_REPOS.values()), "eve
 assert all(len(v) == 40 for v in models.WHISPER_REVISIONS.values())
 assert set(models.SHA256) == {models.SEG_URL, models.EMB_URL, models.VOICE_URL}
 
+# A models folder (or one model) that's a link elsewhere still counts as inside the models folder
+assert models.cache_folder("large-v3-turbo").name == "models--mobiuslabsgmbh--faster-whisper-large-v3-turbo"
+for bad in ("C:x", "a:b"):
+    try:
+        models.cache_folder(bad)
+        raise AssertionError(f"{bad!r} should be refused")
+    except ValueError:
+        pass
+
+# Subtitles in English: off by default, only true/false, and the turbo model (which can't
+# translate) hands over to one that can
+assert paths.DEFAULT_SETTINGS["translate"] is False
+paths.save_settings({**paths.load_settings(), "translate": "yes"})
+assert paths.load_settings()["translate"] is False, "anything but true/false goes back to off"
+assert paths.TRANSLATE_WITH["large-v3-turbo"] in {lv["model"] for lv in paths.LEVELS.values()}
+assert "translate" in app.Api._INSTANT
+paths.save_settings(paths.DEFAULT_SETTINGS)
+
 # A speaker model download that isn't the expected file is thrown away, never kept
 import tempfile as _tf  # noqa: E402
 import urllib.request as _ur  # noqa: E402

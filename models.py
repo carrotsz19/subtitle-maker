@@ -63,7 +63,8 @@ def repo_for(model):
 def cache_folder(model):
     folder = WHISPER_DIR / ("models--" + repo_for(model).replace("/", "--"))
     # The name comes from outside (the window, --model): it must stay a folder inside WHISPER_DIR
-    if "\\" in model or ".." in model or folder.resolve().parent != WHISPER_DIR.resolve():
+    # (by its name alone: resolving would follow a models folder that's a link, and refuse it)
+    if "\\" in model or ".." in model or ":" in model or folder.parent != WHISPER_DIR:
         raise ValueError(f"Not a model name: {model!r}")
     return folder
 
