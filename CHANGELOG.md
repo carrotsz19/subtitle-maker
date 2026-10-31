@@ -4,6 +4,13 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 0.2.2 · 31 October 2026
+
+- **Undo when fixing lines.** Ctrl+Z and Ctrl+Y (or the buttons next to Save) undo and redo any change: typing, splitting, joining, deleting, Replace all, times and speakers.
+- **Subtitles in English.** Settings > Language has a switch that translates videos in another language into English as it goes. High quality can't translate, so it uses Balanced's model for that (a 1.5 GB download the first time).
+- **More languages.** English, Chinese, Malay, Tamil and Auto-detect are one click away, and More… lists every language it knows (100) by name, instead of typing a code.
+- Fixed: a models folder that's a link to another drive was refused.
+
 ## 0.2.1 · 31 October 2026
 
 - **Safer updates.** An update now goes in all at once. If something gets in the way partway, the old version is put back, instead of leaving a mix of old and new files.
