@@ -232,9 +232,33 @@ details[open] summary::before{ transform:rotate(90deg); }
 
 /* ---------- dialog ---------- */
 .scrim{ position:fixed; inset:0; background:rgba(0,0,0,.42); display:flex; align-items:center; justify-content:center; z-index:60; padding:20px; animation:fadeIn var(--spring-default-ms) var(--ease-out) both; }
-.news-version + .news-version{ border-top:1px solid var(--line); padding-top:12px; }
-.news-list{ margin:6px 0 0; }
-.news-list li{ margin:6px 0; line-height:1.45; }
+/* What's new: a fixed header and button, and a timeline between them, oldest at the top */
+.dialog.news-sheet{ display:flex; flex-direction:column; padding:8px 0 0; overflow:hidden; max-width:520px; }
+.nv-head{ display:flex; align-items:center; gap:12px; padding:12px 24px 14px; }
+.nv-head .tile-icon{ width:38px; height:38px; border-radius:11px; background:var(--accent-soft); color:var(--accent); }
+.nv-head .sub{ font-size:12.5px; color:var(--dim); margin-top:2px; }
+.nv-body{ flex:1; min-height:0; overflow-y:auto; padding:6px 24px 4px; border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  mask-image:linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%); }
+.nv-foot{ display:flex; padding:14px 24px 20px; }
+.nv-foot .btn{ flex:1; }
+.timeline{ position:relative; padding:14px 0 6px 26px; }
+.timeline::before{ content:""; position:absolute; left:6px; top:22px; bottom:22px; width:2px; border-radius:2px; background:var(--line); }
+.nv{ position:relative; padding-bottom:22px; }
+.nv:last-child{ padding-bottom:6px; }
+.nv::before{ content:""; position:absolute; left:-26px; top:4px; width:10px; height:10px; border-radius:50%; background:var(--panel); border:2px solid var(--faint); }
+.nv.current::before{ background:var(--accent); border-color:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); }
+.nv-title{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.nv-title .v{ font-size:15px; font-weight:800; letter-spacing:-.01em; }
+.nv-title .d{ font-size:12px; color:var(--faint); margin-left:auto; }
+.nv-items{ display:flex; flex-direction:column; gap:12px; margin-top:12px; }
+.nv-item{ background:var(--panel-2); border-radius:var(--r-control); padding:10px 12px; }
+.nv-item b{ display:block; font-size:13.5px; line-height:1.35; }
+.nv-item span{ display:block; font-size:12.5px; color:var(--dim); line-height:1.45; margin-top:2px; }
+.nv-item.plain{ background:transparent; padding:0 12px; font-size:12.5px; color:var(--dim); line-height:1.45; }
+.nv details summary{ margin-top:8px; }
+.nv details .when-open, .nv details[open] .when-shut{ display:none; }
+.nv details[open] .when-open{ display:inline; }
+.nv details[open] summary{ margin-bottom:-2px; }
 .dialog{ background:var(--panel); border-radius:var(--r-sheet); padding:22px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; box-shadow:var(--elev-3); animation:dialogIn var(--spring-default-ms) var(--spring-default) both; }
 @keyframes fadeIn{ from{ opacity:0 } to{ opacity:1 } }
 @keyframes dialogIn{ from{ opacity:0; transform:translateY(12px) scale(.985) } to{ opacity:1; transform:none } }
@@ -543,6 +567,7 @@ const gb = mb => (mb / 1024).toFixed(1);
 const api = () => window.pywebview.api;
 
 const ICON = {
+  gift: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>',
   undo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
   redo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>',
   split: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg>',
@@ -1544,25 +1569,48 @@ function installedText() {
 function newsHtml(text) {
   return esc(text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
 }
+/* One change: "**Undo when fixing lines.** Ctrl+Z and..." becomes a heading and a line under it */
+function newsItem(text) {
+  const m = /^\*\*(.+?)\*\*\s*(.*)$/.exec(text);
+  if (!m) return `<div class="nv-item plain">${newsHtml(text)}</div>`;
+  return `<div class="nv-item"><b>${esc(m[1].replace(/[.:]$/, ""))}</b>${m[2] ? `<span>${newsHtml(m[2])}</span>` : ""}</div>`;
+}
+/* "31 October 2026" -> "31 Oct 2026" */
+const shortDate = d => (d || "").replace(/^(\d+ )(\w{3})\w*( \d{4})$/, "$1$2$3");
 async function showNews(list, fresh) {
   if (!list) {
     try { list = await api().all_news(); } catch (e) { list = []; }
   }
   if (!list.length) return toast("There's no list of changes in this copy of Subtitle Maker.", true);
-  const title = fresh ? `What's new in ${esc(list[0].version)}` : "What's new";
+  // Oldest at the top, newest at the bottom (CHANGELOG.md lists them newest first)
+  const versions = [...list].reverse(), installed = S.info.release || list[0].version;
+  const title = fresh ? `Updated to ${esc(list[0].version)}` : "What's new";
+  const sub = fresh ? (list.length > 1 ? `Everything from the last ${list.length} versions` : "Here's what changed")
+    : `You have ${esc(installed)}${(list.find(v => v.version === installed) || {}).date ? ` · ${esc(shortDate(list.find(v => v.version === installed).date))}` : ""}`;
+  const version = v => {
+    const current = v.version === installed;
+    // Everything new to you stays open; in the full list, versions before yours are folded away
+    const open = fresh || current || versions.indexOf(v) >= versions.findIndex(x => x.version === installed);
+    const items = `<div class="nv-items">${v.changes.map(newsItem).join("")}</div>`;
+    return `<section class="nv${current ? " current" : ""}">
+      <div class="nv-title"><span class="v">${esc(v.version)}</span>${current ? '<span class="pill accent">Installed</span>' : ""}
+        <span class="d">${esc(shortDate(v.date))}</span></div>
+      ${open ? items : `<details><summary><span class="when-shut">Show ${v.changes.length} change${v.changes.length === 1 ? "" : "s"}</span><span class="when-open">Hide</span></summary>${items}</details>`}</section>`;
+  };
   $("#dialog-root").innerHTML = `
-    <div class="scrim"><div class="dialog stack" role="dialog" aria-modal="true" aria-labelledby="nw-title">
-      <h3 id="nw-title">${title}</h3>
-      ${list.map((v, i) => `<div class="news-version">
-        ${fresh && i === 0 ? "" : `<div class="between"><b>${esc(v.version)}</b><span class="sm dim">${esc(v.date || "")}</span></div>`}
-        <ul class="list sm news-list">${v.changes.map(c => `<li>${newsHtml(c)}</li>`).join("")}</ul></div>`).join("")}
-      <div class="row"><div class="grow"></div><button class="btn" id="nw-done" data-dismiss>${fresh ? "Got it" : "Done"}</button></div>
+    <div class="scrim"><div class="dialog news-sheet" role="dialog" aria-modal="true" aria-labelledby="nw-title">
+      <div class="nv-head"><div class="tile-icon">${ICON.gift}</div>
+        <div class="grow"><h3 id="nw-title">${title}</h3><div class="sub">${sub}</div></div></div>
+      <div class="nv-body" id="nw-body"><div class="timeline">${versions.map(version).join("")}</div></div>
+      <div class="nv-foot"><button class="btn" id="nw-done" data-dismiss>${fresh ? "Got it" : "Done"}</button></div>
     </div></div>`;
+  // Open at the newest (at the bottom), with its heading at the top of the view
+  const body = $("#nw-body"), newest = body.querySelector(".nv:last-child");
+  body.scrollTop = newest.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 8;
   $("#nw-done").onclick = () => {
     closeDialogs();
     if (fresh) api().news_seen();
   };
-  $("#nw-done").focus();
 }
 
 /* Stable is the main branch everybody gets; Experimental has new things first, less tested */
