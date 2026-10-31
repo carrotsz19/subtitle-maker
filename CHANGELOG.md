@@ -4,6 +4,16 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 0.2.1 · 31 October 2026
+
+- **Safer updates.** An update now goes in all at once. If something gets in the way partway, the old version is put back, instead of leaving a mix of old and new files.
+- **Safer downloads.** The speech and speaker models are checked to be exactly the right files before they're used.
+- **Works offline during a security update.** If an important security update is waiting and GitHub can't be reached, you can keep using Subtitle Maker until you're back online.
+- **Asks before closing** if a video is still being made, models are downloading, or an update is installing.
+- **Says when an .srt's formatting won't be kept.** Opening one with italics, colours or positions explains that saving keeps the words and timing, but not the formatting.
+- Big updates say how many more changes there are, beyond the ten listed.
+- Uninstall now moves every voice clip to the desktop, including ones with % in the name.
+
 ## 0.2.0 · 29 October 2026
 
 - **No more freezing on long videos.** Transcribing used to stall partway through while it worked out who was talking. Now both run at full speed side by side.
