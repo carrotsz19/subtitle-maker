@@ -256,6 +256,7 @@ class Api:
         self._taskbar = None  # progress on the taskbar button (Windows)
         self._edit = None  # the .srt open for fixing: {"path", "video"}
         self._closing_ok = False  # the app is closing itself (restart, update, uninstall): don't ask
+        self._updating = False  # an update is being copied in: closing now would stop it partway
         self._outbox = PageMail(self)  # everything for the page goes through here (see PageMail)
         # Look at the PC (nvidia-smi can take a second or two) while the window is still opening,
         # so the page never waits for it
@@ -753,10 +754,12 @@ class Api:
         Runs on the window's own thread, so it asks with a Windows message box: the page can't
         be asked from here without waiting on this same thread.
         """
-        if not self._closing_ok and self._busy() and winextras.WINDOWS:
+        if not self._closing_ok and (self._busy() or self._updating) and winextras.WINDOWS:
             import ctypes
 
-            if self._job:
+            if self._updating:
+                text = "An update is being installed. Closing now could leave it half done, so it's best to wait a moment."
+            elif self._job:
                 text = ("A video is still being worked on. Closing stops it, and that video starts again "
                         "from the beginning next time (the rest of the queue is kept).")
             else:
@@ -866,8 +869,11 @@ class Api:
                 self.send({"type": "update_done", "packages": bool(self._pending_packages)})
             except Exception as e:
                 self.send({"type": "update_done", "error": f"The update didn't finish: {e}"})
-        if self._busy():
+            finally:
+                self._updating = False
+        if self._busy() or self._updating:
             return False
+        self._updating = True
         self.stop_worker()  # it runs the old files, and would keep them in use
         threading.Thread(target=work, daemon=True).start()
         return True

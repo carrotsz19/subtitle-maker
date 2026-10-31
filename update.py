@@ -247,6 +247,7 @@ def swap_in(new_root, files, progress=lambda i: None):
             os.replace(new, target)
             progress(i)
     except OSError as e:
+        failed = target.name
         for target, backup in reversed(done):
             try:
                 if backup:
@@ -257,7 +258,7 @@ def swap_in(new_root, files, progress=lambda i: None):
                 pass
         for path in staged:
             path.unlink(missing_ok=True)
-        raise UpdateError(f"Couldn't replace {target.name} ({e.strerror or e}); the old version was put back.") from e
+        raise UpdateError(f"Couldn't replace {failed} ({e.strerror or e}); the old version was put back.") from e
     for _, backup in done:
         if backup:
             backup.unlink(missing_ok=True)

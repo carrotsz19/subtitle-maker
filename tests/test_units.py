@@ -232,7 +232,7 @@ with _tf.TemporaryDirectory() as tmp:
         update.swap_in(new, ["a.py", "b.py", "c.py"])
         raise AssertionError("should have failed")
     except update.UpdateError as e:
-        assert "put back" in str(e)
+        assert "put back" in str(e) and "c.py" in str(e), e
     update.os.replace = real_replace
     assert sorted(p.name for p in here.iterdir()) == ["a.py", "b.py", "c.py"], list(here.iterdir())
     assert all((here / n).read_text() == "old " + n for n in ("a.py", "b.py", "c.py"))
