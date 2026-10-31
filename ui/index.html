@@ -822,6 +822,8 @@ function viewMake() {
       <p>Drop a video and get a .srt you can import into DaVinci Resolve.</p></div>
     <div class="stack">
       ${S.update.state === "available" && !busy && !S.update.data.switch && S.update.data.kind !== "improvement" ? updateBanner(S.update.data.kind) : ""}
+      ${S.update.deferred ? `<div class="banner bad between"><span>An important security update is waiting. It installs as soon as GitHub can be reached.</span>
+        <button class="btn sm dan" data-act="open-update">Try again</button></div>` : ""}
       ${S.update.blocking && busy ? `<div class="banner bad">An important security update installs as soon as this video is done. Nothing else starts until then.</div>` : ""}
       ${S.unfinished && !busy && !S.review ? unfinishedBanner() : ""}
       ${S.review ? viewReview() : busy ? viewRunning() : showResult ? viewResults(last) : ""}
@@ -1525,12 +1527,12 @@ function updatesBlock() {
 }
 
 async function checkUpdate(quiet) {
-  const sheet = S.update.sheet, locked = S.update.blocking;
-  S.update = { state: "checking", sheet, blocking: locked };
+  const sheet = S.update.sheet, locked = S.update.blocking, deferred = S.update.deferred;
+  S.update = { state: "checking", sheet, blocking: locked, deferred };
   if (S.view === "settings") render();
   renderUpdateSheet();
   const r = await api().check_update(), blocking = locked;
-  if (r.error) S.update = { state: quiet && !sheet && !blocking ? "idle" : "error", error: r.error, sheet: sheet || blocking, blocking };
+  if (r.error) S.update = { state: quiet && !sheet && !blocking ? "idle" : "error", error: r.error, sheet: sheet || blocking, blocking, deferred };
   else S.update = { state: r.update ? "available" : "ok", data: r, sheet, blocking: !!r.required };
   if (S.update.blocking) return lockForUpdate();
   // Automatic checks off: a quiet check keeps everything but a security update to itself
@@ -1753,7 +1755,8 @@ function renderUpdateSheet() {
     }
     default:
       body = `${u.blocking ? lockNote : ""}<div class="banner bad selectable">${esc(u.error || "Something went wrong.")}</div>`;
-      actions = `${u.blocking ? "" : `<button class="btn sec" data-up="close">Close</button>`}<div class="grow"></div><button class="btn" data-up="retry">Try again</button>`;
+      // Locked but GitHub can't be reached: being offline is no risk, so it can be used until it's back
+      actions = `${u.blocking ? `<button class="btn sec" data-up="offline">Keep using it offline</button>` : `<button class="btn sec" data-up="close">Close</button>`}<div class="grow"></div><button class="btn" data-up="retry">Try again</button>`;
   }
   const fresh = !root.querySelector("#update-sheet");
   root.innerHTML = `<div class="scrim" id="update-sheet" ${fresh ? "" : 'style="animation:none"'}><div class="dialog stack${u.blocking ? " blocking" : ""}" role="dialog" aria-modal="true" aria-labelledby="up-title" ${fresh ? "" : 'style="animation:none"'}>
@@ -1768,6 +1771,8 @@ function renderUpdateSheet() {
 const UPDATE_ACTIONS = {
   close: () => { if (S.update.blocking) return; S.update.sheet = false; closeDialogs(); if (S.view === "settings") render(); },
   retry: () => checkUpdate(false),
+  // The lock lifts until the next check that reaches GitHub (every start, and the banner's Try again)
+  offline: () => { S.update = { state: "idle", deferred: true }; closeDialogs(); render(); },
   install: async () => {
     if (!S.update.data) return checkUpdate(false);  // locked while offline: find the version first
     if (!await api().install_update(S.update.data.latest)) return toast("Wait for the current video to finish.", true);

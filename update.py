@@ -200,6 +200,67 @@ def print_step(step, done=None, total=None):
                "packages": "Updating Python packages (a minute or two)...", "done": "Updated."}[step])
 
 
+def inside(rel):
+    """HERE / rel, or None if rel would point outside this folder (installed.json is only a file)."""
+    target = (HERE / rel).resolve()
+    return target if target.is_relative_to(HERE.resolve()) and target != HERE.resolve() else None
+
+
+NEW, OLD = ".update-new", ".update-old"  # endings of the files an update is swapping
+
+
+def swap_in(new_root, files, progress=lambda i: None):
+    """Put these files from new_root into this folder, all or nothing.
+
+    Copying straight over the old files one by one meant a failure partway (antivirus holding a
+    file, a full disk) left half the old version and half the new, which could stop it opening
+    to update again. So every new file is copied in alongside first (name.update-new); only once
+    they all are does each replace its old one, and if a replacement fails the ones already done
+    are put back.
+    """
+    targets = []
+    for rel in files:
+        target = inside(rel)
+        if not target:
+            raise UpdateError(f"The download had a file outside its folder ({rel}). Nothing was changed.")
+        targets.append((new_root / rel, target))
+    staged = []
+    try:
+        for source, target in targets:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            staged.append(target.with_name(target.name + NEW))
+            shutil.copy2(source, staged[-1])
+    except OSError as e:
+        for path in staged:
+            path.unlink(missing_ok=True)
+        raise UpdateError(f"Couldn't write the new files ({e.strerror or e}). Nothing was changed.") from e
+    done = []  # (target, its old version's backup or None)
+    try:
+        for i, ((_, target), new) in enumerate(zip(targets, staged), 1):
+            backup = None
+            if target.exists():
+                backup = target.with_name(target.name + OLD)
+                os.replace(target, backup)
+            done.append((target, backup))
+            os.replace(new, target)
+            progress(i)
+    except OSError as e:
+        for target, backup in reversed(done):
+            try:
+                if backup:
+                    os.replace(backup, target)
+                else:
+                    target.unlink(missing_ok=True)
+            except OSError:
+                pass
+        for path in staged:
+            path.unlink(missing_ok=True)
+        raise UpdateError(f"Couldn't replace {target.name} ({e.strerror or e}); the old version was put back.") from e
+    for _, backup in done:
+        if backup:
+            backup.unlink(missing_ok=True)
+
+
 def apply(latest, report=print_step, packages=True):
     """Download that version and put it in this folder.
 
@@ -221,16 +282,13 @@ def apply(latest, report=print_step, packages=True):
         new_root = roots[0]
         new_files = program_files(new_root)
         report("install", 0, len(new_files))
-        for i, rel in enumerate(new_files, 1):
-            target = HERE / rel
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(new_root / rel, target)
-            report("install", i, len(new_files))
-        # Program files the new version no longer has (never anything else)
+        swap_in(new_root, new_files, lambda i: report("install", i, len(new_files)))
+        # Program files the new version no longer has (never anything else, and never outside this folder)
         previous = installed()
         for rel in set(previous["files"] if previous else []) - set(new_files):
-            if (HERE / rel).is_file():
-                (HERE / rel).unlink()
+            target = inside(rel)
+            if target and target.is_file():
+                target.unlink()
     record(latest["sha"], latest.get("date"), new_files, latest.get("branch", "main"))
 
     changed = [name for name, digest in old_requirements.items() if file_hash(HERE / name) != digest

@@ -148,17 +148,107 @@ update.fetch_json = lambda path: replies[path]
 update.installed = lambda: {"sha": "old", "date": None, "files": []}
 status = update.check("main")
 assert status["kind"] == "critical" and status["required"]["text"] == "Unsafe download", status
-update.fetch_json = lambda path: (_ for _ in ()).throw(update.UpdateError("offline"))
-assert update.required(), "the lock stays when the next check can't reach GitHub"
 try:
     ms.main(["clip.mp4"])
     raise AssertionError("making subtitles should refuse while locked")
 except SystemExit as e:
     assert "security update" in str(e.code), e.code
+update.fetch_json = lambda path: (_ for _ in ()).throw(update.UpdateError("offline"))
+assert update.required(), "the lock stays when the next check can't reach GitHub"
+# ...but offline it carries on (there's no way to update, and no risk): it gets as far as the missing video
+try:
+    ms.main(["clip.mp4"])
+except SystemExit as e:
+    assert "security update" not in str(e.code), e.code
+assert update.required(), "carrying on offline doesn't lift the lock"
 update.record("new", files=[])  # installing the update lifts it
 assert update.required() is None
 update.fetch_json, update.installed = real_fetch, real_installed
 update.INSTALLED_FILE.unlink(missing_ok=True)
+
+# A model name can't point outside the models folder (delete_model deletes that folder)
+import models  # noqa: E402
+
+assert models.cache_folder("small").parent == models.WHISPER_DIR
+for bad in (r"..\..\Users", "../x", "a/../../b", "..", r"x\y"):
+    try:
+        models.cache_folder(bad)
+        raise AssertionError(f"{bad!r} should be refused")
+    except ValueError:
+        pass
+assert set(models.WHISPER_REVISIONS) == set(models.WHISPER_REPOS.values()), "every offered model is pinned"
+assert all(len(v) == 40 for v in models.WHISPER_REVISIONS.values())
+assert set(models.SHA256) == {models.SEG_URL, models.EMB_URL, models.VOICE_URL}
+
+# A speaker model download that isn't the expected file is thrown away, never kept
+import tempfile as _tf  # noqa: E402
+import urllib.request as _ur  # noqa: E402
+
+real_retrieve, real_models_dir, real_emb = _ur.urlretrieve, models.MODELS_DIR, models.EMB_MODEL
+with _tf.TemporaryDirectory() as tmp:
+    tmp = Path(tmp)
+    models.MODELS_DIR = tmp
+    (tmp / "sherpa-onnx-pyannote-segmentation-3-0").mkdir()
+    (tmp / "sherpa-onnx-pyannote-segmentation-3-0" / "model.onnx").write_bytes(b"x")
+    real_seg, real_voice = models.SEG_MODEL, models.VOICE_MODEL
+    models.SEG_MODEL = tmp / "sherpa-onnx-pyannote-segmentation-3-0" / "model.onnx"
+    models.EMB_MODEL, models.VOICE_MODEL = tmp / "emb.onnx", tmp / "voice.onnx"
+    _ur.urlretrieve = lambda url, path, reporthook=None: Path(path).write_bytes(b"not the model")
+    try:
+        models.download_speakers()
+        raise AssertionError("a wrong download should be refused")
+    except OSError as e:
+        assert "wasn't the file it should be" in str(e)
+    assert not models.EMB_MODEL.exists() and not list(tmp.glob("*.part")), list(tmp.iterdir())
+    _ur.urlretrieve, models.MODELS_DIR, models.EMB_MODEL = real_retrieve, real_models_dir, real_emb
+    models.SEG_MODEL, models.VOICE_MODEL = real_seg, real_voice
+
+# An update is all or nothing: a file that can't be replaced puts back the ones already done
+with _tf.TemporaryDirectory() as tmp:
+    tmp = Path(tmp)
+    here, new = tmp / "here", tmp / "new"
+    here.mkdir(); new.mkdir()
+    for name in ("a.py", "b.py", "c.py"):
+        (here / name).write_text("old " + name)
+        (new / name).write_text("new " + name)
+    real_here, real_replace = update.HERE, update.os.replace
+    update.HERE = here
+    assert update.inside("../outside.txt") is None and update.inside("a.py") == (here / "a.py").resolve()
+
+    def flaky(src, dst):
+        if Path(dst).name == "c.py" and str(src).endswith(update.NEW):  # the new c.py can't go in
+            raise PermissionError(13, "in use")
+        real_replace(src, dst)
+    update.os.replace = flaky
+    try:
+        update.swap_in(new, ["a.py", "b.py", "c.py"])
+        raise AssertionError("should have failed")
+    except update.UpdateError as e:
+        assert "put back" in str(e)
+    update.os.replace = real_replace
+    assert sorted(p.name for p in here.iterdir()) == ["a.py", "b.py", "c.py"], list(here.iterdir())
+    assert all((here / n).read_text() == "old " + n for n in ("a.py", "b.py", "c.py"))
+    try:
+        update.swap_in(new, ["../evil.py"])
+        raise AssertionError("a file outside the folder should be refused")
+    except update.UpdateError:
+        pass
+    update.swap_in(new, ["a.py", "b.py", "c.py"])
+    assert all((here / n).read_text() == "new " + n for n in ("a.py", "b.py", "c.py"))
+    assert sorted(p.name for p in here.iterdir()) == ["a.py", "b.py", "c.py"]
+    update.HERE = real_here
+
+# The uninstall script: % in a name survives the batch file, and nothing outside the program folder is listed
+import uninstall  # noqa: E402
+
+with _tf.TemporaryDirectory() as tmp:
+    plan = {"data": str(Path(tmp) / "data"), "program": str(Path(tmp) / "prog"), "shortcut": None,
+            "program_files": ["app.py", "../../outside.txt", "ui/index.html"], "voices": ["100%.wav"],
+            "voices_to": str(Path(tmp) / "clips")}
+    text = uninstall.script(plan, True, 1234)
+    assert "outside.txt" not in text and "app.py" in text and "index.html" in text
+    if sys.platform == "win32":
+        assert "100%%.wav" in text and "100%.wav" not in text.replace("100%%.wav", "")
 
 # The GPU runs out of memory partway: carry on with the CPU from where it stopped
 sr = ms.SAMPLE_RATE

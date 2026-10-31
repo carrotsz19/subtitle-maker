@@ -1289,6 +1289,15 @@ def main(argv=None):
 
         lock = update.required()
         if lock:
+            # Only while GitHub can be reached: offline there's no way to update, and no risk in
+            # carrying on (the window does the same)
+            try:
+                lock = update.check()["required"]
+            except update.UpdateError:
+                print("An important security update is waiting, but GitHub can't be reached right now, "
+                      "so carrying on. It installs once you're back online.")
+                lock = None
+        if lock:
             message = ("An important security update has to be installed before Subtitle Maker can be used again"
                        f" ({lock.get('text') or 'a security problem'}). Open Subtitle Maker, or run Update.bat.")
             emit("error", message=message, log=None)

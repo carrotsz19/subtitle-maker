@@ -75,7 +75,8 @@ def script(p, keep_voices, wait_pid):
     data = Path(p["data"])
     program = Path(p["program"]) if p["program"] else None
     win = sys.platform == "win32"
-    q = (lambda s: f'"{s}"') if win else (lambda s: "'" + str(s).replace("'", "'\\''") + "'")
+    # In a batch file % starts a variable even inside quotes: a clip called "100%.wav" needs %%
+    q = (lambda s: '"' + str(s).replace("%", "%%") + '"') if win else (lambda s: "'" + str(s).replace("'", "'\\''") + "'")
     lines = []
     if win:
         lines += ["@echo off", "title Uninstalling Subtitle Maker", "echo Waiting for Subtitle Maker to close...",
@@ -108,10 +109,14 @@ def script(p, keep_voices, wait_pid):
                 lines += [f"mv -f {q(program / 'Voices' / v)} {q(dest)}/" for v in p["voices"]]
         elif p["voices"]:
             lines += [rm.format(q(program / "Voices" / v)) for v in p["voices"]]
-        for rel in p["program_files"]:
+        # Only files inside the program folder: the list comes from installed.json, which is only a file
+        root = program.resolve()
+        program_files = [rel for rel in p["program_files"]
+                         if (program / rel).resolve().is_relative_to(root) and (program / rel).resolve() != root]
+        for rel in program_files:
             lines.append(rm.format(q(program / rel)))
         # __pycache__ is Python's own; then each folder, deepest first, only if now empty
-        folders = {program / Path(rel).parent for rel in p["program_files"]} | {program / "ui", program / "Voices"}
+        folders = {program / Path(rel).parent for rel in program_files} | {program / "ui", program / "Voices"}
         lines.append(rmtree.format(q(program / "__pycache__")))
         for folder in sorted(folders, key=lambda f: len(f.parts), reverse=True):
             if folder != program:

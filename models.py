@@ -6,6 +6,7 @@ app window can ask "is this level downloaded?" instantly.
 """
 
 import fnmatch
+import hashlib
 import tarfile
 import threading
 import urllib.request
@@ -22,6 +23,15 @@ WHISPER_REPOS = {
     "large-v3": "Systran/faster-whisper-large-v3",
     "large-v3-turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
 }
+# The exact version of each, so a changed model on Hugging Face never arrives unnoticed (the
+# turbo repo has since moved to dropbox-dash/; Hugging Face sends the old name on there)
+WHISPER_REVISIONS = {
+    "Systran/faster-whisper-base": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+    "Systran/faster-whisper-small": "536b0662742c02347bc0e980a01041f333bce120",
+    "Systran/faster-whisper-medium": "08e178d48790749d25932bbc082711ddcfdfbc4f",
+    "Systran/faster-whisper-large-v3": "edaa852ec7e145841d8ffdb056a99866b5f0a478",
+    "mobiuslabsgmbh/faster-whisper-large-v3-turbo": "0a363e9161cbc7ed1431c9597a8ceaf0c4f78fcf",
+}
 # The files faster-whisper needs (the same list its own downloader uses)
 WHISPER_FILES = ["config.json", "preprocessor_config.json", "model.bin", "tokenizer.json", "vocabulary.*"]
 NEEDED = ["config.json", "model.bin", "tokenizer.json", "vocabulary.*"]
@@ -37,6 +47,12 @@ EMB_MODEL = MODELS_DIR / "wespeaker_en_voxceleb_resnet34_LM.onnx"
 VOICE_URL = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/"
              "speaker-recongition-models/nemo_en_titanet_small.onnx")
 VOICE_MODEL = MODELS_DIR / "nemo_en_titanet_small.onnx"
+# What each speaker download must be, byte for byte (SHA-256); anything else is thrown away
+SHA256 = {
+    SEG_URL: "24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488",
+    EMB_URL: "e9848563da86f263117134dfd7ad63c92355b37de492b55e325400c9d9c39012",
+    VOICE_URL: "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e",
+}
 SPEAKER_MB = 70  # the three speaker models together, roughly
 
 
@@ -45,7 +61,11 @@ def repo_for(model):
 
 
 def cache_folder(model):
-    return WHISPER_DIR / ("models--" + repo_for(model).replace("/", "--"))
+    folder = WHISPER_DIR / ("models--" + repo_for(model).replace("/", "--"))
+    # The name comes from outside (the window, --model): it must stay a folder inside WHISPER_DIR
+    if "\\" in model or ".." in model or folder.resolve().parent != WHISPER_DIR.resolve():
+        raise ValueError(f"Not a model name: {model!r}")
+    return folder
 
 
 def whisper_path(model):
@@ -99,8 +119,9 @@ def download_whisper(model, progress=None):
 
     def work():
         try:
-            result["path"] = huggingface_hub.snapshot_download(repo, cache_dir=str(WHISPER_DIR),
-                                                               allow_patterns=WHISPER_FILES)
+            # A model Setup offers comes at its pinned version; one asked for by name (--model) at the latest
+            result["path"] = huggingface_hub.snapshot_download(repo, revision=WHISPER_REVISIONS.get(repo),
+                                                               cache_dir=str(WHISPER_DIR), allow_patterns=WHISPER_FILES)
         except Exception as e:
             failure["error"] = e
 
@@ -131,6 +152,11 @@ def download_speakers(progress=None):
                 progress(done[0] + blocks * block_size / 2**20, SPEAKER_MB)
         tmp = target.with_name(target.name + ".part")
         urllib.request.urlretrieve(url, tmp, reporthook=hook)
+        digest = hashlib.sha256(tmp.read_bytes()).hexdigest()
+        if digest != SHA256[url]:
+            tmp.unlink(missing_ok=True)
+            raise OSError(f"The download of {target.name} wasn't the file it should be (it may have been changed "
+                          "on the server, or broken on the way). Nothing was kept; try again later.")
         tmp.replace(target)
         done[0] += target.stat().st_size / 2**20
 

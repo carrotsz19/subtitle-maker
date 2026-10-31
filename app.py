@@ -572,6 +572,9 @@ class Api:
 
     def delete_model(self, model):
         """Free the space a downloaded speech model takes (not the one the current level uses)."""
+        # Only a model Setup offers: the name becomes a folder to delete, so nothing else may get through
+        if model not in {lv["model"] for lv in LEVELS.values()}:
+            return False
         if model == LEVELS[load_settings()["level"]]["model"] or self._busy():
             return False
         self.stop_worker()  # it may have this one loaded
