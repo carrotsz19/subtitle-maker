@@ -138,9 +138,11 @@ def check(branch=None):
             pass  # the list of changes is a nicety; the update itself still works
     news = news or [change(latest["message"])]
     # Most serious first, then newest first; ten is plenty to read
-    news = sorted(reversed(news), key=lambda n: KINDS.index(n["kind"]))[:10]
+    news = sorted(reversed(news), key=lambda n: KINDS.index(n["kind"]))
+    more = max(0, len(news) - 10)  # the window says "and 4 more", so a big update doesn't look small
+    news = news[:10]
     status = {"repo": REPO, "latest": latest, "installed": current, "branch": branch, "switch": switch, "back": back,
-              "update": not current or current["sha"] != latest["sha"] or bool(switch), "news": news,
+              "update": not current or current["sha"] != latest["sha"] or bool(switch), "news": news, "more": more,
               "kind": news[0]["kind"]}
     if status["update"] and status["kind"] == "critical":
         REQUIRED_FILE.write_text(json.dumps({"text": news[0]["text"], "sha": latest["sha"],

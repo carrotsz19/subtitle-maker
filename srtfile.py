@@ -27,8 +27,13 @@ def seconds(h, m, s, ms):
     return int(h) * 3600 + int(m) * 60 + int(s) + int(ms.ljust(3, "0")) / 1000
 
 
-def read_srt(path):
-    """[{"start", "end", "text"}] from an .srt; each subtitle's lines joined into one."""
+FORMATTING = re.compile(r"<[^>]+>|\{\\[^}]*\}")  # <i>, <font color=...>, and {\an8}-style positions
+
+
+def read_srt(path, found=None):
+    """[{"start", "end", "text"}] from an .srt; each subtitle's lines joined into one.
+    found (a dict) gets "formatted": True if the file has italics, colours or positions, which
+    the editor can't keep."""
     path = Path(path)
     if path.stat().st_size > 20 * 2**20:
         raise SrtError(f"{path.name} is too big to be a subtitle file.")
@@ -44,7 +49,10 @@ def read_srt(path):
         if timing is None:
             continue
         g = TIMING.match(lines[timing]).groups()
-        words = " ".join(re.sub(r"<[^>]+>", "", line).strip() for line in lines[timing + 1:]).split()
+        body = lines[timing + 1:]
+        if found is not None and any(FORMATTING.search(line) for line in body):
+            found["formatted"] = True
+        words = " ".join(FORMATTING.sub("", line).strip() for line in body).split()
         if words:
             cues.append({"start": round(seconds(*g[:4]), 3), "end": round(seconds(*g[4:]), 3), "text": " ".join(words)})
     if not cues:

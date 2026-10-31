@@ -255,6 +255,7 @@ class Api:
         self._lock = threading.Lock()
         self._taskbar = None  # progress on the taskbar button (Windows)
         self._edit = None  # the .srt open for fixing: {"path", "video"}
+        self._closing_ok = False  # the app is closing itself (restart, update, uninstall): don't ask
         self._outbox = PageMail(self)  # everything for the page goes through here (see PageMail)
         # Look at the PC (nvidia-smi can take a second or two) while the window is still opening,
         # so the page never waits for it
@@ -401,8 +402,9 @@ class Api:
         """The lines of an .srt, to fix in the same screen as new ones."""
         if self._busy():
             return {"error": "Wait for the current video to finish first."}
+        found = {}
         try:
-            cues = srtfile.read_srt(path)
+            cues = srtfile.read_srt(path, found)
         except srtfile.SrtError as e:
             return {"error": str(e)}
         except OSError as e:
@@ -412,7 +414,8 @@ class Api:
         threading.Thread(target=self._load_writer, daemon=True).start()  # ready by the time you save
         settings = load_settings()
         return {"path": self._edit["path"], "file": Path(path).name, "video": video.name if video else None,
-                "cues": cues, "max_chars": settings["max_chars"], "max_lines": settings["max_lines"]}
+                "cues": cues, "max_chars": settings["max_chars"], "max_lines": settings["max_lines"],
+                "formatted": bool(found.get("formatted"))}
 
     def _load_writer(self):
         try:
@@ -518,10 +521,12 @@ class Api:
                          f" (Windows shell {'running' if shell else 'not running'})")
             TIMINGS.mark(f"notification: {result.get('error') or 'ok' if shown.is_set() else 'never shown'}")
             TIMINGS.save()
+        self._closing_ok = True
         self._window.destroy()
 
     def restart_app(self):
         """Close this window and open a fresh one (the page offers this if starting goes wrong)."""
+        self._closing_ok = True
         self.shutdown()
         exe = Path(sys.executable)
         pythonw = exe.with_name("pythonw.exe")
@@ -742,6 +747,31 @@ class Api:
             self._process.cancelled = True
             self._process.kill()
 
+    def _on_closing(self):
+        """The window's X (or Alt+F4): ask first if that would stop work in progress. False keeps it open.
+
+        Runs on the window's own thread, so it asks with a Windows message box: the page can't
+        be asked from here without waiting on this same thread.
+        """
+        if not self._closing_ok and self._busy() and winextras.WINDOWS:
+            import ctypes
+
+            if self._job:
+                text = ("A video is still being worked on. Closing stops it, and that video starts again "
+                        "from the beginning next time (the rest of the queue is kept).")
+            else:
+                text = "Models are still downloading. Closing stops the download; it carries on from where it got to next time."
+            try:
+                owner = winextras.hwnd_of(self._window)
+            except Exception:
+                owner = None
+            answer = ctypes.windll.user32.MessageBoxW(owner, text + "\n\nClose Subtitle Maker anyway?", "Subtitle Maker",
+                                                      0x4 | 0x30 | 0x100)  # Yes/No, warning icon, No by default
+            if answer != 6:  # Yes
+                return False
+        self.shutdown()
+        return True
+
     def shutdown(self):
         """The window is closing: stop everything still running, and remember where the window was."""
         self.cancel()
@@ -846,6 +876,7 @@ class Api:
         """Close this window and open the new version (after installing any new packages)."""
         # A visible console only when there are packages to install, so the wait isn't a mystery
         flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if getattr(self, "_pending_packages", None) else NO_WINDOW
+        self._closing_ok = True
         self.stop_worker()
         subprocess.Popen([console_python(), str(HERE / "update.py"), "--finish", str(os.getpid())],
                          cwd=str(HERE), creationflags=flags)
@@ -862,6 +893,7 @@ class Api:
             return False
         self.stop_worker()  # its Python would otherwise stay in use and couldn't be deleted
         uninstall.start(keep_voices, os.getpid())
+        self._closing_ok = True
         self._window.destroy()
         return True
 
@@ -942,7 +974,7 @@ def main():
             api._take(opened_with)
 
     window.events.loaded += on_loaded
-    window.events.closing += api.shutdown
+    window.events.closing += api._on_closing
     if sys.platform == "win32":
         import ctypes
 

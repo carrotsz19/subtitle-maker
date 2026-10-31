@@ -166,6 +166,14 @@ assert update.required() is None
 update.fetch_json, update.installed = real_fetch, real_installed
 update.INSTALLED_FILE.unlink(missing_ok=True)
 
+# What's new lists ten changes, and says how many more there are
+replies["/compare/old...new"]["commits"] = [{"commit": {"message": f"Change {i}"}} for i in range(14)]
+update.fetch_json = lambda path: replies[path]
+update.installed = lambda: {"sha": "old", "date": None, "files": []}
+status = update.check("main")
+assert len(status["news"]) == 10 and status["more"] == 4, status
+update.fetch_json, update.installed = real_fetch, real_installed
+
 # A model name can't point outside the models folder (delete_model deletes that folder)
 import models  # noqa: E402
 
@@ -333,6 +341,14 @@ with tempfile.TemporaryDirectory() as d:
     edit = app.Api()
     opened = edit.open_srt(str(srt))
     assert opened["video"] == "clip.wav" and len(opened["cues"]) == 2
+    assert opened["formatted"], "the <i> is formatting the editor can't keep, so it says so"
+    plain, positioned = d / "plain.srt", d / "positioned.srt"
+    plain.write_text("1\n00:00:01,000 --> 00:00:02,000\nA {curly} word\n", encoding="utf-8")
+    positioned.write_text("1\n00:00:01,000 --> 00:00:02,000\n{\\an8}On top\n", encoding="utf-8")
+    found = {}
+    assert srtfile.read_srt(plain, found)[0]["text"] == "A {curly} word" and not found
+    found = {}
+    assert srtfile.read_srt(positioned, found)[0]["text"] == "On top" and found["formatted"]
     assert edit.edit_clip(1.0, 2.5).startswith("data:audio/wav;base64,")
     saved = edit.save_srt([{"start": 1.0, "end": 2.0, "text": "Hello"}, {"start": 2.0, "end": 2.5, "text": " there "},
                            {"start": 3.2, "end": 4.0, "text": "  "}])

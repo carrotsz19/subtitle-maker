@@ -1105,6 +1105,7 @@ function viewReview() {
           <h3 class="trunc">${esc(r.file)}</h3></div>
         <button class="btn ghost sm" data-act="rv-discard">${r.mode === "file" ? "Close" : "Discard"}</button>
         <button class="btn" data-act="rv-save">${r.mode === "file" ? "Save changes" : "Save subtitles"}</button></div>
+      ${r.mode === "file" && r.formatted ? `<div class="banner">This file has formatting, like italics, colours or positions. Saving keeps the words and timing but not the formatting, and splits lines the way Settings says. The original is kept as a backup.</div>` : ""}
       ${r.hasNames ? `<div class="rv-names">${Object.entries(r.names).map(([k, n]) =>
         `<label>Speaker ${+k + 1} <input type="text" data-rv="name" data-k="${k}" value="${esc(n)}" maxlength="40"></label>`).join("")}</div>` : ""}
       <div class="rv-tools"><input type="text" id="rv-find" placeholder="Find (e.g. a misheard name)">
@@ -1505,7 +1506,7 @@ function updatesBlock() {
     case "ok": body = `<div class="between"><span class="row"><span class="pill ok">Up to date</span><span class="sm dim">You have the latest version.</span></span>
         <button class="btn sec sm" data-act="check-update">Check again</button></div>`; break;
     case "available": body = `<div class="between"><b>${updateTitle(d)}</b><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
-        ${d.switch ? `<p class="sm dim">${switchNote(d)}</p>` : newsList(d.news)}
+        ${d.switch ? `<p class="sm dim">${switchNote(d)}</p>` : newsList(d.news, d.more)}
         ${S.run ? `<button class="btn" disabled>${d.switch ? "Switch" : "Install update"}</button><p class="sm dim">You can update once the current video is finished.</p>`
           : `<div><button class="btn" data-act="install-update">${d.switch ? "Switch now" : "Install update"}</button></div>`}`; break;
     case "error": body = `<div class="banner bad selectable">${esc(u.error)}</div><div><button class="btn sec sm" data-act="check-update">Try again</button></div>`; break;
@@ -1558,11 +1559,11 @@ function updateBanner(kind) {
       <button class="btn sm${kind === "security" ? " dan" : ""}" data-act="open-update">${kind === "security" ? "Update now" : "See what's new"}</button></div>`;
 }
 
-function newsList(news) {
+function newsList(news, more) {
   return `<div class="newslist">${(news || []).map(n => {
     const k = UPDATE_KINDS[n.kind] || UPDATE_KINDS.improvement;
     return `<div class="news"><span class="pill ${k.cls}">${k.pill}</span><span>${esc(n.text)}</span></div>`;
-  }).join("")}</div>`;
+  }).join("")}${more ? `<div class="sm dim">…and ${more} smaller change${more > 1 ? "s" : ""}</div>` : ""}</div>`;
 }
 
 /* ---------------------------------------------------------------------
@@ -1736,7 +1737,7 @@ function renderUpdateSheet() {
     case "available":
       body = `${u.blocking ? lockNote : ""}<div class="between"><span class="sm dim">${d.switch ? "Version" : "New version"}</span><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
         ${d.switch ? `<p>${switchNote(d)}</p>` : ""}
-        ${d.switch === "main" ? "" : `<div><h2 style="margin-left:0">What's new</h2>${newsList(d.news)}</div>`}
+        ${d.switch === "main" ? "" : `<div><h2 style="margin-left:0">What's new</h2>${newsList(d.news, d.more)}</div>`}
         <p class="sm dim">Takes about a minute. Your voice clips, settings, models and history are kept.</p>`;
       actions = u.blocking ? `<div class="grow"></div><button class="btn" data-up="install">Update now</button>`
         : S.run ? `<span class="sm dim grow">You can update once the current video is finished.</span><button class="btn sec" data-up="close">Later</button>`
@@ -2144,7 +2145,7 @@ const app = {
     const r = await api().open_srt(path);
     if (r.error) return toast(r.error, true);
     S.review = { mode: "file", file: r.file, path: r.path, video: r.video, style: "none", max_chars: r.max_chars, max_lines: r.max_lines,
-      names: {}, hasNames: false, cues: r.cues };
+      names: {}, hasNames: false, cues: r.cues, formatted: r.formatted };
     if (S.view !== "make") go("make", "in"); else render(true);
   },
 
