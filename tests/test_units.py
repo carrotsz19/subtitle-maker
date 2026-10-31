@@ -197,6 +197,23 @@ for bad in ("C:x", "a:b"):
     except ValueError:
         pass
 
+# After an update the web view's saved copy of the page goes (it kept showing the 29 October page),
+# and only then: an unchanged page keeps its caches, so opening stays quick
+with tempfile.TemporaryDirectory() as tmp:
+    storage = Path(tmp)
+    cache = storage / "EBWebView" / "Default" / "Cache"
+    cache.mkdir(parents=True)
+    (cache / "old").write_text("old page")
+    app.forget_old_page(storage)
+    assert not cache.exists() and (storage / "page.txt").exists()
+    cache.mkdir(parents=True)
+    (cache / "new").write_text("new page")
+    app.forget_old_page(storage)
+    assert (cache / "new").exists(), "the same page again leaves the cache alone"
+    (storage / "page.txt").write_text("a different page")
+    app.forget_old_page(storage)
+    assert not cache.exists()
+
 # Languages: the window's list is exactly Whisper's, and a code it doesn't know is never saved
 from faster_whisper.tokenizer import _LANGUAGE_CODES  # noqa: E402
 

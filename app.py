@@ -989,7 +989,34 @@ def main():
         # Its own taskbar button and icon, not grouped under Python's
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Veyra.SubtitleMaker")
     # Keep the web view's profile between launches: a fresh private one each time is slow to make
+    forget_old_page(data_dir() / "webview")
     webview.start(private_mode=False, storage_path=str(data_dir() / "webview"), icon=str(HERE / "ui" / "icon.ico"))
+
+
+def forget_old_page(storage):
+    """After an update, clear the web view's saved copy of the page, so the new one shows.
+
+    pywebview serves the page from the same address every time (http://127.0.0.1:42001/index.html),
+    and the web view kept a copy from 29 October 2026 that it went on showing after every update,
+    even though the new file was on disk and being served. So when ui/index.html has changed
+    since the last start, its caches go (only those; sign-ins and settings in the page stay).
+    """
+    import hashlib
+    import shutil
+
+    try:
+        page = hashlib.sha256((HERE / "ui" / "index.html").read_bytes()).hexdigest()
+        marker = storage / "page.txt"
+        if marker.exists() and marker.read_text(encoding="utf-8").strip() == page:
+            return
+        profile = storage / "EBWebView" / "Default"
+        for cache in ("Cache", "Code Cache", "GPUCache", "Service Worker"):
+            shutil.rmtree(profile / cache, ignore_errors=True)
+        storage.mkdir(parents=True, exist_ok=True)
+        marker.write_text(page, encoding="utf-8")
+        TIMINGS.mark("new page since last time: cleared the web view's saved copy")
+    except OSError as e:
+        TIMINGS.mark(f"couldn't clear the web view's saved copy: {e}")
 
 
 def report_crash(error):
