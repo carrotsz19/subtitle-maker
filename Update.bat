@@ -3,7 +3,7 @@ rem Opens the update window: checks GitHub for a newer Subtitle Maker and instal
 rem Your Voices clips, settings and models are kept. For a text-only update: Update.bat --console
 if defined SUBTITLE_MAKER_HOME (set "PY=%SUBTITLE_MAKER_HOME%\venv\Scripts\python.exe") else (set "PY=%USERPROFILE%\.subtitle-maker\venv\Scripts\python.exe")
 if not exist "%PY%" (
-    echo First time on this PC: run Setup.bat in this folder, or "Install Subtitle Maker.bat".
+    echo First time on this PC: run Setup.bat in this folder, or Subtitle-Maker-Setup.exe.
     pause
     exit /b
 )

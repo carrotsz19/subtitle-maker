@@ -19,9 +19,27 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    # Windows, to build Subtitle-Maker-Setup.exe with Inno Setup
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
+
+      - name: Build Subtitle-Maker-Setup.exe
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          version="${TAG#v}"; version="${version%%-*}"
+          # The program's files at this commit, without the ones for developing it
+          mkdir -p build/app
+          git archive --format=tar HEAD | tar -x -C build/app
+          rm -rf build/app/tests build/app/.github build/app/installer
+          iscc="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          [ -f "$iscc" ] || choco install innosetup --no-progress -y
+          "$iscc" "//DVersion=$version" "//DSha=$GITHUB_SHA" installer/SubtitleMaker.iss
+          ls -la dist
 
       - name: Create the release
         env:
@@ -39,21 +57,24 @@ jobs:
             echo "::error::CHANGELOG.md has no '## $version' section. Add what's new in $version there, then release again."
             exit 1
           fi
+          sha256=$(sha256sum dist/Subtitle-Maker-Setup.exe | cut -d' ' -f1)
           { echo "## What's new in $version"; echo; cat changes.md; echo; } > notes.md
           cat >> notes.md <<'NOTES'
-          **To install on a Windows PC** (no security warnings): open PowerShell or Terminal, paste this and press Enter:
+          **To install on a Windows PC:** download `Subtitle-Maker-Setup.exe` below and double-click it.
+          It isn't signed yet, so Windows says "Windows protected your PC": click **More info**, then **Run anyway**.
+
+          Or, with no download warnings: open PowerShell or Terminal, paste this and press Enter:
 
           ```powershell
           irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1 | iex
           ```
 
-          Or download `Install.Subtitle.Maker.bat` below and double-click it. Your browser and Windows warn about
-          downloaded .bat files: keep it, then click **More info**, **Run anyway**.
-
           Already installed? It updates itself: Settings > Updates in the window.
           NOTES
+          printf '
+SHA-256 of Subtitle-Maker-Setup.exe: `%s`
+' "$sha256" >> notes.md
           # A pushed tag already exists; a run from the Actions tab makes it on the commit it ran on
           verify=""
           [ "${{ github.event_name }}" = "push" ] && verify="--verify-tag"
-          gh release create "$TAG" $prerelease $verify --target "$GITHUB_SHA" --title "Subtitle Maker $TAG" \
-            --notes-file notes.md --generate-notes "Install Subtitle Maker.bat"
+          gh release create "$TAG" $prerelease $verify --target "$GITHUB_SHA" --title "Subtitle Maker $TAG"             --notes-file notes.md --generate-notes dist/Subtitle-Maker-Setup.exe
