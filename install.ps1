@@ -81,7 +81,7 @@ function Read-SetupLine([string] $Line) {
         $script:SubtitleMakerDownload = @{ Expected = 1.1GB; Done = 0; LastNow = 0; LastTotal = 0 }
     }
     elseif ($Line -match 'No NVIDIA GPU found') { $ui.Skip3 = $true; Set-InstallStatus 'No NVIDIA graphics card, so nothing to download' 'It runs on the processor instead.' 1 }
-    elseif ($Line -match '^NVIDIA GPU found') { Set-InstallStatus 'Downloading graphics card support (the biggest step)' '' 0 }
+    elseif ($Line -match '^NVIDIA GPU found') { Set-InstallStatus 'Downloading graphics card support (the biggest step)' '' -1 }
     elseif ($Line -match "driver isn't installed") { $ui.Skip3 = $true; Set-InstallStatus 'NVIDIA card found, but its driver isn''t installed' 'It works on the processor for now. Install the NVIDIA driver later for 3x the speed.' 1 }
     elseif ($Line -match '^\s*(?:Downloading|Using cached) ([A-Za-z0-9_.]+?)-\d.*?(?:\((.+)\))?$') {
         $size = if ($Matches[2]) { " ($($Matches[2]))" } else { '' }

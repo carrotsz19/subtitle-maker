@@ -7,6 +7,7 @@ app window can ask "is this level downloaded?" instantly.
 
 import fnmatch
 import hashlib
+import io
 import tarfile
 import threading
 import urllib.request
@@ -96,7 +97,8 @@ def downloaded_levels():
 
 
 def folder_bytes(folder):
-    return sum(p.stat().st_size for p in Path(folder).rglob("*") if p.is_file()) if Path(folder).is_dir() else 0
+    # Links (a model's snapshot pointing at its blobs, where Windows allows it) aren't counted twice
+    return sum(p.stat().st_size for p in Path(folder).rglob("*") if p.is_file() and not p.is_symlink()) if Path(folder).is_dir() else 0
 
 
 def download_whisper(model, progress=None):
@@ -117,28 +119,47 @@ def download_whisper(model, progress=None):
         pass  # only the size is missing; the download itself will say if the internet is down
 
     result, failure = {}, {}
+    from tqdm import tqdm
+
+    bars = []
+
+    class Counted(tqdm):
+        """Hugging Face's own count of the bytes downloaded, shown nowhere (snapshot_download makes
+        its byte bars with this class). Measuring the cache folder isn't enough: hf_xet, which
+        huggingface_hub uses for these models now, keeps a file out of the folder until it's whole,
+        so the bar sat at 0 and then jumped to the end."""
+
+        def __init__(self, *args, **kwargs):
+            kwargs["file"], kwargs["disable"] = io.StringIO(), False
+            super().__init__(*args, **kwargs)
+            bars.append(self)
 
     def work():
         try:
             # A model Setup offers comes at its pinned version; one asked for by name (--model) at the latest
             result["path"] = huggingface_hub.snapshot_download(repo, revision=WHISPER_REVISIONS.get(repo),
-                                                               cache_dir=str(WHISPER_DIR), allow_patterns=WHISPER_FILES)
+                                                               cache_dir=str(WHISPER_DIR), allow_patterns=WHISPER_FILES,
+                                                               tqdm_class=Counted)
         except Exception as e:
             failure["error"] = e
 
+    def done_mb():
+        # The byte bars where huggingface_hub has them (older versions only count files), or else
+        # the folder: .incomplete files in blobs/ as they download, or straight into snapshots/
+        counted = max((b.n for b in list(bars) if getattr(b, "unit", "") == "B"), default=0)
+        return max(counted, folder_bytes(folder)) / 2**20
+
+    folder = cache_folder(model)
     thread = threading.Thread(target=work, daemon=True)
     thread.start()
-    # The download writes into the cache's blobs folder (as .incomplete files while going),
-    # so its size there is how far along it is
-    blobs = cache_folder(model) / "blobs"
     while thread.is_alive():
         if progress:
-            progress(folder_bytes(blobs) / 2**20, total)
+            progress(done_mb(), total)
         thread.join(0.5)
     if failure:
         raise failure["error"]
     if progress:
-        progress(total or folder_bytes(blobs) / 2**20, total)
+        progress(total or done_mb(), total)
     return Path(result["path"])
 
 
