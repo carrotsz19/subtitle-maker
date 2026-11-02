@@ -621,4 +621,12 @@ for script in ("install.ps1", "windows-app.ps1", "Setup.bat", "installer/Subtitl
     bad = [i for i, b in enumerate(text) if b > 127]
     assert not bad, f"{script} has non-ASCII characters (first at byte {bad[0]})"
 
+# --- The GitHub workflows parse ---
+# A workflow GitHub can't read fails on every push, under its file name, without running anything
+import yaml  # noqa: E402  (ctranslate2 brings it)
+
+for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+    parsed = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    assert isinstance(parsed, dict) and parsed.get("jobs"), f"{workflow.name} has no jobs"
+
 print(f"Unit tests passed (page API: {len(exposed)} functions)")
