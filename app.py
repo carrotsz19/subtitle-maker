@@ -595,11 +595,48 @@ class Api:
         return self.models_list()
     # ---- running make_subtitles.py ------------------------------------------------------------
 
-    def start(self, path, speakers=None):
-        """Make subtitles for one file. Progress arrives in the page as events, ending with "exit"."""
+    def start(self, path, speakers=None, later=False):
+        """Make subtitles for one file. Progress arrives in the page as events, ending with "exit".
+
+        later: transcribe it now and check it once the queue is done (a "pending" event says
+        where its lines were put; finish() checks and saves them)."""
         argv = [str(Path(path).absolute()), "--events"]  # the worker runs in the Tools folder
         if speakers is not None:
             argv += ["--speakers", str(int(speakers))]
+        if later:
+            argv.append("--later")
+        return self._run_job(argv)
+
+    def finish(self, path, bundle):
+        """Check and save a video's lines that were set aside (its pending .json)."""
+        return self._run_job([str(Path(path).absolute()), "--events", "--finish", str(bundle)])
+
+    def pending_checks(self):
+        """Videos transcribed but not checked yet (the window was closed first), oldest first."""
+        found = []
+        for bundle in sorted((data_dir() / "pending").glob("*.json")):
+            try:
+                saved = json.loads(bundle.read_text(encoding="utf-8"))
+                found.append({"bundle": str(bundle), "path": saved["input"], "file": Path(saved["out"]).name})
+            except (OSError, ValueError, KeyError):
+                continue
+        return found
+
+    def drop_check(self, bundle):
+        """Forget a video's lines that were waiting to be checked."""
+        bundle = Path(bundle)
+        pending = data_dir() / "pending"
+        if bundle.parent.resolve() != pending.resolve() or bundle.suffix != ".json":
+            return False  # only ever its own files
+        for f in (bundle, bundle.with_suffix(".npy")):
+            f.unlink(missing_ok=True)
+        return True
+
+    def review_discard(self):
+        """Discard the lines being checked: nothing for this video is saved."""
+        self._to_job({"type": "review_discard"})
+
+    def _run_job(self, argv):
         with self._lock:
             if self._busy():
                 return False

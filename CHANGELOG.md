@@ -4,6 +4,11 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 0.2.4 · 2 November 2026
+
+- **Check the lines after the whole queue.** With several videos queued, each one is only transcribed at first, so you can leave the PC while they all run. Once they're done, the check screen opens for the first video, then the next, in queue order. Name people there too: nobody is asked for names halfway through any more.
+- Videos transcribed but not checked when the window was closed come back as To check next time, so nothing is lost.
+
 ## 0.2.3 · 2 November 2026
 
 - **Settings, like an iPhone's.** One short list, each part saying what it's set to (Quality: Balanced, Language: English…), and each opening a page of its own with Settings to go back to, instead of one long page.

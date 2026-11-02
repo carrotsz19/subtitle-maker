@@ -41,8 +41,10 @@ ShowLanguageDialog=no
 SetupIconFile=..\ui\icon.ico
 OutputDir=..\dist
 OutputBaseFilename=Subtitle-Maker-Setup
-Compression=lzma2/max
-SolidCompression=yes
+; Stored, not compressed: a few antivirus engines (3 of 71 on VirusTotal for v0.2.3, none of
+; them Microsoft) took the compressed files for "obfuscated" malware. Python and its packages are
+; what's big, and they're downloaded, so this only takes the file from 2.2 MB to 2.6 MB.
+Compression=none
 
 [Files]
 ; Unpacked by the code below (dontcopy), not by a wizard

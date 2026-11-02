@@ -894,10 +894,10 @@ function viewMake() {
       ${S.review ? viewReview() : busy ? viewRunning() : showResult ? viewResults(last) : ""}
       ${S.review ? "" : busy || showResult ? dropZone(true) : dropZone(false)}
       ${S.review && S.review.mode === "file" ? "" : `
-      ${S.queue.some(q => q.status === "waiting") ? queueList() : ""}
+      ${S.queue.some(q => q.status === "waiting" || q.status === "check") ? queueList() : ""}
       ${busy ? "" : talkCard()}
       ${busy ? "" : whereCard()}
-      ${busy ? "" : `<button class="btn big" data-act="start" ${S.queue.some(q => q.status === "waiting") ? "" : "disabled"}>
+      ${busy ? "" : `<button class="btn big" data-act="start" ${S.queue.some(q => q.status === "waiting" || q.status === "check") ? "" : "disabled"}>
           ${startLabel()}</button>`}
       ${busy ? "" : `<div class="row" style="justify-content:center"><button class="linkbtn" data-act="open-srt">Fix an existing .srt…</button></div>`}`}
     </div>`;
@@ -911,7 +911,8 @@ function unfinishedBanner() {
 }
 
 function startLabel() {
-  const n = S.queue.filter(q => q.status === "waiting").length;
+  const n = S.queue.filter(q => q.status === "waiting").length, c = checksLeft();
+  if (!n && c) return c > 1 ? `Check ${c} videos` : "Check the lines";
   return n > 1 ? `Make subtitles for ${n} files` : "Make subtitles";
 }
 
@@ -938,6 +939,12 @@ function queueList() {
       ${q.has_srt ? '<span class="pill" title="Nothing is overwritten: the new ones are saved as a separate (2) file.">Has subtitles</span>' : ""}
       <span class="pill">Waiting</span>
       <button class="iconbtn" data-act="remove" data-path="${esc(q.path)}" title="Remove">${ICON.x}</button>
+    </div>`).join("") + S.queue.filter(q => q.status === "check").map(q => `
+    <div class="grp-row has-icon">
+      <div class="tile-icon t-accent">${ICON.srt}</div>
+      <div class="grow"><div class="row-title trunc">${esc(q.name)}</div><div class="row-sub trunc">Transcribed · checked once the rest are done</div></div>
+      <span class="pill accent">To check</span>
+      <button class="iconbtn" data-act="drop-check" data-bundle="${esc(q.bundle)}" title="Forget these lines">${ICON.x}</button>
     </div>`).join("");
   return `<div><h2>Up next</h2><div class="grp">${rows}</div></div>`;
 }
@@ -1218,7 +1225,7 @@ function viewReview() {
     <div class="rv-head stack">
       <div class="between"><div class="grow"><div class="sm dim">${r.mode === "file"
             ? (r.video ? `Fixing an existing file · plays from ${esc(r.video)}` : "Fixing an existing file · no video with the same name next to it, so lines can't play")
-            : `Check before saving${queueLeft() ? ` · ${queueLeft()} more after this` : ""}`}</div>
+            : `Check before saving${checksLeft() + queueLeft() ? ` · ${checksLeft() + queueLeft()} more after this` : ""}`}</div>
           <h3 class="trunc">${esc(r.file)}</h3></div>
         <button class="iconbtn" id="rv-undo" data-act="rv-undo" title="Undo (Ctrl+Z)" aria-label="Undo" ${S.review.undo && S.review.undo.length ? "" : "disabled"}>${ICON.undo}</button>
         <button class="iconbtn" id="rv-redo" data-act="rv-redo" title="Redo (Ctrl+Y)" aria-label="Redo" ${S.review.redo && S.review.redo.length ? "" : "disabled"}>${ICON.redo}</button>
@@ -1275,6 +1282,7 @@ function bindReview(root) {
 }
 
 function queueLeft() { return S.queue.filter(q => q.status === "waiting").length; }
+function checksLeft() { return S.queue.filter(q => q.status === "check").length; }
 
 function viewResults(items) {
   const ok = items.filter(q => q.status === "done"), bad = items.filter(q => q.status === "failed");
@@ -2252,8 +2260,13 @@ const ACTIONS = {
   "rv-discard": () => S.review.mode === "file"
     ? confirmBox("Close without saving?", "Any changes you made to this file are lost. The file stays as it was.", "Close",
       () => { S.review = null; api().close_srt(); render("back"); })
-    : confirmBox("Discard these subtitles?", "Nothing for this video is saved. The next video in the queue starts.", "Discard",
-    () => { S.review = null; api().cancel(); }),
+    : S.run && S.run.checking
+      ? confirmBox("Discard these subtitles?", `Nothing for this video is saved.${checksLeft() ? " The next one to check opens." : ""}`, "Discard",
+        () => { S.review = null; S.run.stage = "Discarding"; api().review_discard(); render("back"); })
+      : confirmBox("Discard these subtitles?", "Nothing for this video is saved. The next video in the queue starts.", "Discard",
+        () => { S.review = null; api().cancel(); }),
+  "drop-check": el => confirmBox("Forget these lines?", "This video was transcribed but not checked yet. Nothing for it is saved; you can make it again any time.", "Forget",
+    async () => { await api().drop_check(el.dataset.bundle); S.queue = S.queue.filter(q => q.bundle !== el.dataset.bundle); render(); }),
   pref: async el => {
     const key = el.dataset.k;
     if (el.classList.contains("switch")) {
@@ -2354,7 +2367,7 @@ const ACTIONS = {
   cancel: () => { S.cancelAll = true; api().cancel(); },
   reveal: el => api().reveal(el.dataset.path),
   "error-log": () => api().open_error_log(),
-  clear: () => { S.queue = S.queue.filter(q => q.status === "waiting"); render(); },
+  clear: () => { S.queue = S.queue.filter(q => q.status === "waiting" || q.status === "check"); render(); },
   log: el => { if (S.run) S.run.logOpen = el.open; },
   level: el => { S.draft.level = el.dataset.v; render(); },
   lang: el => { const v = el.dataset.v; S.draft.language = v === "null" ? null : v === "other" && langKeyOf(S.draft.language) === "other" ? S.draft.language : v; render(); if (v === "other") $("#lang-code").focus(); },
@@ -2380,6 +2393,15 @@ function next() {
   if (S.update.blocking) { lockForUpdate(); render(); return; }
   const item = S.queue.find(q => q.status === "waiting");
   if (!item) {
+    // Every video is transcribed: now they're checked, one after another, in queue order
+    const check = S.queue.find(q => q.status === "check");
+    if (check) {
+      check.status = "checking";
+      S.run = { kind: "make", item: check, checking: true, done: 0, total: 0, stage: "Opening the lines to check", speakers: null, res: null, log: [], startedAt: null };
+      api().finish(check.path, check.bundle);
+      if (S.view === "make") render(); else renderSide();
+      return;
+    }
     // The whole queue is done: show where the subtitles went, if Settings says to
     const first = (S.batch || []).find(Boolean);
     if (first && S.info.settings.open_folder) api().reveal(first);
@@ -2393,7 +2415,9 @@ function next() {
   const potato = S.info.settings.level === "potato";
   const speakers = S.multi && !potato ? S.people : null;
   S.run = { kind: "make", item, done: 0, total: 0, stage: "Loading the model", speakers: null, res: null, log: [], startedAt: null };
-  api().start(item.path, speakers);
+  // With checking on, each video is only transcribed now and checked once the queue is done,
+  // so nobody has to wait by the PC between videos
+  api().start(item.path, speakers, !!S.info.settings.review);
   if (S.view === "make") render();
   else renderSide();
 }
@@ -2429,7 +2453,7 @@ const app = {
       if (S.view === "make" && !S.review && fresh.some(q => q.has_srt)) render();
     });
     // A finished batch makes way for the new one
-    if (!S.run) S.queue = S.queue.filter(q => q.status === "waiting");
+    if (!S.run) S.queue = S.queue.filter(q => q.status === "waiting" || q.status === "check");
     // Start loading the speech model while you pick the options, so the first video starts sooner
     if (!S.run) api().warm();
     if (S.view !== "make") go("make"); else render();
@@ -2489,6 +2513,12 @@ const app = {
         S.player.play().catch(() => {});
         return;
       }
+      case "pending":  // transcribed; checked once the rest of the queue is done
+        if (r.item) Object.assign(r.item, { status: "check", bundle: ev.bundle, file: ev.file });
+        break;
+      case "discarded":
+        if (r.item) r.item.status = "discarded";
+        break;
       case "done":
         if (r.item) { r.item.status = "done"; r.item.files = ev.files; (S.batch = S.batch || []).push(ev.files[0] && ev.files[0].path); }
         break;
@@ -2498,7 +2528,7 @@ const app = {
         else toast(ev.message, true);
         break;
       case "exit": {
-        if (r.item && r.item.status === "working") r.item.status = ev.cancelled ? "cancelled" : "failed";
+        if (r.item && (r.item.status === "working" || r.item.status === "checking")) r.item.status = ev.cancelled ? "cancelled" : "failed";
         if (r.kind === "prepare") {
           S.run = null;
           S.models = null;
@@ -2615,6 +2645,9 @@ async function startApp() {
   applyTheme();
   applyLessMotion();
   if (S.info.unfinished && S.info.unfinished.length && S.info.mode !== "setup") S.unfinished = S.info.unfinished;
+  try {
+    for (const c of await api().pending_checks()) S.queue.push({ path: c.path, name: baseName(c.path), status: "check", bundle: c.bundle, file: c.file });
+  } catch (e) { /* none to check */ }
   if (S.info.required) S.update.blocking = true;
   S.multi = !!S.info.settings.multi;
   S.people = S.info.settings.people || 0;
