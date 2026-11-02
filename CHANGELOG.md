@@ -7,6 +7,7 @@ A release (see "Releasing a new version" in the README) needs its section here f
 ## 0.2.3 · 2 November 2026
 
 - **Settings, like an iPhone's.** One short list, each part saying what it's set to (Quality: Balanced, Language: English…), and each opening a page of its own with Settings to go back to, instead of one long page.
+- Fixed: the download bars for speech models sat at 0 until the download was finished.
 - **A proper installer.** New PCs install from Subtitle-Maker-Setup.exe on the releases page: everything is inside it, so antivirus no longer mistakes it for a virus, and its window is wide rather than tall.
 
 ## 0.2.2 · 31 October 2026
