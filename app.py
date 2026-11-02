@@ -396,6 +396,25 @@ class Api:
                          on_click=lambda: winextras.bring_to_front(self._window))
         return True
 
+    def checks_ready(self, count):
+        """Every video in the queue is transcribed and the first check is open. Nothing more happens
+        until someone's back, so: the done sound, and a notification if you're in another window."""
+        settings = load_settings()
+        if sys.platform == "win32" and settings["done_sound"]:
+            import winsound
+
+            winsound.MessageBeep()
+        if not winextras.WINDOWS or not settings["notify"] or not winextras.in_background(self._window):
+            return False
+        title = f"{count} videos are ready to check" if count > 1 else "Subtitles are ready to check"
+        try:
+            winextras.flash(self._window)
+        except Exception:
+            pass
+        winextras.notify(self._window, HERE / "ui" / "icon.ico", title, "Click to open Subtitle Maker.",
+                         on_click=lambda: winextras.bring_to_front(self._window))
+        return True
+
     # ---- fixing an existing .srt ---------------------------------------------------------------
 
     def choose_srt(self):
@@ -609,7 +628,7 @@ class Api:
 
     def finish(self, path, bundle):
         """Check and save a video's lines that were set aside (its pending .json)."""
-        return self._run_job([str(Path(path).absolute()), "--events", "--finish", str(bundle)])
+        return self._run_job([str(Path(path).absolute()), "--events", "--finish", str(bundle)], checking=True)
 
     def pending_checks(self):
         """Videos transcribed but not checked yet (the window was closed first), oldest first."""
@@ -636,11 +655,11 @@ class Api:
         """Discard the lines being checked: nothing for this video is saved."""
         self._to_job({"type": "review_discard"})
 
-    def _run_job(self, argv):
+    def _run_job(self, argv, checking=False):
         with self._lock:
             if self._busy():
                 return False
-            self._job = {"cancelled": False, "reported": False}
+            self._job = {"cancelled": False, "reported": False, "checking": checking}
             if not self._tell_worker({"type": "job", "argv": argv}):
                 self._job = None
                 return False
@@ -801,6 +820,9 @@ class Api:
 
             if self._updating:
                 text = "An update is being installed. Closing now could leave it half done, so it's best to wait a moment."
+            elif self._job and self._job.get("checking"):
+                text = ("You're checking a video's lines. Closing keeps them as they were transcribed, and "
+                        "they open to check again next time (changes made in this check aren't kept).")
             elif self._job:
                 text = ("A video is still being worked on. Closing stops it, and that video starts again "
                         "from the beginning next time (the rest of the queue is kept).")

@@ -828,6 +828,15 @@ def finish_later(args):
     cues = [[float(a), float(b), text, spk] for a, b, text, spk in saved["cues"]]
     names = {int(k): v for k, v in saved["names"].items()} if saved.get("names") else None
     style, st = saved["style"], args.settings
+    prints = {int(k): np.asarray(v, dtype=np.float32) for k, v in (saved.get("prints") or {}).items()}
+    # Everybody was transcribed before anyone was named, so someone named in an earlier check of
+    # this queue is still "Speaker 2" here: name them from the voices remembered since
+    if names and prints and st["remember_voices"]:
+        unnamed = {spk: p for spk, p in prints.items() if spk in names and spk not in real_names(names)}
+        found = known_voices.match(unnamed, speakers.VOICE_MODEL.name, skip=set(real_names(names).values())) if unnamed else {}
+        for spk, (name, score) in found.items():
+            names[spk] = name
+            print(f"Speaker {spk + 1} sounds like {name}, named in an earlier video (voice similarity {score:.0%})")
     # Another video may have taken the name since it was set aside
     out = unique_path(Path(saved["out"]))
     set_title(f"Checking - {out.name}")
@@ -841,7 +850,6 @@ def finish_later(args):
     if not cues:
         raise FriendlyError("Every line was deleted in the check, so there was nothing to save.")
     real = real_names(names)
-    prints = {int(k): np.asarray(v, dtype=np.float32) for k, v in (saved.get("prints") or {}).items()}
     if st["remember_voices"] and real and prints:
         known_voices.remember({name: prints[spk] for spk, name in real.items() if spk in prints}, speakers.VOICE_MODEL.name)
         print(f"Remembered for next time: {', '.join(sorted(set(real.values())))}")

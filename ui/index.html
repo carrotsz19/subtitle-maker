@@ -325,6 +325,7 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 .rv-names{ display:flex; flex-wrap:wrap; gap:8px; }
 .rv-names label{ margin:0; display:flex; align-items:center; gap:6px; text-transform:none; letter-spacing:0; font-size:13px; color:var(--dim); font-weight:600; }
 .rv-names input{ width:160px; font-size:14px; padding:7px 10px; }
+.rv-name{ display:inline-flex; align-items:center; gap:2px; }
 .rv-list{ background:var(--panel); border-radius:var(--r-card); box-shadow:var(--elev-1); }
 .rv-row{ display:grid; grid-template-columns:32px 52px auto 1fr auto auto; gap:8px; align-items:start; padding:8px 10px 8px 8px; position:relative; }
 .rv-row + .rv-row::before{ content:""; position:absolute; top:0; left:52px; right:0; height:1px; background:var(--hairline); }
@@ -865,7 +866,7 @@ function persistQueue() {
 
 function renderSide() {
   if (S.info) persistQueue();
-  const waiting = S.queue.filter(q => q.status === "waiting" || q.status === "working").length;
+  const waiting = S.queue.filter(q => ["waiting", "working", "check", "checking"].includes(q.status)).length;
   const c = $("#queue-count");
   c.textContent = waiting; c.classList.toggle("hide", !waiting);
   if (!S.info) return;
@@ -881,7 +882,7 @@ function renderSide() {
 function viewMake() {
   const busy = S.run && S.run.kind === "make";
   const last = S.queue.filter(q => q.status === "done" || q.status === "failed");
-  const showResult = !busy && !S.queue.some(q => q.status === "waiting") && last.length;
+  const showResult = !busy && !S.queue.some(q => q.status === "waiting" || q.status === "check") && last.length;
   return `
     <div class="topbar"><h1>Make subtitles</h1>
       <p>Drop a video and get a .srt you can import into DaVinci Resolve.</p></div>
@@ -1233,7 +1234,8 @@ function viewReview() {
         <button class="btn" data-act="rv-save">${r.mode === "file" ? "Save changes" : "Save subtitles"}</button></div>
       ${r.mode === "file" && r.formatted ? `<div class="banner">This file has formatting, like italics, colours or positions. Saving keeps the words and timing but not the formatting, and splits lines the way Settings says. The original is kept as a backup.</div>` : ""}
       ${r.hasNames ? `<div class="rv-names">${Object.entries(r.names).map(([k, n]) =>
-        `<label>Speaker ${+k + 1} <input type="text" data-rv="name" data-k="${k}" value="${esc(n)}" maxlength="40"></label>`).join("")}</div>` : ""}
+        `<span class="rv-name"><label>Speaker ${+k + 1} <input type="text" data-rv="name" data-k="${k}" value="${esc(n)}" maxlength="40"></label>
+          <button class="iconbtn" data-act="rv-play-spk" data-k="${k}" title="Hear Speaker ${+k + 1}" aria-label="Hear Speaker ${+k + 1}">${ICON.play}</button></span>`).join("")}</div>` : ""}
       <div class="rv-tools"><input type="text" id="rv-find" placeholder="Find (e.g. a misheard name)">
         <input type="text" id="rv-repl" placeholder="Replace with"><button class="btn sec sm" data-act="rv-replace">Replace all</button>
         <label class="checkrow sm"><input type="checkbox" id="rv-remember" style="margin:0"> Fix it in every video from now on</label></div>
@@ -2182,6 +2184,17 @@ function updateSave() {
 }
 
 const ACTIONS = {
+  "rv-play-spk": el => {
+    // Their longest line is the clearest few seconds of their voice
+    const r = S.review, k = el.dataset.k;
+    let best = -1;
+    r.cues.forEach((c, i) => { if (!c.gone && String(c.speaker) === k && (best < 0 || c.end - c.start > r.cues[best].end - r.cues[best].start)) best = i; });
+    if (best < 0) return toast(`Speaker ${+k + 1} has no lines left.`, true);
+    const btn = document.querySelector(`.rv-row[data-i="${best}"] .rv-play`);
+    if (!btn) return;
+    btn.closest(".rv-row").scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    ACTIONS["rv-play"](btn);
+  },
   "rv-play": async el => {
     const c = S.review.cues[+el.dataset.i];
     document.querySelectorAll(".rv-row.playing").forEach(x => x.classList.remove("playing"));
@@ -2397,6 +2410,8 @@ function next() {
     const check = S.queue.find(q => q.status === "check");
     if (check) {
       check.status = "checking";
+      // Everything's transcribed and nothing more happens until someone's back: say so (once)
+      if (S.announceChecks) { S.announceChecks = false; api().checks_ready(checksLeft() + 1); }
       S.run = { kind: "make", item: check, checking: true, done: 0, total: 0, stage: "Opening the lines to check", speakers: null, res: null, log: [], startedAt: null };
       api().finish(check.path, check.bundle);
       if (S.view === "make") render(); else renderSide();
@@ -2515,6 +2530,7 @@ const app = {
       }
       case "pending":  // transcribed; checked once the rest of the queue is done
         if (r.item) Object.assign(r.item, { status: "check", bundle: ev.bundle, file: ev.file });
+        S.announceChecks = true;
         break;
       case "discarded":
         if (r.item) r.item.status = "discarded";
@@ -2528,7 +2544,9 @@ const app = {
         else toast(ev.message, true);
         break;
       case "exit": {
-        if (r.item && (r.item.status === "working" || r.item.status === "checking")) r.item.status = ev.cancelled ? "cancelled" : "failed";
+        // A check that's cancelled keeps the video "To check": its lines are still kept on disk
+        if (r.item && r.item.status === "checking" && ev.cancelled) r.item.status = "check";
+        else if (r.item && (r.item.status === "working" || r.item.status === "checking")) r.item.status = ev.cancelled ? "cancelled" : "failed";
         if (r.kind === "prepare") {
           S.run = null;
           S.models = null;
