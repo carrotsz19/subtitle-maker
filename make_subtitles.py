@@ -710,9 +710,10 @@ def voice_prints(detector, voices_dir):
             for name, path in speakers.voice_samples(voices_dir).items()}
 
 
-def name_speakers(detector, audio, turns, cues, sample_prints, known=None):
+def name_speakers(detector, audio, turns, cues, sample_prints, known=None, ask=True):
     """Work out a display name for each detected speaker: already matched to a clip (known),
-    then the closest voice clip, then ask."""
+    then the closest voice clip, then ask (unless ask is False: then they're "Speaker 2" until
+    they're named in the check)."""
     import speakers
 
     ids = sorted({spk for _, _, spk in turns})
@@ -734,7 +735,7 @@ def name_speakers(detector, audio, turns, cues, sample_prints, known=None):
             if spk in names:
                 continue
             names[spk] = f"Speaker {spk + 1}"
-            if EVENTS or (sys.stdin and sys.stdin.isatty()):
+            if ask and (EVENTS or (sys.stdin and sys.stdin.isatty())):
                 names[spk] = ask_name(spk, audio, turns, cues, player)
     finally:
         player.close()
@@ -761,14 +762,92 @@ def remember_people(detector, audio, cues, names):
     import known_voices
     import speakers
 
-    real = {spk: name.strip() for spk, name in names.items()
-            if name and name.strip() and not re.fullmatch(r"Speaker \d+", name.strip())}
+    real = real_names(names)
     if not real:
         return
     turns = [(c[0], c[1], c[3]) for c in cues if c[3] in real]
     whole = detector.speaker_fingerprints(audio, turns)
     known_voices.remember({real[spk]: p for spk, p in whole.items()}, speakers.VOICE_MODEL.name)
     print(f"Remembered for next time: {', '.join(sorted(set(real.values())))}")
+
+
+def real_names(names):
+    """{speaker: name} for the people given a real name (not left as "Speaker 2")."""
+    return {spk: name.strip() for spk, name in (names or {}).items()
+            if name and name.strip() and not re.fullmatch(r"Speaker \d+", name.strip())}
+
+
+# ---- checking after the whole queue -----------------------------------------------------------
+# A video set aside for checking keeps everything the check and the saving need in PENDING_DIR:
+# its lines and names (.json), its sound for playing lines (.npy, 16-bit, about 2 MB a minute)
+# and each person's voice fingerprint, so naming them in the check still teaches it their voice.
+
+PENDING_DIR = data_dir() / "pending"
+
+
+def save_for_later(args, out, cues, names, style, audio, detector, total, language):
+    PENDING_DIR.mkdir(parents=True, exist_ok=True)
+    key = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
+    sound = PENDING_DIR / f"{key}.npy"
+    np.save(sound, (np.clip(audio, -1, 1) * 32767).astype(np.int16))
+    prints = {}
+    if names and detector and args.settings["remember_voices"]:
+        whole = detector.speaker_fingerprints(audio, [(c[0], c[1], c[3]) for c in cues if c[3] is not None])
+        prints = {str(spk): np.asarray(p, dtype=np.float32).tolist() for spk, p in whole.items()}
+    bundle = PENDING_DIR / f"{key}.json"
+    bundle.write_text(json.dumps({
+        "input": str(Path(args.input).absolute()), "out": str(out), "style": style, "sound": sound.name,
+        "cues": [[float(c[0]), float(c[1]), c[2], c[3]] for c in cues],
+        "names": {str(k): v for k, v in names.items()} if names else None,
+        "prints": prints, "length": total, "language": language}), encoding="utf-8")
+    return bundle
+
+
+def drop_pending(bundle):
+    with contextlib.suppress(OSError, ValueError):
+        sound = json.loads(bundle.read_text(encoding="utf-8")).get("sound")
+        if sound:
+            (bundle.parent / sound).unlink(missing_ok=True)
+    bundle.unlink(missing_ok=True)
+
+
+def finish_later(args):
+    """--finish BUNDLE: check a video's lines that were set aside, then save them."""
+    import known_voices
+    import speakers
+
+    bundle = Path(args.finish)
+    try:
+        saved = json.loads(bundle.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise FriendlyError("The lines kept for checking this video are gone, so it needs making again.") from e
+    try:
+        audio = np.load(bundle.parent / saved["sound"]).astype(np.float32) / 32767
+    except (OSError, ValueError):
+        audio = np.zeros(0, dtype=np.float32)  # the lines can still be checked, just not played
+    cues = [[float(a), float(b), text, spk] for a, b, text, spk in saved["cues"]]
+    names = {int(k): v for k, v in saved["names"].items()} if saved.get("names") else None
+    style, st = saved["style"], args.settings
+    # Another video may have taken the name since it was set aside
+    out = unique_path(Path(saved["out"]))
+    set_title(f"Checking - {out.name}")
+    checked = review(cues, names, audio, out, style)
+    if checked is None:
+        drop_pending(bundle)
+        print("Discarded: nothing was saved.")
+        emit("discarded")
+        return None
+    cues, names = checked
+    if not cues:
+        raise FriendlyError("Every line was deleted in the check, so there was nothing to save.")
+    real = real_names(names)
+    prints = {int(k): np.asarray(v, dtype=np.float32) for k, v in (saved.get("prints") or {}).items()}
+    if st["remember_voices"] and real and prints:
+        known_voices.remember({name: prints[spk] for spk, name in real.items() if spk in prints}, speakers.VOICE_MODEL.name)
+        print(f"Remembered for next time: {', '.join(sorted(set(real.values())))}")
+    result = save_outputs(args, st, out, cues, names, style, saved["length"], saved["language"])
+    drop_pending(bundle)
+    return result
 
 
 # ---- videos kept in the cloud ---------------------------------------------------------------------
@@ -984,6 +1063,8 @@ def make_subtitles(args, level):
         print("Models ready.")
         emit("done", files=[])
         return
+    if args.finish:
+        return finish_later(args)
     if args.input is None:
         raise FriendlyError("Drag a video or audio file onto the Make Subtitles icon.")
     if not args.input.exists():
@@ -1112,24 +1193,44 @@ def make_subtitles(args, level):
     after_transcript("lines", "Making the lines", total)
     cues = build_cues(tokens)
     style = st["speaker_labels"]
+    # In a queue, every video is transcribed first and checked afterwards, one after another, so
+    # nobody has to wait by the PC between videos (the window passes --later when checking is on)
+    later = EVENTS and args.later and st["review"]
 
     names = None
     if turns:
-        names = name_speakers(detector, audio, turns, cues, prints, known)
+        names = name_speakers(detector, audio, turns, cues, prints, known, ask=not later)
         # Split again now the names are known, so each label fits inside the line length
         if style != "none":
             cues = build_cues(tokens, lambda spk: label("", names[spk], style))
     elif detector:
         print("No separate speakers found, writing plain subtitles.")
 
+    if later:
+        bundle = save_for_later(args, out, cues, names, style, audio, detector, total, language)
+        print("Ready to check once the rest of the queue is done.")
+        emit("pending", file=out.name, bundle=str(bundle))
+        return None
+
     # In the window, the lines can be checked and fixed before anything is saved
     if EVENTS and st["review"]:
-        cues, names = review(cues, names, audio, out, style)
+        checked = review(cues, names, audio, out, style)
+        if checked is None:
+            print("Discarded: nothing was saved.")
+            emit("discarded")
+            return None
+        cues, names = checked
         if not cues:
             raise FriendlyError("Every line was deleted in the check, so there was nothing to save.")
 
     if names and st["remember_voices"] and detector:
         remember_people(detector, audio, cues, names)
+    return save_outputs(args, st, out, cues, names, style, total, language)
+
+
+def save_outputs(args, st, out, cues, names, style, total, language):
+    """Write the .srt (and the per-person files, transcript and .vtt Settings asks for), note it in
+    the history and tell the window. Returns the .srt's path."""
     after_transcript("writing", "Writing subtitles", total)
     write_srt(out, cues, names, style)
     print(f"\nWrote {len(cues)} {'labelled ' if names else ''}subtitles to {out}")
@@ -1158,7 +1259,8 @@ def review(cues, names, audio, out, style):
     """Send the lines to the window to be checked, and wait for them to come back fixed.
 
     While waiting it also plays back lines: {"type": "clip", "id", "start", "end"} answers with
-    a "clip" event holding that stretch of audio. Returns (cues, names) as edited.
+    a "clip" event holding that stretch of audio. Returns (cues, names) as edited, or None if
+    the lines were discarded.
     """
     emit("review", file=out.name, style=style, max_chars=MAX_LINE_CHARS, max_lines=MAX_LINES,
          names={str(k): v for k, v in (names or {}).items()},
@@ -1176,6 +1278,8 @@ def review(cues, names, audio, out, style):
             start, end = max(0.0, request["start"] - 0.15), request["end"] + 0.15
             clip = audio[int(start * SAMPLE_RATE):int(end * SAMPLE_RATE)]
             emit("clip", id=request["id"], data="data:audio/wav;base64," + base64.b64encode(wav_bytes(clip)).decode("ascii"))
+        elif request.get("type") == "review_discard":
+            return None
         elif request.get("type") == "review_done":
             fixed = [[float(c["start"]), float(c["end"]), " ".join(str(c["text"]).split()), c.get("speaker")]
                      for c in request["cues"] if str(c["text"]).strip()]
@@ -1288,6 +1392,10 @@ def main(argv=None):
     parser.add_argument("--voices", type=Path, default=VOICES_DIR, help="folder of voice clips named after each person")
     parser.add_argument("--events", action="store_true", help=argparse.SUPPRESS)  # used by the app window
     parser.add_argument("--serve", action="store_true", help=argparse.SUPPRESS)  # used by the app window
+    # The window's queue: transcribe now and check once the queue is done (--later), then check
+    # and save one that was set aside (--finish its .json)
+    parser.add_argument("--later", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--finish", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     args.settings = settings
     if args.events and not SERVE:
