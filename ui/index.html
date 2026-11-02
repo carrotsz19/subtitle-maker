@@ -143,6 +143,25 @@ main.main{ overflow-y:auto; padding:26px 30px 48px; }
 .grp-row.tap{ cursor:pointer; transition:background-color .12s var(--ease-standard); }
 .grp-row.tap:hover{ background:var(--fill-tertiary); }
 .grp-row.danger{ color:var(--bad); font-weight:600; justify-content:center; }
+/* Settings, iPhone style */
+.settings-page{ max-width:720px; }
+.set-row{ min-height:46px; padding-top:7px; padding-bottom:7px; }
+.set-row .row-title{ font-weight:500; }
+.set-row .ico{ width:29px; height:29px; border-radius:7px; display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; }
+.ico.i-red{ background:#c4532f; } .ico.i-blue{ background:#3d6c9e; } .ico.i-gold{ background:#b8862c; } .ico.i-plum{ background:#86517b; }
+.ico.i-green{ background:#3f7a4f; } .ico.i-teal{ background:#2f7d7a; } .ico.i-slate{ background:#4d5866; } .ico.i-gray{ background:#857f75; }
+.set-row .val{ color:var(--dim); font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:46%; }
+.grp-row .chev{ color:var(--faint); flex-shrink:0; margin-left:-2px; }
+.badge{ min-width:20px; height:20px; border-radius:10px; background:var(--bad); color:#fff; font-size:12px; font-weight:700;
+  display:inline-flex; align-items:center; justify-content:center; padding:0 6px; }
+.set-card{ gap:14px; padding-top:12px; padding-bottom:12px; }
+.set-card .app-tile{ border-radius:13px; box-shadow:0 0 0 1px var(--hairline); flex-shrink:0; }
+.set-name{ font-size:18px; font-weight:700; letter-spacing:-.01em; }
+.grp-row.center-row{ color:var(--accent); font-weight:600; justify-content:center; }
+.back{ display:inline-flex; align-items:center; gap:6px; color:var(--accent); font:inherit; font-size:15px; font-weight:500;
+  background:none; border:0; padding:4px 8px 4px 0; margin:-4px 0 8px -2px; cursor:pointer; border-radius:8px; }
+.back:hover{ opacity:.78; }
+.back:active{ opacity:.6; }
 .btn.dan{ background:var(--bad); color:var(--on-tint); }
 .checkrow{ display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:14px; }
 .checkrow input{ width:18px; height:18px; margin:2px 0 0; accent-color:var(--accent); flex-shrink:0; }
@@ -803,8 +822,9 @@ function syncSegs(root) {
    A screen arrives with its data, as IronLog's do: drawing it and then redrawing it a moment
    later (when its list came in) restarted the arrival halfway through. */
 let goSeq = 0;
-async function go(view, dir = "tab") {
+async function go(view, dir = "tab", page = null) {
   if (S.view === "settings" && view !== "settings") S.draft = null;
+  if (view === "settings") S.page = page;
   document.querySelectorAll(".navbtn").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
   const btn = $(`.navbtn[data-view="${view}"]`);
   $("#nav-pill").style.transform = `translateY(${btn.offsetTop}px)`;
@@ -822,7 +842,7 @@ async function go(view, dir = "tab") {
   render(dir);
 }
 document.querySelectorAll(".navbtn").forEach(b => b.onclick = () => go(b.dataset.view));
-$("#pc-card").onclick = () => go("settings");
+$("#pc-card").onclick = () => go("settings", "tab", "quality");
 
 function render(animate) {
   const el = $("#view");
@@ -1338,13 +1358,96 @@ function viewHistory() {
 /* ---------------------------------------------------------------------
    Settings
 --------------------------------------------------------------------- */
+/* Settings, the way an iPhone's are: a short list of sections, each saying what it's set to,
+   and each opening a page of its own (with "< Settings" to go back) instead of one long page. */
+const SET_SVG = {
+  quality: '<path d="M12 3.5l1.8 5.2 5.2 1.8-5.2 1.8L12 17.5l-1.8-5.2L5 10.5l5.2-1.8z"/><path d="M18.5 15.5l.6 1.7 1.7.6-1.7.6-.6 1.7-.6-1.7-1.7-.6 1.7-.6z"/>',
+  language: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5s1.2-6.1 3.6-8.5z"/>',
+  style: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 11h3M12 11h5M7 15h7M16 15h1"/>',
+  speakers: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><path d="M15.5 5.6a3 3 0 0 1 0 5.8M17.5 14.6a5.3 5.3 0 0 1 3 4.9"/>',
+  accuracy: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>',
+  done: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+  appearance: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>',
+  storage: '<ellipse cx="12" cy="6.2" rx="7.5" ry="2.7"/><path d="M4.5 6.2v11.6c0 1.5 3.4 2.7 7.5 2.7s7.5-1.2 7.5-2.7V6.2"/><path d="M4.5 12c0 1.5 3.4 2.7 7.5 2.7s7.5-1.2 7.5-2.7"/>',
+  updates: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/>',
+};
+const setIcon = k => `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SET_SVG[k]}</svg>`;
+const CHEVRON = '<svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 1.5l5 5-5 5"/></svg>';
+const BACK = '<svg width="10" height="17" viewBox="0 0 10 17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8.2 1.8L1.8 8.5l6.4 6.7"/></svg>';
+
+const SETTINGS_PAGES = {
+  quality: { title: "Quality", icon: "quality", tone: "i-red", body: pageQuality,
+    value: () => S.info.levels[S.info.settings.level].name },
+  language: { title: "Language", icon: "language", tone: "i-blue", body: pageLanguage,
+    value: () => langName(S.info.settings.language) + (S.info.settings.translate && S.info.settings.language !== "en" ? " → English" : "") },
+  style: { title: "Subtitle style", icon: "style", tone: "i-gold", body: pageStyle,
+    value: () => `${S.info.settings.max_chars} characters · ${S.info.settings.max_lines} line${S.info.settings.max_lines > 1 ? "s" : ""}` },
+  speakers: { title: "Speakers", icon: "speakers", tone: "i-plum", body: pageSpeakers,
+    value: () => ({ name: "Names", dash: "Dashes", none: "No labels" })[S.info.settings.speaker_labels] || "" },
+  accuracy: { title: "Accuracy", icon: "accuracy", tone: "i-green", body: pageAccuracy,
+    value: () => { const n = (S.info.settings.fixes || []).length; return n ? `${n} word fix${n > 1 ? "es" : ""}` : ""; } },
+  done: { title: "When it's done", icon: "done", tone: "i-teal", body: pageDone,
+    value: () => S.info.settings.review ? "Check first" : "Save straight away" },
+  appearance: { title: "Appearance", icon: "appearance", tone: "i-slate", body: pageAppearance,
+    value: () => (PREF_OPTIONS.theme.find(([v]) => v === S.info.settings.theme) || [, ""])[1] },
+  storage: { title: "Storage", icon: "storage", tone: "i-gray", body: pageStorage,
+    value: () => !S.models ? "" : S.models.length ? `${S.models.reduce((a, m) => a + m.gb, 0).toFixed(1)} GB` : "None" },
+  updates: { title: "Software update", icon: "updates", tone: "i-blue", body: pageUpdates,
+    value: () => S.info.release || "", badge: () => S.update.state === "available" },
+};
+const SETTINGS_GROUPS = [["quality", "language"], ["style", "speakers", "accuracy", "done"], ["appearance", "storage", "updates"]];
+
 function viewSettings() {
   if (!S.info) return "";
-  const { levels, recommended, hardware: hw } = S.info;
+  const page = S.page && SETTINGS_PAGES[S.page];
+  if (page) return `
+    <button class="back" data-act="settings-back">${BACK}<span>Settings</span></button>
+    <div class="topbar"><h1>${page.title}</h1></div>
+    <div class="settings-page">${page.body()}</div>`;
+  const { hardware: hw } = S.info;
+  const row = key => {
+    const p = SETTINGS_PAGES[key], value = p.value() || "";
+    return `<div class="grp-row tap has-icon set-row" role="button" tabindex="0" data-act="settings-page" data-page="${key}">
+      <span class="ico ${p.tone}">${setIcon(p.icon)}</span><span class="grow row-title">${p.title}</span>
+      ${p.badge && p.badge() ? '<span class="badge">1</span>' : ""}<span class="val">${esc(value)}</span>${CHEVRON}</div>`;
+  };
+  return `
+    <div class="topbar"><h1>Settings</h1></div>
+    <div class="settings-page">
+      <div class="block"><div class="grp"><div class="grp-row tap set-card" role="button" tabindex="0" data-act="settings-page" data-page="updates">
+        <img class="app-tile" src="icon.svg" width="58" height="58" alt="">
+        <div class="grow"><div class="set-name">Subtitle Maker</div>
+          <div class="row-sub">${esc(S.info.release ? "Version " + S.info.release : "Version unknown")} · ${hw.gpu ? esc(hw.gpu) : "runs on the processor"}</div></div>
+        ${CHEVRON}</div></div></div>
+      ${SETTINGS_GROUPS.map(g => `<div class="block"><div class="grp">${g.map(row).join("")}</div></div>`).join("")}
+      <div class="block"><div class="grp">
+          <div class="grp-row tap center-row" role="button" tabindex="0" data-act="reset-prefs">Reset settings</div>
+          <div class="grp-row tap danger" role="button" tabindex="0" data-act="uninstall">Uninstall Subtitle Maker…</div></div>
+        <p class="foot">Settings are saved on this PC. Uninstalling never touches your videos or subtitles.</p></div>
+    </div>`;
+}
+
+/* Quality and Language share one Save (a new quality may need a download first) */
+function settingsDraft() {
   const d = S.draft || (S.draft = { level: S.info.settings.level, language: S.info.settings.language });
   // "More…" with no language picked from its list yet isn't a change
   const changed = d.language !== "other" && (d.level !== S.info.settings.level || d.language !== S.info.settings.language);
-  const saving = S.run && S.run.kind === "prepare";
+  return { d, changed };
+}
+function saveBlock() {
+  const { d, changed } = settingsDraft();
+  const saving = S.run && S.run.kind === "prepare", levels = S.info.levels;
+  return `<div class="block">
+      ${saving ? `<h2>Downloading what ${esc(levels[S.run.level].name)} needs</h2><div id="downloads">${downloadRows(S.run.level)}</div>
+          <p class="foot">First time only. Levels marked Downloaded switch instantly.</p>`
+        : S.run ? `<button class="btn big" disabled>Save</button><p class="foot">You can save once the current video is finished.</p>`
+        : `<button class="btn big" data-act="save" ${changed || (!S.info.configured && d.language !== "other") ? "" : "disabled"}>${S.info.configured ? "Save" : "Save and download"}</button>`}
+    </div>`;
+}
+
+function pageQuality() {
+  const { levels, recommended, hardware: hw } = S.info;
+  const { d } = settingsDraft();
   const rows = Object.entries(levels).map(([key, lv]) => `
     <div class="grp-row tap" role="radio" tabindex="0" aria-checked="${d.level === key}" data-act="level" data-v="${key}">
       <span class="radio"></span>
@@ -1356,32 +1459,106 @@ function viewSettings() {
       <div class="right sm dim mono">${lv.download}<div class="xs faint">${hw.gpu ? `~${gb(lv.vram_mb)} GB GPU` : "download"}</div></div>
     </div>`).join("");
   return `
-    <div class="topbar"><h1>Settings</h1><p>Saved on this PC. Every video uses these until you change them.</p></div>
-    <div class="block"><h2>Quality</h2><div class="grp" role="radiogroup">${rows}</div>
-      <p class="foot">Switching to a level marked Downloaded needs no download.
+    <div class="block"><div class="grp" role="radiogroup">${rows}</div>
+      <p class="foot">Higher quality is more accurate but slower. Switching to one marked Downloaded needs no download.
         This PC: ${hw.gpu ? `${esc(hw.gpu)} (${gb(hw.vram_mb)} GB)` : "no NVIDIA GPU, so it runs on the CPU"} · ${hw.ram_gb} GB RAM · ${hw.cores} CPU cores.
         ${d.level === "potato" ? " Potato turns off speaker names and the resource meters." : ""}</p></div>
-    <div class="block"><h2>Language spoken in your videos</h2>
+    ${saveBlock()}`;
+}
+
+function pageLanguage() {
+  const { d } = settingsDraft();
+  const st = S.info.settings;
+  return `
+    <div class="block"><h2>Spoken in your videos</h2>
       <div class="card stack">${langPicker(d.language, "lang", "lang-code")}</div>
-      <p class="foot">Auto-detect works for most videos. Picking the language is a little more accurate.</p>
-      <div class="grp" style="margin-top:12px">${prefRow("Subtitles in English",
-        S.info.settings.language === "en"
-          ? (S.info.settings.translate ? "On, but your videos are set to English, so there's nothing to translate. Pick the language they're in, or Auto-detect."
+      <p class="foot">Auto-detect works for most videos. Picking the language is a little more accurate.</p></div>
+    ${saveBlock()}
+    <div class="block"><div class="grp">${prefRow("Subtitles in English",
+        st.language === "en"
+          ? (st.translate ? "On, but your videos are set to English, so there's nothing to translate. Pick the language they're in, or Auto-detect."
             : "For videos in another language. Pick the language they're in above (or Auto-detect) first.")
-          : `Translates as it goes, for videos in another language.${S.info.settings.level === "high"
+          : `Translates as it goes, for videos in another language.${st.level === "high"
             ? ` High can't translate, so this uses Balanced's model${S.info.models.whisper.balanced ? "" : " (a 1.5 GB download the first time)"}.` : ""}`,
-        switchPref("translate"))}</div></div>
-    <div class="block">
-      ${saving ? `<h2>Downloading what ${esc(levels[S.run.level].name)} needs</h2><div id="downloads">${downloadRows(S.run.level)}</div>
-          <p class="foot">First time only. Levels marked Downloaded switch instantly.</p>`
-        : S.run ? `<button class="btn big" disabled>Save</button><p class="foot">You can save once the current video is finished.</p>`
-        : `<button class="btn big" data-act="save" ${changed || (!S.info.configured && d.language !== "other") ? "" : "disabled"}>${S.info.configured ? "Save" : "Save and download"}</button>`}
-    </div>
-    ${prefsBlocks()}
-    ${modelsBlock()}
-    ${updatesBlock()}
-    <div class="block"><div class="grp"><div class="grp-row tap danger" role="button" tabindex="0" data-act="uninstall">Uninstall Subtitle Maker…</div></div>
-      <p class="foot">Removes it from this PC. Your videos and subtitles are never touched.</p></div>`;
+        switchPref("translate"))}</div></div>`;
+}
+
+function pageStyle() {
+  const st = S.info.settings;
+  const frames = previewCues(st).slice(0, 2).map((lines, i) => `<div class="frame"><i>${i + 1}</i><span>${lines.map(esc).join("\n")}</span></div>`).join("");
+  return `
+    <div class="block"><div class="card stack"><div class="frames" aria-label="Preview">${frames}</div>
+        <p class="xs dim">How a sentence splits with these settings. Fonts and colours are set in Resolve.</p></div></div>
+    <div class="block"><h2>Lines</h2><div class="grp">
+        ${prefRow("Characters per line", "42 is the film and TV standard; fewer suits phones.", segPref("max_chars"))}
+        ${prefRow("Lines per subtitle", "One line covers less of the picture.", segPref("max_lines"))}
+      </div></div>
+    <div class="block"><h2>Timing</h2><div class="grp">
+        ${prefRow("Shortest time on screen", "So quick lines can still be read.", segPref("min_seconds"))}
+        ${prefRow("Longest time on screen", "Longer lines are split.", segPref("max_seconds"))}
+        ${prefRow("New subtitle after a pause", "How long a gap in speech starts a new one.", segPref("pause_split"))}
+      </div></div>`;
+}
+
+function pageSpeakers() {
+  return `
+    <div class="block"><div class="grp">
+        ${prefRow("Name labels", "How each line shows who's talking (with Several people).", segPref("speaker_labels"))}
+        ${prefRow("Also save one file per person", "Handy for Resolve's subtitle regions.", switchPref("speaker_files"))}
+        ${prefRow("Remember people I name", "Next time they're in a video, they're named by themselves. Their voice stays on this PC.", switchPref("remember_voices"))}
+      </div></div>
+    ${voicesBlock()}`;
+}
+
+function pageAccuracy() {
+  const st = S.info.settings;
+  return `
+    <div class="block"><div class="grp">
+        <div class="grp-row" style="flex-wrap:wrap"><div class="grow" style="min-width:220px"><div class="row-title">Words to spell right</div>
+            <div class="row-sub">Names, places and brands it might mishear, separated by commas.</div></div>
+          <input type="text" id="hotwords" class="prefs-input" style="flex:1;min-width:240px" maxlength="500"
+            placeholder="e.g. Jamie, Singapore Polytechnic, DaVinci" value="${esc(st.hotwords)}"></div>
+        ${prefRow("Remove filler words", "Leaves out um, uh, er and hmm.", switchPref("remove_fillers"))}
+        ${prefRow("Skip music and silence", "Turn off if quiet speech gets missed.", switchPref("vad"))}
+        ${prefRow("Run on", S.info.hardware.gpu ? "Automatic uses the graphics card when it has room." : "This PC has no NVIDIA graphics card, so it uses the processor.", segPref("device"))}
+      </div></div>
+    ${fixesBlock()}`;
+}
+
+function pageDone() {
+  return `
+    <div class="block"><div class="grp">
+        ${prefRow("Check the lines before saving", "Fix words and names, then save. Off: saves straight away.", switchPref("review"))}
+      </div></div>
+    <div class="block"><h2>Let me know</h2><div class="grp">
+        ${prefRow("Play a sound", "", switchPref("done_sound"))}
+        ${prefRow("Open the folder", "Shows the subtitles once everything in the queue is done.", switchPref("open_folder"))}
+        ${S.info.platform === "win32" ? prefRow("Notify me", "If you're in another window when the queue finishes, Windows shows a notification.", switchPref("notify")) : ""}
+      </div></div>
+    <div class="block"><h2>Also save</h2><div class="grp">
+        ${prefRow("A transcript", "A plain .txt of everything said, next to the .srt.", switchPref("transcript"))}
+        ${prefRow("A .vtt file", "The same subtitles for YouTube and web players.", switchPref("vtt"))}
+      </div></div>`;
+}
+
+function pageAppearance() {
+  return `
+    <div class="block"><div class="grp">
+        ${prefRow("Colours", "", segPref("theme"))}
+        ${prefRow("Less animations", "Things appear and go without moving. Also follows Windows' own setting.", switchPref("less_motion"))}
+      </div></div>`;
+}
+
+function pageStorage() {
+  const models = modelsBlock();
+  return models || `<div class="block"><div class="card"><p class="dim">${S.models ? "No speech models downloaded yet. They download when you save a quality." : "Measuring…"}</p></div></div>`;
+}
+
+function pageUpdates() {
+  return `${updatesBlock()}
+    <div class="block"><div class="grp">
+        ${prefRow("Check for updates automatically", "Security updates are always shown.", switchPref("auto_update"))}
+      </div></div>`;
 }
 
 /* Downloaded speech models, to free space. Loaded when Settings opens (it measures folders). */
@@ -1499,52 +1676,6 @@ function previewCues(st) {
   }
   if (cur.length) cues.push(cur.join(" "));
   return cues.map(c => evenLines(lab + c, st.max_chars, st.max_lines));
-}
-
-function prefsBlocks() {
-  const st = S.info.settings;
-  const frames = previewCues(st).slice(0, 2).map((lines, i) => `<div class="frame"><i>${i + 1}</i><span>${lines.map(esc).join("\n")}</span></div>`).join("");
-  return `
-    <div class="block"><h2>Subtitle style</h2>
-      <div class="card stack"><div class="frames" aria-label="Preview">${frames}</div>
-        <p class="xs dim">Preview of how a sentence splits, with the settings below. Fonts and colours are set in Resolve.</p></div>
-      <div class="grp" style="margin-top:12px">
-        ${prefRow("Characters per line", "42 is the film and TV standard; fewer suits phones.", segPref("max_chars"))}
-        ${prefRow("Lines per subtitle", "One line covers less of the picture.", segPref("max_lines"))}
-        ${prefRow("Shortest time on screen", "So quick lines can still be read.", segPref("min_seconds"))}
-        ${prefRow("Longest time on screen", "Longer lines are split.", segPref("max_seconds"))}
-        ${prefRow("New subtitle after a pause", "How long a gap in speech starts a new one.", segPref("pause_split"))}
-      </div></div>
-    <div class="block"><h2>Speakers</h2><div class="grp">
-        ${prefRow("Name labels", "How each line shows who's talking (with Several people).", segPref("speaker_labels"))}
-        ${prefRow("Also save one file per person", "Handy for Resolve's subtitle regions.", switchPref("speaker_files"))}
-        ${prefRow("Remember people I name", "Next time they're in a video, they're named by themselves. Their voice stays on this PC.", switchPref("remember_voices"))}
-      </div></div>
-    ${voicesBlock()}
-    <div class="block"><h2>Accuracy</h2><div class="grp">
-        <div class="grp-row" style="flex-wrap:wrap"><div class="grow" style="min-width:220px"><div class="row-title">Words to spell right</div>
-            <div class="row-sub">Names, places and brands it might mishear, separated by commas.</div></div>
-          <input type="text" id="hotwords" class="prefs-input" style="flex:1;min-width:240px" maxlength="500"
-            placeholder="e.g. Jamie, Singapore Polytechnic, DaVinci" value="${esc(st.hotwords)}"></div>
-        ${prefRow("Remove filler words", "Leaves out um, uh, er and hmm.", switchPref("remove_fillers"))}
-        ${prefRow("Skip music and silence", "Turn off if quiet speech gets missed.", switchPref("vad"))}
-        ${prefRow("Run on", S.info.hardware.gpu ? "Automatic uses the graphics card when it has room." : "This PC has no NVIDIA graphics card, so it uses the processor.", segPref("device"))}
-      </div></div>
-    ${fixesBlock()}
-    <div class="block"><h2>When it's done</h2><div class="grp">
-        ${prefRow("Check the lines before saving", "Fix words and names, then save. Off: saves straight away.", switchPref("review"))}
-        ${prefRow("Play a sound", "", switchPref("done_sound"))}
-        ${prefRow("Open the folder", "Shows the subtitles once everything in the queue is done.", switchPref("open_folder"))}
-        ${S.info.platform === "win32" ? prefRow("Notify me", "If you're in another window when the queue finishes, Windows shows a notification.", switchPref("notify")) : ""}
-        ${prefRow("Also save a transcript", "A plain .txt of everything said, next to the .srt.", switchPref("transcript"))}
-        ${prefRow("Also save a .vtt", "The same subtitles for YouTube and web players.", switchPref("vtt"))}
-      </div></div>
-    <div class="block"><h2>Appearance</h2><div class="grp">
-        ${prefRow("Colours", "", segPref("theme"))}
-        ${prefRow("Less animations", "Things appear and go without moving. Also follows Windows' own setting.", switchPref("less_motion"))}
-        ${prefRow("Check for updates automatically", "Security updates are always shown.", switchPref("auto_update"))}
-      </div>
-      <p class="foot"><button class="linkbtn" data-act="reset-prefs">Reset these settings to their defaults</button></p></div>`;
 }
 
 function applyTheme() {
@@ -2216,7 +2347,9 @@ const ACTIONS = {
   multi: el => { S.multi = el.dataset.v === "1"; render(); api().save_prefs({ multi: S.multi }); },
   people: el => { S.people = +el.dataset.v; render(); api().save_prefs({ people: S.people }); },
   voices: async () => { S.info.voices = await api().open_voices(); },
-  "goto-settings": () => go("settings"),
+  "goto-settings": () => go("settings", "tab", "quality"),
+  "settings-page": el => { S.page = el.dataset.page; render("in"); $("main.main").scrollTop = 0; },
+  "settings-back": () => { S.page = null; render("back"); $("main.main").scrollTop = 0; },
   start: () => next(),
   cancel: () => { S.cancelAll = true; api().cancel(); },
   reveal: el => api().reveal(el.dataset.path),
