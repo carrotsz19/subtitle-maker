@@ -12,6 +12,7 @@ A release (see "Releasing a new version" in the README) needs its section here f
 - **A proper Windows app.** Search for Subtitle Maker and it opens straight away from the Start menu, it pins to the taskbar properly, and it's in Settings > Apps with an Uninstall button.
 - **Updates now show their new screens.** The window kept showing a saved copy of the 0.2.0 screens after every update.
 - **Installing and updating work on school and office Wi-Fi.** GitHub only allows 60 update checks an hour per network without signing in, and a shared network runs out fast. Subtitle Maker now uses GitHub's ordinary pages, which don't have that limit.
+- **Installing works first time.** The install shows each step and its download progress as it goes, says "Done" once the window is open, and opens the window by itself. Before, it sat silent for many minutes, could wait for ever on a hidden "press any key", and sometimes never opened the window. It also tries again by itself when antivirus briefly locks the new files, and the downloadable installer no longer looks like malware to antivirus.
 - Fixed: a models folder that's a link to another drive was refused.
 
 ## 0.2.1 · 31 October 2026

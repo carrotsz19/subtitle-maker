@@ -1046,8 +1046,10 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        if "--setup" in sys.argv:
-            # Setup.bat falls back to asking its questions in the console, so no message box
+        if "--setup" in sys.argv and sys.stderr is not None:
+            # Setup.bat falls back to asking its questions in the console, so no message box.
+            # (Not when opened with pythonw, as the installer does: there's no console to print
+            # to, so it would close without a word. The message box says what went wrong.)
             print(f"The setup window couldn't open ({e.__class__.__name__}: {e}).", file=sys.stderr)
         else:
             report_crash(e)

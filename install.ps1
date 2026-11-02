@@ -53,14 +53,16 @@ function Install-SubtitleMaker {
     }
     $which = if ($branch -eq 'main') { '' } else { "$branch " }
     Write-Host "Downloading the latest ${which}version ($($sha.Substring(0, 7)))..."
-    $zip = Join-Path $env:TEMP "subtitle-maker-$sha.zip"
-    $unpacked = Join-Path $env:TEMP "subtitle-maker-$sha"
+    # A new name each time, so a folder left locked by an earlier try (antivirus still scanning it)
+    # can't get in the way
+    $run = [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    $zip = Join-Path $env:TEMP "subtitle-maker-$sha-$run.zip"
+    $unpacked = Join-Path $env:TEMP "subtitle-maker-$sha-$run"
     try {
         Invoke-WebRequest -Headers $plain -Uri "$codeload/$repo/zip/$sha" -OutFile $zip -UseBasicParsing
     } catch {
         Invoke-WebRequest -Headers $headers -Uri "$api/repos/$repo/zipball/$sha" -OutFile $zip -UseBasicParsing
     }
-    if (Test-Path $unpacked) { Remove-Item -LiteralPath $unpacked -Recurse -Force }
     Expand-Archive -LiteralPath $zip -DestinationPath $unpacked -Force
     $root = (Get-ChildItem -LiteralPath $unpacked -Directory | Select-Object -First 1).FullName
     if (-not (Test-Path (Join-Path $root 'make_subtitles.py'))) {
@@ -84,14 +86,23 @@ function Install-SubtitleMaker {
         Write-Host "Couldn't copy the files into $dest." -ForegroundColor Red
         return $false
     }
-    Remove-Item -LiteralPath $zip, $unpacked -Recurse -Force
+    Remove-Item -LiteralPath $zip, $unpacked -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host ''
 
     # ---- 2. Python and its packages (the window takes it from there) ------------------------
-    & cmd.exe /c "`"$dest\Setup.bat`" --no-window"
-    if ($LASTEXITCODE -ne 0) { return $false }
+    # Started as its own process in this window, so what it prints (each step, pip's download bars)
+    # shows as it happens. Run with & inside this function, all of it was collected as the
+    # function's result instead: the window sat silent for many minutes, and the result
+    # (an array of that text) counted as success even when it failed.
+    $setup = Start-Process -FilePath $env:ComSpec -ArgumentList "/c `"`"$dest\Setup.bat`" --no-window`"" `
+        -NoNewWindow -Wait -PassThru
+    if ($setup.ExitCode -ne 0) {
+        Write-Host ''
+        Write-Host 'Installing Python and its packages failed (the reason is above). Paste the install line again to carry on from here.' -ForegroundColor Red
+        return $false
+    }
     $python = Join-Path $data 'venv\Scripts\python.exe'
-    & $python (Join-Path $dest 'update.py') --record $sha --channel $branch
+    & $python (Join-Path $dest 'update.py') --record $sha --channel $branch | Out-Host
 
     # ---- 3. Desktop shortcut, with the icon --------------------------------------------------
     $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut(
@@ -104,17 +115,59 @@ function Install-SubtitleMaker {
     $shortcut.Save()
 
     # ---- 4. A proper Windows app: Start menu entry and Settings > Apps -------------------------
-    & $python (Join-Path $dest 'winapp.py')
+    & $python (Join-Path $dest 'winapp.py') | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-Host "Couldn't add it to the Start menu; it does that itself the first time it opens." -ForegroundColor Yellow }
 
     Write-Host ''
     Write-Host 'Installed. There''s a "Subtitle Maker" shortcut on your desktop.' -ForegroundColor Green
     if ($env:SUBTITLE_MAKER_NO_LAUNCH) { return $true }  # the Windows tests on GitHub
-    Write-Host 'Opening the setup window to choose the quality and download what it needs...'
-    Start-Process -FilePath (Join-Path $data 'venv\Scripts\pythonw.exe') -ArgumentList "`"$(Join-Path $dest 'app.py')`" --setup" -WorkingDirectory $dest
+    Write-Host 'Opening the Subtitle Maker window...'
+    $log = Join-Path $data 'startup.log'
+    $launched = Get-Date
+    $app = Start-Process -FilePath (Join-Path $data 'venv\Scripts\pythonw.exe') -ArgumentList "`"$(Join-Path $dest 'app.py')`" --setup" `
+        -WorkingDirectory $dest -PassThru
+    # Wait until it says it's ready (startup.log is rewritten as it opens), so this window can say
+    # it's done instead of stopping with no word on whether anything happened
+    $deadline = $launched.AddSeconds(90)
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 500
+        if ((Test-Path $log) -and (Get-Item $log).LastWriteTime -ge $launched -and
+            (Get-Content $log -Raw) -match 'window ready to use') {
+            Write-Host ''
+            Write-Host 'Done. Subtitle Maker is open: pick the quality there and it downloads the rest.' -ForegroundColor Green
+            Write-Host 'You can close this window.'
+            return $true
+        }
+        if ($app.HasExited) {
+            Write-Host ''
+            Write-Host 'The Subtitle Maker window closed straight away.' -ForegroundColor Red
+            $errors = Join-Path $data 'last_error.log'
+            if ((Test-Path $errors) -and (Get-Item $errors).LastWriteTime -ge $launched) {
+                Write-Host (Get-Content $errors -Raw)
+                Write-Host "(saved in $errors)"
+            }
+            Write-Host 'Everything is installed, so try the "Subtitle Maker" shortcut on your desktop.' -ForegroundColor Yellow
+            return $true   # the install itself worked
+        }
+    }
+    Write-Host ''
+    Write-Host 'Installed. The window is taking a while to open; it will appear by itself (or use the desktop shortcut).' -ForegroundColor Yellow
     return $true
+}
+
+function Install-SubtitleMakerSafely {
+    # Anything unexpected (a download cut off, antivirus holding a file) is said plainly here,
+    # instead of escaping as a red PowerShell error with no "it failed" and no result
+    try {
+        return [bool](Install-SubtitleMaker | Select-Object -Last 1)
+    } catch {
+        Write-Host ''
+        Write-Host "The install stopped: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host 'Nothing you made is lost. Check your internet connection and paste the install line again.' -ForegroundColor Red
+        return $false
+    }
 }
 
 # A function (not the script itself) does the work, so a problem never closes the PowerShell
 # window it was pasted into; "Install Subtitle Maker.bat" reads the result from this variable
-$global:SubtitleMakerInstalled = Install-SubtitleMaker
+$global:SubtitleMakerInstalled = Install-SubtitleMakerSafely
