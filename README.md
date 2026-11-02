@@ -12,7 +12,8 @@ irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1
 It downloads the latest version to `%USERPROFILE%\Subtitle Maker`, installs Python and
 everything else, puts a shortcut on the desktop and opens the setup window. No security
 warnings, because nothing is downloaded through the browser. (Prefer double-clicking?
-`Install Subtitle Maker.bat` does the same, after the usual warnings for downloaded files.)
+`Install Subtitle Maker.bat` does the same in an installer window, with no console, after the usual
+warnings for downloaded files.)
 
 **Updating:** Settings > Updates in the window, or `Update.bat`.
 

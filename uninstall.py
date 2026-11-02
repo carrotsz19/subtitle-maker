@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 import update
+import winapp
 from paths import data_dir
 
 HERE = Path(__file__).parent.resolve()
@@ -124,6 +125,10 @@ def script(p, keep_voices, wait_pid):
         lines.append(rmdir.format(q(program)))
     if p["shortcut"]:
         lines.append(rm.format(q(p["shortcut"])))
+    # The Start menu entry and Settings > Apps' entry (see winapp.py)
+    if win:
+        lines.append(rm.format(q(winapp.start_menu_link())))
+        lines.append(f'reg delete "HKCU\\{winapp.KEY}" /f >nul 2>nul')
     lines.append(rmdir.format(q(data)))  # only if nothing else of yours is in it
 
     # Say so if something couldn't be removed, rather than leaving it behind silently

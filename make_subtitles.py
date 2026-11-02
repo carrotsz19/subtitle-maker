@@ -44,7 +44,8 @@ from tqdm import tqdm
 
 
 import models  # noqa: E402
-from paths import ERROR_LOG, LEVELS, MODELS_DIR, add_history, data_dir, level_for_model, load_settings  # noqa: E402
+from paths import (ERROR_LOG, LEVELS, MODELS_DIR, TRANSLATE_WITH, add_history, data_dir, level_for_model,  # noqa: E402
+                   load_settings)
 
 
 def add_cuda_dlls():
@@ -951,16 +952,25 @@ def transcribe(whisper, model_name, audio, language, beam_size, bar, options=Non
 def make_subtitles(args, level):
     potato = level == "potato"
     model_name = args.model or LEVELS[level]["model"]
+    # Set to English: nothing to translate (and the level's own model is the better one for it)
+    translate = getattr(args, "translate", False) and args.language != "en"
+    level_model = model_name
+    if translate and not args.model and model_name in TRANSLATE_WITH:
+        model_name = TRANSLATE_WITH[model_name]
+        print(f"Translating to English with the '{model_name}' model "
+              f"({LEVELS[level]['name']}'s own model can only write the language that's spoken).")
 
     if args.prepare:
         # Only what's missing is downloaded; nothing is loaded into memory
         print(f"Models live in {MODELS_DIR}")
         check_space(model_name, potato)
         try:
-            if models.whisper_path(model_name):
-                print(f"The '{model_name}' speech model is already downloaded.")
-            else:
-                whisper_source(model_name)
+            # The level's model, and the one that translates for it if that's on
+            for name in dict.fromkeys([level_model, model_name]):
+                if models.whisper_path(name):
+                    print(f"The '{name}' speech model is already downloaded.")
+                else:
+                    whisper_source(name)
             if potato:
                 print("Potato mode: skipping the speaker detection models.")
             elif models.speakers_ready():
@@ -1002,7 +1012,7 @@ def make_subtitles(args, level):
         clear_incoming()  # the sound is in memory now; the copy isn't needed
     if not len(audio):
         raise FriendlyError(f"'{args.input.name}' has no sound in it.")
-    quality = "" if args.model else f" ({LEVELS[level]['name']} quality)"
+    quality = "" if args.model else " (to translate)" if model_name != level_model else f" ({LEVELS[level]['name']} quality)"
     whisper = get_whisper(model_name, args.device, potato, quality)
     loaded_on = whisper["device"]
 
@@ -1044,6 +1054,8 @@ def make_subtitles(args, level):
     with monitor or contextlib.nullcontext():
         st = args.settings
         options = {"vad_filter": st["vad"], "hotwords": st["hotwords"].strip() or None}
+        if translate:
+            options["task"] = "translate"
         started = time.perf_counter()
         # Speaker fingerprints for each finished sentence are worked out while Whisper carries on,
         # when it's on the graphics card (on the processor they would only slow each other down)
@@ -1061,7 +1073,7 @@ def make_subtitles(args, level):
         LOADED.clear()  # it fell back to the CPU partway: the next video tries the GPU afresh
     elif "error" not in detection:
         remember_speed(speed_key(model_name, loaded_on, detector), took, total)
-    print(f"Language: {language}  Length: {clock(len(audio) / SAMPLE_RATE)}")
+    print(f"Language: {language}{' (translated to English)' if translate else ''}  Length: {clock(len(audio) / SAMPLE_RATE)}")
     if "error" in detection:
         raise detection["error"]
     turns = detection.get("turns", [])
@@ -1237,8 +1249,11 @@ def warm():
     """Load the model the current settings use, ready for the first video."""
     settings = load_settings()
     level = settings["level"]
+    name = LEVELS[level]["model"]
+    if settings["translate"] and settings["language"] != "en":
+        name = TRANSLATE_WITH.get(name, name)  # the one the video will actually use
     try:
-        get_whisper(LEVELS[level]["model"], settings["device"], level == "potato")
+        get_whisper(name, settings["device"], level == "potato")
         emit("warmed")
     except Exception as e:  # the job itself will report it properly; warming is only a head start
         log_error(e)
@@ -1267,6 +1282,9 @@ def main(argv=None):
     parser.add_argument("--speakers", type=int, metavar="N",
                         help="also detect who is talking: number of people, or 0 to guess "
                              "(or use how many clips are in the Voices folder)")
+    parser.add_argument("--translate", action=argparse.BooleanOptionalAction, default=settings["translate"],
+                        help="make the subtitles in English, whatever language is spoken "
+                             f"(default: {'on' if settings['translate'] else 'off'}, from Settings)")
     parser.add_argument("--voices", type=Path, default=VOICES_DIR, help="folder of voice clips named after each person")
     parser.add_argument("--events", action="store_true", help=argparse.SUPPRESS)  # used by the app window
     parser.add_argument("--serve", action="store_true", help=argparse.SUPPRESS)  # used by the app window

@@ -29,8 +29,9 @@ import models  # noqa: E402
 import srtfile  # noqa: E402
 import uninstall  # noqa: E402
 import update  # noqa: E402
+import winapp  # noqa: E402
 import winextras  # noqa: E402
-from paths import (DEFAULT_SETTINGS, ERROR_LOG, LEVELS, SETTINGS_FILE, data_dir, load_history,  # noqa: E402
+from paths import (DEFAULT_SETTINGS, ERROR_LOG, LANGUAGES, LEVELS, SETTINGS_FILE, data_dir, load_history,  # noqa: E402
                    load_settings, save_history, save_settings)
 
 HERE = Path(__file__).parent
@@ -331,6 +332,7 @@ class Api:
             "settings": load_settings(),
             "configured": SETTINGS_FILE.exists(),
             "levels": LEVELS,
+            "languages": LANGUAGES,
             "recommended": self._probe["recommended"],
             "hardware": self._probe["hardware"],
             "voices": self.voices(),
@@ -341,7 +343,8 @@ class Api:
             "news": changelog.news(first_run=not SETTINGS_FILE.exists()),
             "models": self._probe["models"],
             # Setup.bat opens the window with --setup; Update.bat with --update
-            "mode": "setup" if "--setup" in sys.argv else "update" if "--update" in sys.argv else None,
+            # Settings > Apps > Uninstall opens it with --uninstall
+            "mode": next((m for m in ("setup", "update", "uninstall") if f"--{m}" in sys.argv), None),
             "unfinished": self._unfinished(),
             "required": update.required(),  # an important security update must go in first
         }
@@ -494,6 +497,8 @@ class Api:
         """The page has drawn itself: the window is fully open."""
         TIMINGS.mark("window ready to use")
         TIMINGS.save()
+        # A Start menu entry and Settings > Apps (only does anything the first time, or after moving or updating)
+        threading.Thread(target=lambda: (TIMINGS.mark(winapp.ensure()), TIMINGS.save()), daemon=True).start()
         if SMOKE_TEST:
             threading.Thread(target=self._smoke_test_extras, daemon=True).start()
 
@@ -788,9 +793,9 @@ class Api:
 
     def save_settings(self, level, language):
         settings = load_settings()
-        settings.update(level=level, language=language or None)
+        settings.update(level=level, language=language if language in LANGUAGES else None)
         save_settings(settings)
-        return settings
+        return load_settings()
 
     # ---- where subtitles go ------------------------------------------------------------------
 
@@ -802,7 +807,8 @@ class Api:
     # they can mean a download)
     _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
                "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "review", "done_sound",
-               "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify", "remember_voices", "less_motion")
+               "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify", "remember_voices", "less_motion",
+               "translate")
 
     def save_prefs(self, changes):
         """Save some instant settings; anything not allowed falls back to its default."""
@@ -987,7 +993,34 @@ def main():
         # Its own taskbar button and icon, not grouped under Python's
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Veyra.SubtitleMaker")
     # Keep the web view's profile between launches: a fresh private one each time is slow to make
+    forget_old_page(data_dir() / "webview")
     webview.start(private_mode=False, storage_path=str(data_dir() / "webview"), icon=str(HERE / "ui" / "icon.ico"))
+
+
+def forget_old_page(storage):
+    """After an update, clear the web view's saved copy of the page, so the new one shows.
+
+    pywebview serves the page from the same address every time (http://127.0.0.1:42001/index.html),
+    and the web view kept a copy from 29 October 2026 that it went on showing after every update,
+    even though the new file was on disk and being served. So when ui/index.html has changed
+    since the last start, its caches go (only those; sign-ins and settings in the page stay).
+    """
+    import hashlib
+    import shutil
+
+    try:
+        page = hashlib.sha256((HERE / "ui" / "index.html").read_bytes()).hexdigest()
+        marker = storage / "page.txt"
+        if marker.exists() and marker.read_text(encoding="utf-8").strip() == page:
+            return
+        profile = storage / "EBWebView" / "Default"
+        for cache in ("Cache", "Code Cache", "GPUCache", "Service Worker"):
+            shutil.rmtree(profile / cache, ignore_errors=True)
+        storage.mkdir(parents=True, exist_ok=True)
+        marker.write_text(page, encoding="utf-8")
+        TIMINGS.mark("new page since last time: cleared the web view's saved copy")
+    except OSError as e:
+        TIMINGS.mark(f"couldn't clear the web view's saved copy: {e}")
 
 
 def report_crash(error):
@@ -1013,8 +1046,10 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        if "--setup" in sys.argv:
-            # Setup.bat falls back to asking its questions in the console, so no message box
+        if "--setup" in sys.argv and sys.stderr is not None:
+            # Setup.bat falls back to asking its questions in the console, so no message box.
+            # (Not when opened with pythonw, as the installer does: there's no console to print
+            # to, so it would close without a word. The message box says what went wrong.)
             print(f"The setup window couldn't open ({e.__class__.__name__}: {e}).", file=sys.stderr)
         else:
             report_crash(e)

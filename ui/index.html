@@ -173,6 +173,7 @@ button{ font:inherit; cursor:pointer; }
 .btn.big{ min-height:50px; width:100%; font-size:15px; border-radius:var(--r-card); }
 .iconbtn{ border:0; background:transparent; color:var(--dim); width:32px; height:32px; border-radius:99px; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
 .iconbtn:hover{ color:var(--ink); background:var(--fill-tertiary); }
+.iconbtn:disabled{ opacity:.35; pointer-events:none; }
 .linkbtn{ border:0; background:none; padding:0; color:var(--accent); font-weight:600; }
 .linkbtn:hover{ text-decoration:underline; }
 input[type=text]{ font:inherit; font-size:15px; width:100%; padding:10px 12px; border-radius:var(--r-control); border:1px solid var(--line); background:var(--panel); color:var(--ink); transition:border-color .16s var(--ease-standard), box-shadow .16s var(--ease-standard); }
@@ -231,9 +232,33 @@ details[open] summary::before{ transform:rotate(90deg); }
 
 /* ---------- dialog ---------- */
 .scrim{ position:fixed; inset:0; background:rgba(0,0,0,.42); display:flex; align-items:center; justify-content:center; z-index:60; padding:20px; animation:fadeIn var(--spring-default-ms) var(--ease-out) both; }
-.news-version + .news-version{ border-top:1px solid var(--line); padding-top:12px; }
-.news-list{ margin:6px 0 0; }
-.news-list li{ margin:6px 0; line-height:1.45; }
+/* What's new: a fixed header and button, and a timeline between them, oldest at the top */
+.dialog.news-sheet{ display:flex; flex-direction:column; padding:8px 0 0; overflow:hidden; max-width:520px; }
+.nv-head{ display:flex; align-items:center; gap:12px; padding:12px 24px 14px; }
+.nv-head .tile-icon{ width:38px; height:38px; border-radius:11px; background:var(--accent-soft); color:var(--accent); }
+.nv-head .sub{ font-size:12.5px; color:var(--dim); margin-top:2px; }
+.nv-body{ flex:1; min-height:0; overflow-y:auto; padding:6px 24px 4px; border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  mask-image:linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%); }
+.nv-foot{ display:flex; padding:14px 24px 20px; }
+.nv-foot .btn{ flex:1; }
+.timeline{ position:relative; padding:14px 0 6px 26px; }
+.timeline::before{ content:""; position:absolute; left:6px; top:22px; bottom:22px; width:2px; border-radius:2px; background:var(--line); }
+.nv{ position:relative; padding-bottom:22px; }
+.nv:last-child{ padding-bottom:6px; }
+.nv::before{ content:""; position:absolute; left:-26px; top:4px; width:10px; height:10px; border-radius:50%; background:var(--panel); border:2px solid var(--faint); }
+.nv.current::before{ background:var(--accent); border-color:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); }
+.nv-title{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.nv-title .v{ font-size:15px; font-weight:800; letter-spacing:-.01em; }
+.nv-title .d{ font-size:12px; color:var(--faint); margin-left:auto; }
+.nv-items{ display:flex; flex-direction:column; gap:12px; margin-top:12px; }
+.nv-item{ background:var(--panel-2); border-radius:var(--r-control); padding:10px 12px; }
+.nv-item b{ display:block; font-size:13.5px; line-height:1.35; }
+.nv-item span{ display:block; font-size:12.5px; color:var(--dim); line-height:1.45; margin-top:2px; }
+.nv-item.plain{ background:transparent; padding:0 12px; font-size:12.5px; color:var(--dim); line-height:1.45; }
+.nv details summary{ margin-top:8px; }
+.nv details .when-open, .nv details[open] .when-shut{ display:none; }
+.nv details[open] .when-open{ display:inline; }
+.nv details[open] summary{ margin-bottom:-2px; }
 .dialog{ background:var(--panel); border-radius:var(--r-sheet); padding:22px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; box-shadow:var(--elev-3); animation:dialogIn var(--spring-default-ms) var(--spring-default) both; }
 @keyframes fadeIn{ from{ opacity:0 } to{ opacity:1 } }
 @keyframes dialogIn{ from{ opacity:0; transform:translateY(12px) scale(.985) } to{ opacity:1; transform:none } }
@@ -295,6 +320,8 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 .rv-timing .nudge{ display:flex; align-items:center; gap:4px; }
 .rv-timing input{ width:92px; font-size:13px; padding:5px 8px; text-align:center; font-variant-numeric:tabular-nums; }
 .rv-timing .btn{ padding:4px 9px; min-width:0; }
+.seg.langs button{ padding:6px 10px; white-space:nowrap; }  /* six choices fit at the narrowest window */
+.lang-list{ font:inherit; font-size:14px; padding:8px 10px; border-radius:var(--r-control); border:1px solid var(--line); background:var(--panel-2); color:var(--ink); max-width:300px; }
 .rv-row select{ font:inherit; font-size:13px; padding:6px 8px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--ink); max-width:150px; }
 .rv-row textarea{ font:inherit; font-size:14.5px; line-height:1.4; width:100%; resize:none; border:1px solid transparent; border-radius:8px; padding:6px 8px;
   background:transparent; color:var(--ink); overflow:hidden; field-sizing:content; min-height:34px; }
@@ -502,7 +529,22 @@ html.reduce-motion .sidecard:active, html.reduce-motion .drop:active, html.reduc
    State. The Python side (app.py) pushes events in with app.onEvent();
    everything the page asks for goes through window.pywebview.api.
 --------------------------------------------------------------------- */
-const LANGS = [["en", "English"], [null, "Auto-detect"], ["other", "Other"]];
+/* The quick choices (the languages most videos here are in), then "More" for every other one Whisper knows */
+const LANGS = [["en", "English"], ["zh", "Chinese"], ["ms", "Malay"], ["ta", "Tamil"], [null, "Auto-detect"], ["other", "More…"]];
+const QUICK_LANGS = LANGS.map(([v]) => v).filter(v => v && v !== "other");
+/* Every language Whisper knows, by name (the web view's own names miss some, like Bashkir) */
+const LANG_NAMES = { af: "Afrikaans", am: "Amharic", ar: "Arabic", as: "Assamese", az: "Azerbaijani", ba: "Bashkir", be: "Belarusian", bg: "Bulgarian", bn: "Bengali", bo: "Tibetan", br: "Breton", bs: "Bosnian", ca: "Catalan", cs: "Czech", cy: "Welsh", da: "Danish", de: "German", el: "Greek", en: "English", es: "Spanish", et: "Estonian", eu: "Basque", fa: "Persian", fi: "Finnish", fo: "Faroese", fr: "French", gl: "Galician", gu: "Gujarati", ha: "Hausa", haw: "Hawaiian", he: "Hebrew", hi: "Hindi", hr: "Croatian", ht: "Haitian Creole", hu: "Hungarian", hy: "Armenian", id: "Indonesian", is: "Icelandic", it: "Italian", ja: "Japanese", jw: "Javanese", ka: "Georgian", kk: "Kazakh", km: "Khmer", kn: "Kannada", ko: "Korean", la: "Latin", lb: "Luxembourgish", ln: "Lingala", lo: "Lao", lt: "Lithuanian", lv: "Latvian", mg: "Malagasy", mi: "Maori", mk: "Macedonian", ml: "Malayalam", mn: "Mongolian", mr: "Marathi", ms: "Malay", mt: "Maltese", my: "Burmese", ne: "Nepali", nl: "Dutch", nn: "Norwegian Nynorsk", no: "Norwegian", oc: "Occitan", pa: "Punjabi", pl: "Polish", ps: "Pashto", pt: "Portuguese", ro: "Romanian", ru: "Russian", sa: "Sanskrit", sd: "Sindhi", si: "Sinhala", sk: "Slovak", sl: "Slovenian", sn: "Shona", so: "Somali", sq: "Albanian", sr: "Serbian", su: "Sundanese", sv: "Swedish", sw: "Swahili", ta: "Tamil", te: "Telugu", tg: "Tajik", th: "Thai", tk: "Turkmen", tl: "Tagalog", tr: "Turkish", tt: "Tatar", uk: "Ukrainian", ur: "Urdu", uz: "Uzbek", vi: "Vietnamese", yi: "Yiddish", yo: "Yoruba", zh: "Chinese (Mandarin)", yue: "Cantonese" };
+function langName(code) { return code ? LANG_NAMES[code] || code : "Auto-detect"; }
+/* Which button is lit: a quick one, Auto-detect, or More (for any other language, or none picked yet) */
+function langKeyOf(language) { return language === null || QUICK_LANGS.includes(language) ? language : "other"; }
+function langPicker(language, act, id) {
+  const key = langKeyOf(language);
+  const all = (S.info.languages || []).map(c => [c, langName(c)]).sort((a, b) => a[1].localeCompare(b[1]));
+  return `<div class="seg langs">${LANGS.map(([v, l]) => `<button data-act="${act}" data-v="${v}" aria-selected="${key === v}">${l}</button>`).join("")}</div>
+    ${key === "other" ? `<select id="${id}" class="lang-list" aria-label="Language">
+      <option value="" ${language === "other" ? "selected" : ""} disabled>Pick a language…</option>
+      ${all.map(([c, n]) => `<option value="${c}" ${c === language ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}`;
+}
 const S = {
   view: "make",
   info: null,                 // from api.init(): settings, levels, hardware, voices
@@ -525,6 +567,9 @@ const gb = mb => (mb / 1024).toFixed(1);
 const api = () => window.pywebview.api;
 
 const ICON = {
+  gift: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>',
+  undo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  redo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>',
   split: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg>',
   merge: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v7M12 20v-7M8 7l4 4 4-4M8 17l4-4 4 4"/></svg>',
   film: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/></svg>',
@@ -805,8 +850,8 @@ function renderSide() {
   c.textContent = waiting; c.classList.toggle("hide", !waiting);
   if (!S.info) return;
   const { settings, levels, hardware: hw } = S.info;
-  const lang = settings.language === "en" ? "English" : settings.language ? settings.language : "Auto-detect";
-  $("#pc-level").textContent = `${levels[settings.level].name} quality · ${lang}`;
+  const lang = langName(settings.language);
+  $("#pc-level").textContent = `${levels[settings.level].name} quality · ${lang}${settings.translate && settings.language !== "en" ? " → English" : ""}`;
   $("#pc-detail").textContent = hw.gpu ? `${hw.gpu} · ${gb(hw.vram_mb)} GB` : `No NVIDIA GPU · runs on the CPU`;
 }
 
@@ -1080,6 +1125,58 @@ function rvTiming(c, i) {
       <button class="btn sec sm" data-act="rv-nudge" data-i="${i}" data-k="${key}" data-d="0.1" title="0.1 s later">+</button></span>`;
   return `<div class="rv-timing">Shows ${nudge("start")} Goes ${nudge("end")} <span>${(c.end - c.start).toFixed(1)} s on screen</span></div>`;
 }
+/* Undo and redo: every change to the lines first saves how they were (with what it was, for the
+   toast). Typing in one line counts as one change until you move to another line or do something else. */
+const RV_UNDO_LIMIT = 200;
+function rvSnap(what, focus = null) {
+  const r = S.review;
+  r.undo = r.undo || [];
+  r.undo.push({ what, focus, cues: JSON.parse(JSON.stringify(r.cues)), names: { ...r.names } });
+  if (r.undo.length > RV_UNDO_LIMIT) r.undo.shift();
+  r.redo = [];
+  r.typing = null;
+}
+function rvTyping(i) {
+  const r = S.review;
+  if (r.typing === i) return;
+  rvSnap("typing", i);
+  r.typing = i;
+  rvUndoButtons();
+}
+function rvStep(back) {
+  const r = S.review, from = back ? r.undo : r.redo, to = back ? r.redo : r.undo;
+  if (!from || !from.length) return;
+  const step = from.pop();
+  to.push({ what: step.what, focus: step.focus, cues: JSON.parse(JSON.stringify(r.cues)), names: { ...r.names } });
+  r.cues = step.cues; r.names = step.names;
+  r.typing = null; r.timing = null; r.caret = null;
+  render();
+  if (step.focus != null) {
+    const box = $(`#review textarea[data-i="${step.focus}"]`);
+    if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+  }
+  toast(`${back ? "Undid" : "Redid"}: ${RV_WHAT[step.what] || step.what}.`);
+}
+const RV_WHAT = { typing: "typing", split: "split line", join: "joined lines", delete: "deleted line", restore: "brought back line",
+  replace: "replace all", time: "time change", speaker: "speaker change", name: "speaker name" };
+function rvUndoButtons() {
+  const r = S.review, u = $("#rv-undo"), d = $("#rv-redo");
+  if (u) u.disabled = !(r.undo && r.undo.length);
+  if (d) d.disabled = !(r.redo && r.redo.length);
+}
+// Ctrl+Z / Ctrl+Y (and Ctrl+Shift+Z) while the lines are open. The find, replace, time and name
+// boxes keep their own undo; the lines themselves use this one, so a join or split undoes too.
+document.addEventListener("keydown", e => {
+  if (!S.review || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const key = e.key.toLowerCase();
+  if (key !== "z" && key !== "y") return;
+  const t = e.target;
+  if (t && t.matches && t.matches("input, select, textarea") && !t.matches('textarea[data-rv="text"]')) return;
+  if ($("#dialog-root") && $("#dialog-root").innerHTML.trim()) return;
+  e.preventDefault();
+  rvStep(key === "z" && !e.shiftKey);
+});
+
 /* A new time for one end of a line, kept between its neighbours and at least 0.2 s long */
 function rvSetTime(i, key, t) {
   const cues = S.review.cues, c = cues[i];
@@ -1103,6 +1200,8 @@ function viewReview() {
             ? (r.video ? `Fixing an existing file · plays from ${esc(r.video)}` : "Fixing an existing file · no video with the same name next to it, so lines can't play")
             : `Check before saving${queueLeft() ? ` · ${queueLeft()} more after this` : ""}`}</div>
           <h3 class="trunc">${esc(r.file)}</h3></div>
+        <button class="iconbtn" id="rv-undo" data-act="rv-undo" title="Undo (Ctrl+Z)" aria-label="Undo" ${S.review.undo && S.review.undo.length ? "" : "disabled"}>${ICON.undo}</button>
+        <button class="iconbtn" id="rv-redo" data-act="rv-redo" title="Redo (Ctrl+Y)" aria-label="Redo" ${S.review.redo && S.review.redo.length ? "" : "disabled"}>${ICON.redo}</button>
         <button class="btn ghost sm" data-act="rv-discard">${r.mode === "file" ? "Close" : "Discard"}</button>
         <button class="btn" data-act="rv-save">${r.mode === "file" ? "Save changes" : "Save subtitles"}</button></div>
       ${r.mode === "file" && r.formatted ? `<div class="banner">This file has formatting, like italics, colours or positions. Saving keeps the words and timing but not the formatting, and splits lines the way Settings says. The original is kept as a backup.</div>` : ""}
@@ -1126,6 +1225,7 @@ function bindReview(root) {
     const i = +el.dataset.i;
     if (el.dataset.rv === "text") {
       el.oninput = () => {
+        rvTyping(i);
         S.review.cues[i].text = el.value.replace(/\n/g, " ");
         $("#rv-warn-" + i).innerHTML = rvTooLong(i) ? '<span class="pill bad">Too long</span>' : "";
         rvCount();
@@ -1142,14 +1242,14 @@ function bindReview(root) {
       el.onchange = () => {
         const t = unstamp(el.value);
         if (t === null) toast("Type a time like 1:02.35", true);
-        else rvSetTime(i, el.dataset.rv, t);
+        else { rvSnap("time"); rvSetTime(i, el.dataset.rv, t); }
         render();
       };
       el.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } };
     } else if (el.dataset.rv === "speaker") {
-      el.onchange = () => { S.review.cues[i].speaker = +el.value; $("#rv-warn-" + i).innerHTML = rvTooLong(i) ? '<span class="pill bad">Too long</span>' : ""; rvCount(); };
+      el.onchange = () => { rvSnap("speaker"); rvUndoButtons(); S.review.cues[i].speaker = +el.value; $("#rv-warn-" + i).innerHTML = rvTooLong(i) ? '<span class="pill bad">Too long</span>' : ""; rvCount(); };
     } else if (el.dataset.rv === "name") {
-      el.onchange = () => { S.review.names[el.dataset.k] = el.value.trim() || `Speaker ${+el.dataset.k + 1}`; render(); };
+      el.onchange = () => { rvSnap("name"); S.review.names[el.dataset.k] = el.value.trim() || `Speaker ${+el.dataset.k + 1}`; render(); };
     }
   });
 }
@@ -1242,8 +1342,8 @@ function viewSettings() {
   if (!S.info) return "";
   const { levels, recommended, hardware: hw } = S.info;
   const d = S.draft || (S.draft = { level: S.info.settings.level, language: S.info.settings.language });
-  const langKey = d.language === "en" || d.language === null ? d.language : "other";
-  const changed = d.level !== S.info.settings.level || d.language !== S.info.settings.language;
+  // "More…" with no language picked from its list yet isn't a change
+  const changed = d.language !== "other" && (d.level !== S.info.settings.level || d.language !== S.info.settings.language);
   const saving = S.run && S.run.kind === "prepare";
   const rows = Object.entries(levels).map(([key, lv]) => `
     <div class="grp-row tap" role="radio" tabindex="0" aria-checked="${d.level === key}" data-act="level" data-v="${key}">
@@ -1262,15 +1362,20 @@ function viewSettings() {
         This PC: ${hw.gpu ? `${esc(hw.gpu)} (${gb(hw.vram_mb)} GB)` : "no NVIDIA GPU, so it runs on the CPU"} · ${hw.ram_gb} GB RAM · ${hw.cores} CPU cores.
         ${d.level === "potato" ? " Potato turns off speaker names and the resource meters." : ""}</p></div>
     <div class="block"><h2>Language spoken in your videos</h2>
-      <div class="card stack"><div class="seg">${LANGS.map(([v, l]) => `<button data-act="lang" data-v="${v}" aria-selected="${langKey === v}">${l}</button>`).join("")}</div>
-        ${langKey === "other" ? `<div><input type="text" id="lang-code" placeholder="Language code, e.g. zh, ms, ta, ja" value="${esc(d.language === "other" ? "" : d.language)}" maxlength="8" style="max-width:280px"></div>` : ""}
-      </div>
-      <p class="foot">Auto-detect works for most videos. Picking the language is a little more accurate.</p></div>
+      <div class="card stack">${langPicker(d.language, "lang", "lang-code")}</div>
+      <p class="foot">Auto-detect works for most videos. Picking the language is a little more accurate.</p>
+      <div class="grp" style="margin-top:12px">${prefRow("Subtitles in English",
+        S.info.settings.language === "en"
+          ? (S.info.settings.translate ? "On, but your videos are set to English, so there's nothing to translate. Pick the language they're in, or Auto-detect."
+            : "For videos in another language. Pick the language they're in above (or Auto-detect) first.")
+          : `Translates as it goes, for videos in another language.${S.info.settings.level === "high"
+            ? ` High can't translate, so this uses Balanced's model${S.info.models.whisper.balanced ? "" : " (a 1.5 GB download the first time)"}.` : ""}`,
+        switchPref("translate"))}</div></div>
     <div class="block">
       ${saving ? `<h2>Downloading what ${esc(levels[S.run.level].name)} needs</h2><div id="downloads">${downloadRows(S.run.level)}</div>
           <p class="foot">First time only. Levels marked Downloaded switch instantly.</p>`
         : S.run ? `<button class="btn big" disabled>Save</button><p class="foot">You can save once the current video is finished.</p>`
-        : `<button class="btn big" data-act="save" ${changed || !S.info.configured ? "" : "disabled"}>${S.info.configured ? "Save" : "Save and download"}</button>`}
+        : `<button class="btn big" data-act="save" ${changed || (!S.info.configured && d.language !== "other") ? "" : "disabled"}>${S.info.configured ? "Save" : "Save and download"}</button>`}
     </div>
     ${prefsBlocks()}
     ${modelsBlock()}
@@ -1464,25 +1569,48 @@ function installedText() {
 function newsHtml(text) {
   return esc(text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
 }
+/* One change: "**Undo when fixing lines.** Ctrl+Z and..." becomes a heading and a line under it */
+function newsItem(text) {
+  const m = /^\*\*(.+?)\*\*\s*(.*)$/.exec(text);
+  if (!m) return `<div class="nv-item plain">${newsHtml(text)}</div>`;
+  return `<div class="nv-item"><b>${esc(m[1].replace(/[.:]$/, ""))}</b>${m[2] ? `<span>${newsHtml(m[2])}</span>` : ""}</div>`;
+}
+/* "31 October 2026" -> "31 Oct 2026" */
+const shortDate = d => (d || "").replace(/^(\d+ )(\w{3})\w*( \d{4})$/, "$1$2$3");
 async function showNews(list, fresh) {
   if (!list) {
     try { list = await api().all_news(); } catch (e) { list = []; }
   }
   if (!list.length) return toast("There's no list of changes in this copy of Subtitle Maker.", true);
-  const title = fresh ? `What's new in ${esc(list[0].version)}` : "What's new";
+  // Oldest at the top, newest at the bottom (CHANGELOG.md lists them newest first)
+  const versions = [...list].reverse(), installed = S.info.release || list[0].version;
+  const title = fresh ? `Updated to ${esc(list[0].version)}` : "What's new";
+  const sub = fresh ? (list.length > 1 ? `Everything from the last ${list.length} versions` : "Here's what changed")
+    : `You have ${esc(installed)}${(list.find(v => v.version === installed) || {}).date ? ` · ${esc(shortDate(list.find(v => v.version === installed).date))}` : ""}`;
+  const version = v => {
+    const current = v.version === installed;
+    // Everything new to you stays open; in the full list, versions before yours are folded away
+    const open = fresh || current || versions.indexOf(v) >= versions.findIndex(x => x.version === installed);
+    const items = `<div class="nv-items">${v.changes.map(newsItem).join("")}</div>`;
+    return `<section class="nv${current ? " current" : ""}">
+      <div class="nv-title"><span class="v">${esc(v.version)}</span>${current ? '<span class="pill accent">Installed</span>' : ""}
+        <span class="d">${esc(shortDate(v.date))}</span></div>
+      ${open ? items : `<details><summary><span class="when-shut">Show ${v.changes.length} change${v.changes.length === 1 ? "" : "s"}</span><span class="when-open">Hide</span></summary>${items}</details>`}</section>`;
+  };
   $("#dialog-root").innerHTML = `
-    <div class="scrim"><div class="dialog stack" role="dialog" aria-modal="true" aria-labelledby="nw-title">
-      <h3 id="nw-title">${title}</h3>
-      ${list.map((v, i) => `<div class="news-version">
-        ${fresh && i === 0 ? "" : `<div class="between"><b>${esc(v.version)}</b><span class="sm dim">${esc(v.date || "")}</span></div>`}
-        <ul class="list sm news-list">${v.changes.map(c => `<li>${newsHtml(c)}</li>`).join("")}</ul></div>`).join("")}
-      <div class="row"><div class="grow"></div><button class="btn" id="nw-done" data-dismiss>${fresh ? "Got it" : "Done"}</button></div>
+    <div class="scrim"><div class="dialog news-sheet" role="dialog" aria-modal="true" aria-labelledby="nw-title">
+      <div class="nv-head"><div class="tile-icon">${ICON.gift}</div>
+        <div class="grow"><h3 id="nw-title">${title}</h3><div class="sub">${sub}</div></div></div>
+      <div class="nv-body" id="nw-body"><div class="timeline">${versions.map(version).join("")}</div></div>
+      <div class="nv-foot"><button class="btn" id="nw-done" data-dismiss>${fresh ? "Got it" : "Done"}</button></div>
     </div></div>`;
+  // Open at the newest (at the bottom), with its heading at the top of the view
+  const body = $("#nw-body"), newest = body.querySelector(".nv:last-child");
+  body.scrollTop = newest.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 8;
   $("#nw-done").onclick = () => {
     closeDialogs();
     if (fresh) api().news_seen();
   };
-  $("#nw-done").focus();
 }
 
 /* Stable is the main branch everybody gets; Experimental has new things first, less tested */
@@ -1636,12 +1764,9 @@ function viewSetup() {
               <div class="right sm dim mono">${lv.download}</div></div>`).join("")}</div></div>${nav("wiz-next")}`;
       break;
     case 2: {
-      const key = w.language === "en" || w.language === null ? w.language : "other";
       body = `<div class="wiz-body"><h1>What language do your videos use?</h1>
           <p class="lede">Picking it is a little more accurate than letting it guess.</p>
-          <div class="card stack"><div class="seg">${LANGS.map(([v, l]) => `<button data-act="wiz-lang" data-v="${v}" aria-selected="${key === v}">${l}</button>`).join("")}</div>
-            ${key === "other" ? `<input type="text" id="wiz-code" placeholder="Language code, e.g. zh, ms, ta, ja" value="${esc(w.language === "other" ? "" : w.language)}" maxlength="8" style="max-width:300px">` : ""}
-          </div></div>${nav("wiz-next")}`;
+          <div class="card stack">${langPicker(w.language, "wiz-lang", "wiz-code")}</div></div>${nav("wiz-next")}`;
       break;
     }
     case 3:
@@ -1907,14 +2032,14 @@ function bind(root) {
   const hot = $("#hotwords", root);
   if (hot) hot.onchange = async () => { S.info.settings = await api().save_prefs({ hotwords: hot.value.trim() }); toast("Saved."); };
   const wizCode = $("#wiz-code", root);
-  if (wizCode) wizCode.oninput = () => { S.setup.language = wizCode.value.trim().toLowerCase() || "other"; };
+  if (wizCode) wizCode.onchange = () => { S.setup.language = wizCode.value || "other"; };
   const code = $("#lang-code", root);
-  if (code) code.oninput = () => { S.draft.language = code.value.trim().toLowerCase() || "other"; updateSave(); };
+  if (code) code.onchange = () => { S.draft.language = code.value || "other"; updateSave(); };
 }
 
 function updateSave() {
   const b = $('[data-act="save"]');
-  if (b) b.disabled = S.info.configured && S.draft.level === S.info.settings.level && S.draft.language === S.info.settings.language;
+  if (b) b.disabled = S.draft.language === "other" || (S.info.configured && S.draft.level === S.info.settings.level && S.draft.language === S.info.settings.language);
 }
 
 const ACTIONS = {
@@ -1931,6 +2056,7 @@ const ACTIONS = {
   "rv-timing": el => { const i = +el.dataset.i; S.review.timing = S.review.timing === i ? null : i; render(); },
   "rv-nudge": el => {
     const i = +el.dataset.i, key = el.dataset.k, c = S.review.cues[i];
+    rvSnap("time");
     rvSetTime(i, key, c[key] + parseFloat(el.dataset.d));
     render();
   },
@@ -1947,6 +2073,7 @@ const ACTIONS = {
     if (!left || !right) return toast("Put the cursor where the line should be split.", true);
     // The time is shared out by length, which is close to how long each part takes to say
     const cut = Math.round((c.start + (c.end - c.start) * left.length / (left.length + right.length)) * 100) / 100;
+    rvSnap("split", i);
     r.cues.splice(i, 1, { ...c, text: left, end: cut }, { ...c, text: right, start: cut });
     r.timing = null; r.caret = null;
     render();
@@ -1955,16 +2082,20 @@ const ACTIONS = {
     const r = S.review, i = +el.dataset.i, c = r.cues[i], next = r.cues[i + 1];
     if (!next || next.gone) return;
     if (r.hasNames && next.speaker !== c.speaker) toast(`Joined into ${r.names[c.speaker] || "the first speaker"}'s line.`);
+    rvSnap("join", i);
     r.cues.splice(i, 2, { ...c, text: `${c.text.trim()} ${next.text.trim()}`, end: next.end });
     r.timing = null; r.caret = null;
     render();
   },
-  "rv-del": el => { const c = S.review.cues[+el.dataset.i]; c.gone = !c.gone; render(); },
+  "rv-del": el => { const c = S.review.cues[+el.dataset.i]; rvSnap(c.gone ? "restore" : "delete"); c.gone = !c.gone; render(); },
+  "rv-undo": () => rvStep(true),
+  "rv-redo": () => rvStep(false),
   "rv-replace": async () => {
     const find = $("#rv-find").value, repl = $("#rv-repl").value;
     if (!find) return;
     const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
     let n = 0;
+    if (S.review.cues.some(c => !c.gone && c.text.search(re) >= 0)) rvSnap("replace");  // nothing to undo if nothing matches
     S.review.cues.forEach(c => { if (c.gone) return; c.text = c.text.replace(re, () => { n++; return repl; }); });
     const remember = $("#rv-remember") && $("#rv-remember").checked;
     render();
@@ -2030,12 +2161,12 @@ const ACTIONS = {
   restart: () => api().restart(),
   "wiz-next": () => {
     const w = S.setup;
-    if (w.step === 2 && w.language === "other") return toast("Type a language code, or pick English or Auto-detect.", true);
+    if (w.step === 2 && w.language === "other") return toast("Pick a language from the list, or Auto-detect.", true);
     w.step++; render(true);
   },
   "wiz-back": () => { S.setup.step = Math.max(0, S.setup.step - 1); S.setup.error = null; render("back"); },
   "wiz-level": el => { S.setup.level = el.dataset.v; render(); },
-  "wiz-lang": el => { const v = el.dataset.v; S.setup.language = v === "null" ? null : v; render(); if (v === "other") $("#wiz-code").focus(); },
+  "wiz-lang": el => { const v = el.dataset.v; S.setup.language = v === "null" ? null : v === "other" && langKeyOf(S.setup.language) === "other" ? S.setup.language : v; render(); if (v === "other") $("#wiz-code").focus(); },
   "wiz-out-here": () => { S.setup.output_dir = null; render(); },
   "wiz-out-folder": async () => { const dir = await api().choose_folder(); if (dir) { S.setup.output_dir = dir; render(); } },
   "wiz-download": () => setupDownload(),
@@ -2093,9 +2224,10 @@ const ACTIONS = {
   clear: () => { S.queue = S.queue.filter(q => q.status === "waiting"); render(); },
   log: el => { if (S.run) S.run.logOpen = el.open; },
   level: el => { S.draft.level = el.dataset.v; render(); },
-  lang: el => { const v = el.dataset.v; S.draft.language = v === "null" ? null : v; render(); if (v === "other") $("#lang-code").focus(); },
+  lang: el => { const v = el.dataset.v; S.draft.language = v === "null" ? null : v === "other" && langKeyOf(S.draft.language) === "other" ? S.draft.language : v; render(); if (v === "other") $("#lang-code").focus(); },
   save: async () => {
-    const lang = S.draft.language === "other" ? null : S.draft.language, level = S.draft.level;
+    if (S.draft.language === "other") return toast("Pick a language from the list, or Auto-detect.", true);
+    const lang = S.draft.language, level = S.draft.level;
     S.info.settings = await api().save_settings(level, lang);
     S.info.configured = true;
     S.draft = null;
@@ -2362,6 +2494,7 @@ async function startApp() {
   if (S.info.news && S.info.news.length && !S.info.mode && S.info.configured)
     setTimeout(() => { if (!$("#dialog-root").innerHTML.trim()) showNews(S.info.news, true); }, 700);
   if (S.info.mode === "update") openUpdate();  // opened by Update.bat
+  else if (S.info.mode === "uninstall") { go("settings"); ACTIONS.uninstall(); }  // Settings > Apps > Uninstall
   // Quietly, and a few seconds in so it doesn't slow the start: only a ready update is shown
   // Even with automatic checks off this looks, but then only speaks up for a security update
   else setTimeout(() => checkUpdate(true), 4000);

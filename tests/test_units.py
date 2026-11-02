@@ -235,6 +235,68 @@ assert set(models.WHISPER_REVISIONS) == set(models.WHISPER_REPOS.values()), "eve
 assert all(len(v) == 40 for v in models.WHISPER_REVISIONS.values())
 assert set(models.SHA256) == {models.SEG_URL, models.EMB_URL, models.VOICE_URL}
 
+# A models folder (or one model) that's a link elsewhere still counts as inside the models folder
+assert models.cache_folder("large-v3-turbo").name == "models--mobiuslabsgmbh--faster-whisper-large-v3-turbo"
+for bad in ("C:x", "a:b"):
+    try:
+        models.cache_folder(bad)
+        raise AssertionError(f"{bad!r} should be refused")
+    except ValueError:
+        pass
+
+# After an update the web view's saved copy of the page goes (it kept showing the 29 October page),
+# and only then: an unchanged page keeps its caches, so opening stays quick
+with tempfile.TemporaryDirectory() as tmp:
+    storage = Path(tmp)
+    cache = storage / "EBWebView" / "Default" / "Cache"
+    cache.mkdir(parents=True)
+    (cache / "old").write_text("old page")
+    app.forget_old_page(storage)
+    assert not cache.exists() and (storage / "page.txt").exists()
+    cache.mkdir(parents=True)
+    (cache / "new").write_text("new page")
+    app.forget_old_page(storage)
+    assert (cache / "new").exists(), "the same page again leaves the cache alone"
+    (storage / "page.txt").write_text("a different page")
+    app.forget_old_page(storage)
+    assert not cache.exists()
+
+# A proper Windows app: a copy that isn't installed (this one, in the tests) doesn't register,
+# and Uninstall takes away the Start menu entry and Settings > Apps' entry
+import uninstall  # noqa: E402
+import winapp  # noqa: E402
+
+if sys.platform == "win32":
+    assert "not an installed copy" in winapp.ensure(), "only the installed copy registers"
+    assert winapp.start_menu_link().name == "Subtitle Maker.lnk" and "Start Menu" in str(winapp.start_menu_link())
+    removal = uninstall.script({"data": str(Path(tempfile.gettempdir()) / "x"), "program": None, "shortcut": None,
+                                "program_files": [], "voices": [], "voices_to": ""}, True, 1)
+    assert str(winapp.start_menu_link()) in removal and f'reg delete "HKCU\\{winapp.KEY}" /f' in removal, removal
+
+# Languages: the window's list is exactly Whisper's, and a code it doesn't know is never saved
+from faster_whisper.tokenizer import _LANGUAGE_CODES  # noqa: E402
+
+assert set(paths.LANGUAGES) == set(_LANGUAGE_CODES), set(paths.LANGUAGES) ^ set(_LANGUAGE_CODES)
+paths.save_settings({**paths.load_settings(), "language": "zz"})
+assert paths.load_settings()["language"] == paths.DEFAULT_SETTINGS["language"], "an unknown code goes back to the default"
+paths.save_settings({**paths.load_settings(), "language": "ta"})
+assert paths.load_settings()["language"] == "ta"
+paths.save_settings({**paths.load_settings(), "language": None})
+assert paths.load_settings()["language"] is None, "Auto-detect stays Auto-detect"
+saver = app.Api.__new__(app.Api)
+assert saver.save_settings("high", "yue")["language"] == "yue"
+assert saver.save_settings("high", "klingon")["language"] is None, "an unknown code becomes Auto-detect"
+paths.save_settings(paths.DEFAULT_SETTINGS)
+
+# Subtitles in English: off by default, only true/false, and the turbo model (which can't
+# translate) hands over to one that can
+assert paths.DEFAULT_SETTINGS["translate"] is False
+paths.save_settings({**paths.load_settings(), "translate": "yes"})
+assert paths.load_settings()["translate"] is False, "anything but true/false goes back to off"
+assert paths.TRANSLATE_WITH["large-v3-turbo"] in {lv["model"] for lv in paths.LEVELS.values()}
+assert "translate" in app.Api._INSTANT
+paths.save_settings(paths.DEFAULT_SETTINGS)
+
 # A speaker model download that isn't the expected file is thrown away, never kept
 import tempfile as _tf  # noqa: E402
 import urllib.request as _ur  # noqa: E402
@@ -551,4 +613,12 @@ def walk(obj, base=""):
 walk(api)
 nested = [e for e in exposed if "." in e]
 assert exposed and not nested, nested
+# --- The installer scripts are plain ASCII ---
+# Windows PowerShell 5.1 reads a .ps1 without a byte-order mark as ANSI, so one "…" or "█" in
+# install.ps1 breaks "Install Subtitle Maker.bat", which runs it from a file (a paste is fine).
+for script in ("install.ps1", "windows-app.ps1", "Install Subtitle Maker.bat", "Setup.bat"):
+    text = (ROOT / script).read_bytes()
+    bad = [i for i, b in enumerate(text) if b > 127]
+    assert not bad, f"{script} has non-ASCII characters (first at byte {bad[0]})"
+
 print(f"Unit tests passed (page API: {len(exposed)} functions)")

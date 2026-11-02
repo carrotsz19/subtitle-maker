@@ -4,6 +4,18 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 0.2.2 · 31 October 2026
+
+- **Undo when fixing lines.** Ctrl+Z and Ctrl+Y (or the buttons next to Save) undo and redo any change: typing, splitting, joining, deleting, Replace all, times and speakers.
+- **Subtitles in English.** Settings > Language has a switch that translates videos in another language into English as it goes. High quality can't translate, so it uses Balanced's model for that (a 1.5 GB download the first time).
+- **More languages.** English, Chinese, Malay, Tamil and Auto-detect are one click away, and More… lists every language it knows (100) by name, instead of typing a code.
+- **A proper Windows app.** Search for Subtitle Maker and it opens straight away from the Start menu, it pins to the taskbar properly, and it's in Settings > Apps with an Uninstall button.
+- **Updates now show their new screens.** The window kept showing a saved copy of the 0.2.0 screens after every update.
+- **Installing and updating work on school and office Wi-Fi.** GitHub only allows 60 update checks an hour per network without signing in, and a shared network runs out fast. Subtitle Maker now uses GitHub's ordinary pages, which don't have that limit.
+- **An installer window.** Double-clicking Install Subtitle Maker.bat opens a proper installer instead of a black console: each step ticks off, the downloads show how far they've got, a problem is explained with a Try again button, and it hands over to Subtitle Maker once it's open.
+- **Installing works first time.** The install shows each step and its download progress as it goes, says "Done" once the window is open, and opens the window by itself. Before, it sat silent for many minutes, could wait for ever on a hidden "press any key", and sometimes never opened the window. It also tries again by itself when antivirus briefly locks the new files, and the downloadable installer no longer looks like malware to antivirus.
+- Fixed: a models folder that's a link to another drive was refused.
+
 ## 0.2.1 · 31 October 2026
 
 - **Safer updates.** An update now goes in all at once. If something gets in the way partway, the old version is put back, instead of leaving a mix of old and new files.
