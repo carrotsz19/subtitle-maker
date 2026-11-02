@@ -3,17 +3,18 @@
 Turns the talking in a video into movie-style subtitles (.srt) for DaVinci Resolve,
 on your own PC. Optional speaker detection labels who is talking.
 
-**New PC:** open PowerShell (right-click Start > Terminal), paste this and press Enter:
+**New PC:** download `Subtitle-Maker-Setup.exe` from the
+[latest release](https://github.com/carrotsz19/subtitle-maker/releases/latest) and double-click it.
+It isn't signed yet, so Windows says "Windows protected your PC": click **More info**, then
+**Run anyway**. The installer window installs it into `%USERPROFILE%\Subtitle Maker`, with Python
+and everything else, puts a shortcut on the desktop and opens the app.
+
+Or, with no download warnings at all: open PowerShell (right-click Start > Terminal), paste this and
+press Enter. It does the same in the console, with the newest version of `main`:
 
 ```powershell
 irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1 | iex
 ```
-
-It downloads the latest version to `%USERPROFILE%\Subtitle Maker`, installs Python and
-everything else, puts a shortcut on the desktop and opens the setup window. No security
-warnings, because nothing is downloaded through the browser. (Prefer double-clicking?
-`Install Subtitle Maker.bat` does the same in an installer window, with no console, after the usual
-warnings for downloaded files.)
 
 **Updating:** Settings > Updates in the window, or `Update.bat`.
 
@@ -59,3 +60,9 @@ Push to `experimental` first and let the Windows tests pass (Actions tab) before
 3. Actions tab > Release > Run workflow on `main`, with the version (`v0.3.0`). It tags `main`
    and makes the GitHub release, with the CHANGELOG section at the top of its notes and the
    installer attached. It stops if the CHANGELOG has no section for that version.
+
+The installer is `Subtitle-Maker-Setup.exe`, built by the Release workflow with
+[Inno Setup](https://jrsoftware.org/isinfo.php) from [installer/SubtitleMaker.iss](installer/SubtitleMaker.iss).
+It has the program's files inside it and runs `install.ps1` from them in the installer window, so it
+downloads nothing but Python and its packages. (It replaced a .bat that downloaded and ran
+`install.ps1`, which antivirus took for a trojan dropper.)

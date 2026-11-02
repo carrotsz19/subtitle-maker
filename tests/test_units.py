@@ -615,8 +615,8 @@ nested = [e for e in exposed if "." in e]
 assert exposed and not nested, nested
 # --- The installer scripts are plain ASCII ---
 # Windows PowerShell 5.1 reads a .ps1 without a byte-order mark as ANSI, so one "…" or "█" in
-# install.ps1 breaks "Install Subtitle Maker.bat", which runs it from a file (a paste is fine).
-for script in ("install.ps1", "windows-app.ps1", "Install Subtitle Maker.bat", "Setup.bat"):
+# install.ps1 breaks Subtitle-Maker-Setup.exe, which runs it from a file (a paste is fine).
+for script in ("install.ps1", "windows-app.ps1", "Setup.bat", "installer/SubtitleMaker.iss"):
     text = (ROOT / script).read_bytes()
     bad = [i for i, b in enumerate(text) if b > 127]
     assert not bad, f"{script} has non-ASCII characters (first at byte {bad[0]})"

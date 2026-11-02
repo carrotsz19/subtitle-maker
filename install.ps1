@@ -6,9 +6,10 @@
 # It downloads the latest version into %USERPROFILE%\Subtitle Maker, installs Python and its
 # packages (Setup.bat), puts a shortcut on the desktop and opens the setup window.
 #
-# "Install Subtitle Maker.bat" runs this same script for people who'd rather double-click, with
-# SUBTITLE_MAKER_GUI=1: then there's no console at all, just the Veyra installer window (made
-# here with WPF, which every Windows PC has, since there's no Python yet to show the app's own).
+# "Subtitle-Maker-Setup.exe" (installer/SubtitleMaker.iss) runs this same script from the files
+# inside it, with SUBTITLE_MAKER_GUI=1: then there's no console at all, just the Veyra installer
+# window (made here with WPF, which every Windows PC has, since there's no Python yet to show the
+# app's own).
 #
 # For the experimental version (newer, less tested; Settings > Updates switches back to Stable):
 #
@@ -140,7 +141,19 @@ function Install-SubtitleMaker {
     Set-InstallStage 0 'Finding the latest version'
     New-Item -ItemType Directory -Force -Path $data | Out-Null
 
-    # ---- 1. The latest version from GitHub ----------------------------------------------------
+    # ---- 1. The program's files ---------------------------------------------------------------
+    # "Subtitle-Maker-Setup.exe" has them inside it: it unpacks them to a folder and passes that
+    # folder and its version here, so nothing is downloaded but Python and its packages.
+    $source = $env:SUBTITLE_MAKER_SOURCE
+    $unpacked = $null; $zip = $null
+    if ($source) {
+        $sha = $env:SUBTITLE_MAKER_SHA
+        if ($sha -notmatch '^[0-9a-f]{40}$') { Show-InstallLine "The installer doesn't say which version it has." Red; return $false }
+        Show-InstallLine "Copying Subtitle Maker ($($sha.Substring(0, 7)))..."
+        Set-InstallStatus 'Copying Subtitle Maker' $sha.Substring(0, 7)
+        $root = $source
+    } else {
+    # The latest version from GitHub
     $sha = $null
     try {
         [xml]$feed = (Invoke-WebRequest -Headers $plain -Uri "$web/$repo/commits/$branch.atom" -UseBasicParsing).Content
@@ -170,14 +183,15 @@ function Install-SubtitleMaker {
     }
     Expand-Archive -LiteralPath $zip -DestinationPath $unpacked -Force
     $root = (Get-ChildItem -LiteralPath $unpacked -Directory | Select-Object -First 1).FullName
+    }
     if (-not (Test-Path (Join-Path $root 'make_subtitles.py'))) {
         Show-InstallLine "The download didn't look right. Nothing was changed." Red
         return $false
     }
 
     # The exact files this version has: updates replace and Uninstall removes these, nothing else
-    # (tests and .github are for developing it, not part of an install)
-    foreach ($dev in 'tests', '.github') {
+    # (tests, .github and installer are for developing it, not part of an install)
+    foreach ($dev in @('tests', '.github', 'installer') | Where-Object { -not $source }) {
         $devPath = Join-Path $root $dev
         if (Test-Path $devPath) { Remove-Item -LiteralPath $devPath -Recurse -Force }
     }
@@ -191,7 +205,7 @@ function Install-SubtitleMaker {
         Show-InstallLine "Couldn't copy the files into $dest." Red
         return $false
     }
-    Remove-Item -LiteralPath $zip, $unpacked -Recurse -Force -ErrorAction SilentlyContinue
+    if ($unpacked) { Remove-Item -LiteralPath $zip, $unpacked -Recurse -Force -ErrorAction SilentlyContinue }
     Show-InstallLine ''
     if (Test-InstallCancelled) { return $false }
 
@@ -292,15 +306,15 @@ try {
     try { $dark = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -ErrorAction Stop).AppsUseLightTheme -eq 0 } catch { }
     $c = if ($dark) {
         @{ Bg = '#15140F'; Card = '#1E1C17'; Fill = '#272420'; Line = '#37342C'; Ink = '#F2EFE8'; Dim = '#A29C8F'; Faint = '#5E5A52'
-           Tint = '#D9633E'; OnTint = '#161310'; Ok = '#7FAE87'; Shadow = '#000000'; Hover = '#2E2B26' }
+           Tint = '#D9633E'; OnTint = '#161310'; Ok = '#7FAE87'; Shadow = '#000000'; Hover = '#2E2B26'; Side = '#1A1914' }
     } else {
         @{ Bg = '#F3F1EC'; Card = '#FFFFFF'; Fill = '#ECEAE5'; Line = '#DCD8CF'; Ink = '#1B1A18'; Dim = '#6D6961'; Faint = '#B9B5AC'
-           Tint = '#B3492B'; OnTint = '#FFFFFF'; Ok = '#3F6B4A'; Shadow = '#1B1A18'; Hover = '#E4E1DA' }
+           Tint = '#B3492B'; OnTint = '#FFFFFF'; Ok = '#3F6B4A'; Shadow = '#1B1A18'; Hover = '#E4E1DA'; Side = '#EAE7E0' }
     }
     $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Install Subtitle Maker" Width="540" SizeToContent="Height"
+        Title="Install Subtitle Maker" Width="820" Height="476"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
         Foreground="$($c.Ink)" Opacity="0" UseLayoutRounding="True" TextOptions.TextFormattingMode="Ideal">
@@ -350,71 +364,81 @@ try {
   <Border x:Name="Shell" Margin="20" CornerRadius="18" Background="$($c.Bg)" BorderBrush="$($c.Line)" BorderThickness="1">
     <Border.Effect><DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270" Opacity="0.22" Color="$($c.Shadow)"/></Border.Effect>
     <Border.RenderTransform><TranslateTransform x:Name="Lift" Y="10"/></Border.RenderTransform>
-    <Grid Margin="26,20,20,24">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-      </Grid.RowDefinitions>
+    <Grid>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="268"/><ColumnDefinition/></Grid.ColumnDefinitions>
 
-      <Grid Grid.Row="0">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <Viewbox x:Name="Logo" Width="48" Height="48" Margin="0,6,0,0">
-          <Canvas Width="1024" Height="1024">
-            <Rectangle Width="1024" Height="1024" RadiusX="225" RadiusY="225" Fill="#F3F1EC" Stroke="#171B1A18" StrokeThickness="22"/>
-            <Line X1="762" Y1="267" X2="512" Y2="766" Stroke="#3F6B4A" StrokeThickness="128" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-            <Line X1="262" Y1="267" X2="512" Y2="766" Stroke="#B3492B" StrokeThickness="128" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-            <Line X1="262" Y1="267" X2="512" Y2="766" Stroke="#1C1B19" Opacity="0.2" StrokeThickness="128" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
-              <Line.Clip>
-                <GeometryGroup FillRule="Nonzero">
-                  <PathGeometry Figures="M819.2,295.7 L704.8,238.3 L454.8,737.3 L569.2,794.7 Z"/>
-                  <EllipseGeometry Center="512,766" RadiusX="64" RadiusY="64"/>
-                </GeometryGroup>
-              </Line.Clip>
-            </Line>
-          </Canvas>
-        </Viewbox>
-        <StackPanel Grid.Column="1" Margin="14,6,0,0" VerticalAlignment="Center">
-          <TextBlock Text="VEYRA" FontSize="10.5" FontWeight="Bold" Foreground="$($c.Tint)"/>
-          <TextBlock Text="Subtitle Maker" FontSize="21" FontWeight="Bold" FontFamily="Segoe UI Variable Display, Segoe UI"/>
-        </StackPanel>
-        <Button x:Name="MinButton" Grid.Column="2" Style="{StaticResource Ghost}" Content="&#xE921;" VerticalAlignment="Top" ToolTip="Minimise"/>
-        <Button x:Name="CloseButton" Grid.Column="3" Style="{StaticResource Ghost}" Content="&#xE8BB;" VerticalAlignment="Top" ToolTip="Close"/>
-      </Grid>
-
-      <TextBlock x:Name="Headline" Grid.Row="1" Margin="0,22,6,0" FontSize="17" FontWeight="SemiBold"
-                 FontFamily="Segoe UI Variable Display, Segoe UI" Text="Installing Subtitle Maker"/>
-      <TextBlock x:Name="Intro" Grid.Row="2" Margin="0,3,6,0" Foreground="$($c.Dim)" TextWrapping="Wrap"
-                 Text="About 5 to 15 minutes, mostly downloading. You can keep using your PC while it works."/>
-
-      <Border Grid.Row="3" Margin="0,16,6,0" CornerRadius="14" Background="$($c.Card)" BorderBrush="$($c.Line)" BorderThickness="1" Padding="16,6">
-        <StackPanel x:Name="Steps"/>
+      <!-- Left: who it is and how it's going -->
+      <Border CornerRadius="17,0,0,17" Background="$($c.Side)" BorderBrush="$($c.Line)" BorderThickness="0,0,1,0">
+        <Grid Margin="28,28,24,26">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <Viewbox x:Name="Logo" Width="58" Height="58" HorizontalAlignment="Left">
+            <Canvas Width="1024" Height="1024">
+              <Rectangle Width="1024" Height="1024" RadiusX="225" RadiusY="225" Fill="#F3F1EC" Stroke="#171B1A18" StrokeThickness="22"/>
+              <Line X1="762" Y1="267" X2="512" Y2="766" Stroke="#3F6B4A" StrokeThickness="128" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+              <Line X1="262" Y1="267" X2="512" Y2="766" Stroke="#B3492B" StrokeThickness="128" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+              <Line X1="262" Y1="267" X2="512" Y2="766" Stroke="#1C1B19" Opacity="0.2" StrokeThickness="128" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                <Line.Clip>
+                  <GeometryGroup FillRule="Nonzero">
+                    <PathGeometry Figures="M819.2,295.7 L704.8,238.3 L454.8,737.3 L569.2,794.7 Z"/>
+                    <EllipseGeometry Center="512,766" RadiusX="64" RadiusY="64"/>
+                  </GeometryGroup>
+                </Line.Clip>
+              </Line>
+            </Canvas>
+          </Viewbox>
+          <StackPanel Grid.Row="1" Margin="0,18,0,0">
+            <TextBlock Text="VEYRA" FontSize="10.5" FontWeight="Bold" Foreground="$($c.Tint)"/>
+            <TextBlock Text="Subtitle Maker" FontSize="23" FontWeight="Bold" FontFamily="Segoe UI Variable Display, Segoe UI"/>
+          </StackPanel>
+          <StackPanel Grid.Row="2" Margin="0,22,0,0">
+            <TextBlock x:Name="Headline" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Text="Installing"/>
+            <TextBlock x:Name="Intro" Margin="0,4,0,0" Foreground="$($c.Dim)" TextWrapping="Wrap" LineHeight="19"
+                       Text="About 5 to 15 minutes, mostly downloading. You can keep using your PC while it works."/>
+          </StackPanel>
+          <TextBlock Grid.Row="3" FontSize="11" Foreground="$($c.Dim)" Opacity="0.8" TextWrapping="Wrap"
+                     Text="Makes subtitles for DaVinci Resolve, on this PC."/>
+        </Grid>
       </Border>
 
-      <StackPanel Grid.Row="4" Margin="0,18,6,0">
-        <Border x:Name="Track" Height="6" CornerRadius="3" Background="$($c.Fill)" ClipToBounds="True">
-          <Border x:Name="Bar" CornerRadius="3" Background="$($c.Tint)" HorizontalAlignment="Left" Width="0"/>
-        </Border>
-        <Grid Margin="0,10,0,0">
-          <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <TextBlock x:Name="Status" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Text="Getting ready"/>
-          <TextBlock x:Name="Percent" Grid.Column="1" Margin="12,0,0,0" Foreground="$($c.Dim)"/>
+      <!-- Right: the steps, the progress and the buttons -->
+      <Grid Grid.Column="1" Margin="26,14,14,24">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button x:Name="MinButton" Style="{StaticResource Ghost}" Content="&#xE921;" ToolTip="Minimise"/>
+          <Button x:Name="CloseButton" Style="{StaticResource Ghost}" Content="&#xE8BB;" ToolTip="Close"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,2,12,0">
+          <Border x:Name="StepsCard" CornerRadius="14" Background="$($c.Card)" BorderBrush="$($c.Line)" BorderThickness="1" Padding="16,4" VerticalAlignment="Top">
+            <StackPanel x:Name="Steps"/>
+          </Border>
+          <Border x:Name="DetailsBox" Visibility="Collapsed" CornerRadius="14" Background="$($c.Card)" BorderBrush="$($c.Line)" BorderThickness="1" Padding="6">
+            <TextBox x:Name="Details" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="$($c.Dim)"
+                     FontFamily="Cascadia Mono, Consolas" FontSize="11" TextWrapping="NoWrap"
+                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+          </Border>
         </Grid>
-        <TextBlock x:Name="Sub" Margin="0,2,0,0" FontSize="12" Foreground="$($c.Dim)" TextWrapping="Wrap" MaxHeight="64"/>
-      </StackPanel>
 
-      <StackPanel Grid.Row="5" Margin="0,12,6,0">
-        <TextBlock x:Name="DetailsToggle" Text="Show details" FontSize="12" Foreground="$($c.Tint)" Cursor="Hand" HorizontalAlignment="Left"/>
-        <Border x:Name="DetailsBox" Visibility="Collapsed" Margin="0,8,0,0" CornerRadius="10" Background="$($c.Card)" BorderBrush="$($c.Line)" BorderThickness="1" Padding="4">
-          <TextBox x:Name="Details" Height="150" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="$($c.Dim)"
-                   FontFamily="Cascadia Mono, Consolas" FontSize="11" TextWrapping="NoWrap"
-                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
-        </Border>
-      </StackPanel>
+        <StackPanel Grid.Row="2" Margin="0,16,12,0">
+          <Border x:Name="Track" Height="6" CornerRadius="3" Background="$($c.Fill)" ClipToBounds="True">
+            <Border x:Name="Bar" CornerRadius="3" Background="$($c.Tint)" HorizontalAlignment="Left" Width="0"/>
+          </Border>
+          <Grid Margin="0,10,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="Status" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Text="Getting ready"/>
+            <TextBlock x:Name="Percent" Grid.Column="1" Margin="12,0,0,0" Foreground="$($c.Dim)"/>
+          </Grid>
+          <TextBlock x:Name="Sub" Margin="0,2,0,0" FontSize="12" Foreground="$($c.Dim)" TextTrimming="CharacterEllipsis" Height="34" TextWrapping="Wrap"/>
+        </StackPanel>
 
-      <StackPanel Grid.Row="6" Margin="0,18,6,0" Orientation="Horizontal" HorizontalAlignment="Right">
-        <Button x:Name="Secondary" Style="{StaticResource Btn}" Content="Cancel"/>
-        <Button x:Name="Primary" Style="{StaticResource Primary}" Content="Try again" Visibility="Collapsed"/>
-      </StackPanel>
+        <Grid Grid.Row="3" Margin="0,12,12,0">
+          <TextBlock x:Name="DetailsToggle" Text="Show details" FontSize="12" Foreground="$($c.Tint)" Cursor="Hand" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="Secondary" Style="{StaticResource Btn}" Content="Cancel"/>
+            <Button x:Name="Primary" Style="{StaticResource Primary}" Content="Try again" Visibility="Collapsed"/>
+          </StackPanel>
+        </Grid>
+      </Grid>
     </Grid>
   </Border>
 </Window>
@@ -422,18 +446,18 @@ try {
     $window = [Windows.Markup.XamlReader]::Parse($xaml)
     $find = { param($name) $window.FindName($name) }
     $ui = @{}
-    foreach ($name in 'Shell', 'Lift', 'Logo', 'MinButton', 'CloseButton', 'Headline', 'Intro', 'Steps', 'Track', 'Bar', 'Status',
+    foreach ($name in 'Shell', 'Lift', 'Logo', 'StepsCard', 'MinButton', 'CloseButton', 'Headline', 'Intro', 'Steps', 'Track', 'Bar', 'Status',
                       'Percent', 'Sub', 'DetailsToggle', 'DetailsBox', 'Details', 'Secondary', 'Primary') { $ui[$name] = & $find $name }
     $brush = @{}
     foreach ($k in $c.Keys) { $brush[$k] = New-Object Windows.Media.SolidColorBrush ([Windows.Media.ColorConverter]::ConvertFromString($c[$k])) }
 
     # ---- The five steps --------------------------------------------------------------------
-    $names = 'Download Subtitle Maker', 'Python', 'App packages', 'Graphics card support', 'Finish and open'
+    $names = 'Subtitle Maker', 'Python', 'App packages', 'Graphics card support', 'Finish and open'
     $notes = 'a few MB', '', 'about 300 MB', 'only for NVIDIA cards, about 1 GB', ''
     $rows = @()
     for ($i = 0; $i -lt $names.Count; $i++) {
         $grid = New-Object Windows.Controls.Grid
-        $grid.Margin = '0,9,0,9'
+        $grid.Margin = '0,8,0,8'
         foreach ($w in 30, 1) {
             $col = New-Object Windows.Controls.ColumnDefinition
             $col.Width = if ($w -eq 1) { New-Object Windows.GridLength 1, 'Star' } else { New-Object Windows.GridLength $w }
@@ -528,6 +552,7 @@ try {
     $ui.DetailsToggle.Add_MouseLeftButtonUp({
         $open = $ui.DetailsBox.Visibility -ne 'Visible'
         $ui.DetailsBox.Visibility = if ($open) { 'Visible' } else { 'Collapsed' }
+        $ui.StepsCard.Visibility = if ($open) { 'Collapsed' } else { 'Visible' }
         $ui.DetailsToggle.Text = if ($open) { 'Hide details' } else { 'Show details' }
         if ($open) { $ui.Details.ScrollToEnd() }
     })
@@ -554,8 +579,8 @@ try {
             if ($state.Shown -eq 'failed' -and $sync.State -eq 'working') {
                 $state.Shown = 'working'
                 foreach ($r in $rows) { $r.Look = '' }
-                $ui.Headline.Text = 'Installing Subtitle Maker'
-                $ui.Intro.Visibility = 'Visible'
+                $ui.Headline.Text = 'Installing'
+                $ui.Intro.Text = 'About 5 to 15 minutes, mostly downloading. You can keep using your PC while it works.'
                 $ui.Status.Foreground = $brush.Ink; $ui.Bar.Background = $brush.Tint
                 $ui.Primary.Visibility = 'Collapsed'; $ui.Primary.IsEnabled = $true
                 $ui.Secondary.Content = 'Cancel'; $ui.Secondary.IsEnabled = $true
@@ -600,11 +625,11 @@ try {
                     if ($state.Shown -ne 'failed') {
                         $state.Shown = 'failed'
                         $ui.Headline.Text = "The install didn't finish"
-                        $ui.Intro.Visibility = 'Collapsed'
+                        $ui.Intro.Text = 'Nothing is lost. Try again carries on from where it stopped.'
                         $ui.Status.Text = 'Something got in the way'
                         $ui.Status.Foreground = $brush.Tint
                         $why = if ($sync.Error) { $sync.Error } else { 'Show details has what happened.' }
-                        $ui.Sub.Text = "$why`nTry again carries on from where it stopped."
+                        $ui.Sub.Text = $why
                         $ui.Bar.Background = $brush.Tint
                         $ui.Secondary.Content = 'Close'; $ui.Secondary.IsEnabled = $true
                         $ui.Primary.Content = 'Try again'; $ui.Primary.Visibility = 'Visible'
@@ -613,8 +638,8 @@ try {
                 { $_ -in 'done', 'slow' } {
                     if ($state.Shown -ne $sync.State) {
                         $state.Shown = $sync.State
-                        $ui.Headline.Text = 'Subtitle Maker is installed'
-                        $ui.Intro.Visibility = 'Collapsed'
+                        $ui.Headline.Text = 'Installed'
+                        $ui.Intro.Text = 'Open it any time from the Start menu or the shortcut on your desktop.'
                         $ui.Bar.Background = $brush.Ok
                         $ui.Secondary.Visibility = 'Collapsed'
                         if ($sync.State -eq 'done') {

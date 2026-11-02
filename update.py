@@ -202,8 +202,8 @@ def program_files(root):
     files = []
     for path in sorted(Path(root).rglob("*")):
         rel = path.relative_to(root)
-        # tests/ and .github/ are for developing it, not part of an install
-        if not path.is_file() or rel.parts[0] in (".git", ".github", "tests", "__pycache__") or "__pycache__" in rel.parts:
+        # tests/, .github/ and installer/ are for developing it, not part of an install
+        if not path.is_file() or rel.parts[0] in (".git", ".github", "tests", "installer", "__pycache__") or "__pycache__" in rel.parts:
             continue
         if rel.parts[0] == "Voices" and rel.name != "README.txt":
             continue
@@ -218,7 +218,7 @@ def file_hash(path):
         return None
 
 
-FILES_LIST = data_dir() / "install-files.txt"  # written by Install Subtitle Maker.bat
+FILES_LIST = data_dir() / "install-files.txt"  # written by install.ps1
 
 
 def record(sha, date=None, files=None, branch="main"):
