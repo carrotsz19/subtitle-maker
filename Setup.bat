@@ -34,8 +34,11 @@ if not defined VENV_OK (
     if exist "%VENV_PY%" (echo The Python environment is incomplete, so making it again...) else (echo Creating private Python environment...)
     %PY% -m venv --clear "%HOME_DIR%\venv" || goto :failed
 )
-rem pip's own progress bars show the downloads, so a slow connection never looks frozen
-set "PIP=-m pip install --disable-pip-version-check --no-input --progress-bar on"
+rem pip's own progress bars show the downloads, so a slow connection never looks frozen. The installer
+rem window reads "raw" ones instead ("Progress 123 of 456"), if this pip has them (24.1 and later)
+set "BAR=on"
+if defined SUBTITLE_MAKER_PIP_RAW "%VENV_PY%" -c "import pip, sys; sys.exit(tuple(int(x) for x in pip.__version__.split('.')[:2]) < (24, 1))" >nul 2>&1 && set "BAR=raw"
+set "PIP=-m pip install --disable-pip-version-check --no-input --progress-bar %BAR%"
 echo [2/3] Python packages (about 300 MB to download the first time, then a few minutes to install)
 call :pip -r "%~dp0requirements.txt" || goto :failed
 echo.
