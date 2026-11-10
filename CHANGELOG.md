@@ -11,6 +11,7 @@ A release (see "Releasing a new version" in the README) needs its section here f
 - **Change who's talking.** In the check, pick "+ Someone else…" on a line for a person detection missed, use "+ Add person", or move all of one person's lines to another when it split someone in two. Giving two people the same name puts them together.
 - People added in the check are remembered for later videos too, from the lines as you checked them.
 - **Ready to check.** When the whole queue is transcribed, it plays the done sound, and shows a notification if you're in another window.
+- **Feels like a desktop app.** Pop-ups open in the middle of the window, with Cancel and the action at the bottom right, a ✕ in the corner and Esc to close. A click outside no longer closes them, so nothing you typed is lost. Messages show at the bottom right.
 - Fixed: cancelling a check, or closing the window during one, lost that video's lines. Now it stays To check.
 - Fixed: uninstalling left behind videos that were waiting to be checked.
 - Fixed in the check: renaming a speaker no longer swallows your next click, Ctrl+Z works right after changing a line's speaker, Enter skips deleted lines, and replacing a word with nothing in every future video asks first.

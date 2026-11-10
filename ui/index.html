@@ -426,47 +426,45 @@ body.wizard aside.side{ display:none; }
 .grp-row.tap:active{ transform:none; background:var(--fill-secondary, var(--fill-tertiary)); }
 .btn[disabled]:active{ transform:none; }
 
-/* --- sheets: rise from the bottom with a grabber, follow a drag, fling away; the app behind
-   shrinks back and dims. Confirmations are action sheets. Blocking ones can't be dismissed. --- */
-.scrim{ align-items:flex-end; padding:0; background:rgba(0,0,0,.45); animation:fadeIn var(--spring-default-ms) var(--ease-out); }
-.dialog{ max-width:560px; border-radius:var(--r-sheet) var(--r-sheet) 0 0; max-height:88vh; padding:20px 22px 26px;
-  animation:sheetUp var(--spring-default-ms) var(--spring-default); touch-action:pan-y; }
-.dialog:not(.blocking)::before{ content:""; display:block; width:36px; height:5px; border-radius:3px; background:var(--line); margin:-8px auto 6px; cursor:grab; }
-@keyframes sheetUp{ from{ transform:translateY(100%) } to{ transform:translateY(0) } }
-.shell{ transform-origin:center top; transition:transform var(--spring-default-ms) var(--spring-default), filter var(--spring-default-ms) var(--spring-default); }
-body.dialog-open .shell{ transform:scale(.94); filter:brightness(.92); }
-.dialog.is-dragged, .scrim.is-dragged{ animation:none; }
-.dialog.is-dragging, .scrim.is-dragging{ animation:none !important; transition:none !important; }
-.dialog.is-settling{ animation:none !important; transition:transform var(--sheet-settle-ms, var(--spring-overscroll-ms)) var(--spring-overscroll); }
-.scrim.is-settling{ animation:none !important; transition:opacity var(--sheet-settle-ms, 240ms) var(--ease-standard); }
-.scrim.is-closing{ animation:veyraFadeOut var(--sheet-exit-ms, 340ms) var(--ease-standard) both; }
-.dialog.is-closing{ animation:veyraSheetOut var(--sheet-exit-ms, 340ms) var(--ease-sheet) both; }
+/* --- dialogs: a window in the middle, the way desktop apps ask. It fades and scales in quickly,
+   Esc or the corner ✕ closes it, and a click outside gives it a shake instead of closing it (so a
+   stray click never throws away what you typed). Blocking ones have no ✕ and ignore Esc. --- */
+.scrim{ align-items:center; padding:24px; background:rgba(20,18,16,.32); animation:fadeIn 140ms var(--ease-out) both; }
+.dialog{ position:relative; max-width:460px; border-radius:12px; max-height:min(86vh, 720px); padding:22px 24px 20px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.06), 0 10px 24px rgba(0,0,0,.12), 0 30px 70px rgba(0,0,0,.18);
+  animation:dlgIn 170ms var(--ease-out) both; }
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .dialog{ box-shadow:0 0 0 1px rgba(255,255,255,.08), 0 10px 24px rgba(0,0,0,.35), 0 30px 70px rgba(0,0,0,.45); } }
+:root[data-theme="dark"] .dialog{ box-shadow:0 0 0 1px rgba(255,255,255,.08), 0 10px 24px rgba(0,0,0,.35), 0 30px 70px rgba(0,0,0,.45); }
+@keyframes dlgIn{ from{ opacity:0; transform:scale(.965) } to{ opacity:1; transform:none } }
+.scrim.is-closing{ animation:veyraFadeOut 130ms var(--ease-standard) both; }
+.dialog.is-closing{ animation:dlgOut 130ms var(--ease-standard) both; }
 @keyframes veyraFadeOut{ to{ opacity:0 } }
-@keyframes veyraSheetOut{ to{ transform:translateY(var(--sheet-exit-to, calc(100% + 24px))) } }
-/* an action sheet: the message, the action named by its verb, and Cancel on its own */
-.dialog.action-sheet{ background:transparent; box-shadow:none; padding:0 12px 14px; max-width:440px; overflow:visible; }
-.dialog.action-sheet::before{ background:rgba(255,255,255,.6); margin:0 auto 8px; }
-.as-group{ background:var(--panel); border-radius:var(--r-card); overflow:hidden; box-shadow:var(--elev-3); }
-.as-msg{ padding:16px 18px 14px; text-align:center; font-size:13px; color:var(--dim); line-height:1.45; }
-.as-msg b{ display:block; color:var(--ink); font-size:14px; margin-bottom:3px; }
-.as-btn{ all:unset; box-sizing:border-box; display:flex; width:100%; justify-content:center; align-items:center; min-height:52px;
-  font-size:16px; font-weight:600; color:var(--accent); cursor:pointer; position:relative; transition:background-color .12s var(--ease-standard); }
-.as-btn::before{ content:""; position:absolute; top:0; left:0; right:0; height:1px; background:var(--line); }
-.as-btn:active, .as-btn:focus-visible{ background:var(--fill-tertiary); }
-.as-btn.destructive{ color:var(--bad); }
-.as-cancel{ margin-top:8px; background:var(--panel); border-radius:var(--r-card); box-shadow:var(--elev-3); font-weight:700; }
-.as-cancel::before{ display:none; }
+@keyframes dlgOut{ to{ opacity:0; transform:scale(.975) } }
+.dialog.is-nudged{ animation:dlgNudge 260ms var(--ease-standard); }
+@keyframes dlgNudge{ 20%{ transform:translateX(-6px) } 45%{ transform:translateX(5px) } 70%{ transform:translateX(-3px) } 100%{ transform:none } }
+/* the corner ✕ (added to every dialog that can be closed) */
+.dlg-x{ all:unset; box-sizing:border-box; position:absolute; top:12px; right:12px; width:28px; height:28px; border-radius:7px; display:flex;
+  align-items:center; justify-content:center; color:var(--faint); cursor:pointer; font-size:13px; z-index:2; transition:background-color .12s var(--ease-standard), color .12s; }
+.dlg-x:hover{ background:var(--fill-tertiary); color:var(--ink); }
+.dlg-x:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+.dialog.has-x h3{ padding-right:30px; }
+.dialog.news-sheet .dlg-x{ top:18px; right:16px; }
+/* a confirmation: the question, what happens, then Cancel and the action at the bottom right */
+.dialog.confirm{ max-width:420px; padding:22px 24px 18px; }
+.confirm .cf-text{ font-size:13.5px; color:var(--dim); line-height:1.5; margin:8px 0 0; }
+.dlg-foot{ display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+.dlg-foot .btn{ min-width:88px; min-height:34px; padding:7px 16px; font-size:13.5px; }
 
-/* --- toasts drop in from the top, with a close button --- */
-#toast-root{ top:16px; bottom:auto; right:auto; left:50%; transform:translateX(-50%); align-items:center; }
-.toast{ display:flex; align-items:center; gap:10px; padding:10px 12px 10px 16px; border-radius:14px; pointer-events:auto;
-  box-shadow:0 2px 8px rgba(0,0,0,.08), 0 12px 28px rgba(0,0,0,.16); animation:toastSlideIn var(--spring-snappy-ms) var(--spring-snappy); }
+/* --- toasts: bottom right, sliding in from the side, like Windows notifications --- */
+#toast-root{ top:auto; bottom:20px; right:20px; left:auto; transform:none; align-items:flex-end; }
+.toast{ display:flex; align-items:center; gap:10px; padding:10px 12px 10px 16px; border-radius:10px; pointer-events:auto;
+  box-shadow:0 2px 8px rgba(0,0,0,.08), 0 12px 28px rgba(0,0,0,.16); animation:toastSlideIn 200ms var(--ease-out); }
 .toast-dismiss{ all:unset; box-sizing:border-box; flex-shrink:0; width:20px; height:20px; border-radius:99px; display:flex; align-items:center; justify-content:center; opacity:.7; font-size:11px; cursor:pointer; position:relative; }
 .toast-dismiss::after{ content:""; position:absolute; inset:-12px; }
 .toast-dismiss:hover{ opacity:1; }
 .toast.is-leaving{ animation:toastOut .22s var(--ease-standard) both; pointer-events:none; }
-@keyframes toastSlideIn{ from{ opacity:0; transform:translateY(-12px) scale(.97) } to{ opacity:1; transform:translateY(0) scale(1) } }
-@keyframes toastOut{ to{ opacity:0; transform:translateY(-8px) } }
+@keyframes toastSlideIn{ from{ opacity:0; transform:translateX(16px) } to{ opacity:1; transform:none } }
+@keyframes toastOut{ to{ opacity:0; transform:translateX(12px) } }
 
 /* --- segmented controls: the selection slides (only when it changes) --- */
 .seg.has-pill{ position:relative; }
@@ -486,7 +484,6 @@ body.dialog-open .shell{ transform:scale(.94); filter:brightness(.92); }
     animation-name:fadeIn !important; animation-duration:.12s !important; animation-delay:0ms !important; animation-timing-function:linear !important; }
   .dialog.is-closing, .scrim.is-closing, .toast.is-leaving{ animation-name:veyraFadeOut !important; }
   .screen-visible .bar > i, .success, .step.done .dot{ animation:none !important; }
-  body.dialog-open .shell{ transform:none; filter:none; }
   .btn:active, .iconbtn:active, .seg button:active, .navbtn:active, .sidecard:active, .drop:active, .chip:active, .playbtn:active{ transform:none !important; }
 }
 html.reduce-motion *{ transition:none !important; }
@@ -495,7 +492,6 @@ html.reduce-motion .screen-visible > *, html.reduce-motion .anim-card, html.redu
 html.reduce-motion .dialog.is-closing, html.reduce-motion .scrim.is-closing, html.reduce-motion .toast.is-leaving{
   animation-name:veyraFadeOut !important; animation-duration:.12s !important; animation-timing-function:linear !important; }
 html.reduce-motion .screen-visible .bar > i, html.reduce-motion .success, html.reduce-motion .step.done .dot{ animation:none !important; }
-html.reduce-motion body.dialog-open .shell{ transform:none; filter:none; }
 html.reduce-motion .btn:active, html.reduce-motion .iconbtn:active, html.reduce-motion .seg button:active, html.reduce-motion .navbtn:active,
 html.reduce-motion .sidecard:active, html.reduce-motion .drop:active, html.reduce-motion .chip:active, html.reduce-motion .playbtn:active{ transform:none !important; }
 </style>
@@ -690,105 +686,70 @@ function arrive(el, dir) {
 /* ---------- sheets ---------- */
 /* Closing: the sheet carries on down and off the screen (at the speed it was flung, if it was),
    the backdrop fades, and the app behind comes forward again. */
-let sheetFling = null;
-function settleMs(remaining, velocity, base) {
-  const v = Math.abs(velocity);
-  if (v < 0.05 || remaining <= 0) return base;
-  return Math.max(140, Math.min(base, Math.round(remaining / v) + 120));
-}
 function closeDialogs() {
   const root = $("#dialog-root"), scrim = root.querySelector(".scrim:not(.is-closing)");
-  const fling = sheetFling; sheetFling = null;
-  document.body.classList.remove("dialog-open");
   if (!scrim) { root.innerHTML = ""; return; }
   if (prefersReducedMotion()) { scrim.remove(); return; }
-  const sheet = scrim.querySelector(".dialog");
-  let ms = 340;
-  if (sheet && fling && fling.height) ms = settleMs(Math.max(0, fling.height - fling.from), Math.max(0, fling.velocity), 340);
-  scrim.style.setProperty("--sheet-exit-ms", ms + "ms");
   scrim.style.pointerEvents = "none";
-  if (sheet) {
-    sheet.style.setProperty("--sheet-exit-ms", ms + "ms");
-    sheet.style.setProperty("--sheet-exit-to", Math.max(sheet.getBoundingClientRect().height + 24, ((fling && fling.from) || 0) + 24) + "px");
-    sheet.classList.remove("is-dragging", "is-settling");
-    sheet.classList.add("is-closing");
-  }
-  scrim.classList.remove("is-dragging", "is-settling");
-  animateOut(scrim, "is-closing", ms + 80);
+  const dialog = scrim.querySelector(".dialog");
+  if (dialog) dialog.classList.add("is-closing");
+  animateOut(scrim, "is-closing", 210);
 }
-/* Dismissing (a drag down, a click on the backdrop, Escape) does what the sheet's own Cancel,
-   Later or Close does. A sheet without one (the security lock) can't be dismissed. */
-function dismissSheet(fling) {
+/* Dismissing (Escape or the corner ✕) does what the dialog's own Cancel, Later or Close does.
+   A dialog without one (the security lock) can't be dismissed. */
+function dismissSheet() {
   const button = document.querySelector("#dialog-root .scrim:not(.is-closing) [data-dismiss], #dialog-root .scrim:not(.is-closing) [data-up=\"close\"]");
   if (!button) return false;
-  sheetFling = fling || null;
   button.click();
   return true;
 }
 document.addEventListener("keydown", e => { if (e.key === "Escape") dismissSheet(); });
-function rubberBand(d, max) {
-  const c = 0.55, m = Math.abs(d), r = (m * c) / (1 + (m * c) / max);
-  return d < 0 ? -r : r;
-}
-/* The sheet follows the pointer 1:1 downward and resists upward. Let go and it reads where the
-   sheet would come to rest (120 ms of projection, so a flick counts), then either leaves at that
-   speed or springs back. */
+/* Each dialog: a corner ✕ when it can be closed, a shake for a click outside it, Tab kept inside
+   it, and the focus put back where it was once it closes */
+let dialogReturnFocus = null;
 function bindSheet(scrim) {
-  const sheet = scrim.querySelector(".dialog");
-  if (!sheet || scrim.dataset.bound) return;
+  const dialog = scrim.querySelector(".dialog");
+  if (!dialog || scrim.dataset.bound) return;
   scrim.dataset.bound = "1";
-  scrim.addEventListener("click", e => { if (e.target === scrim) dismissSheet(); });
-  let g = null;
-  sheet.addEventListener("pointerdown", e => {
-    if (e.button !== 0 || e.target.closest("button, input, textarea, select, a, label, audio, .player, .quote, .selectable")) return;
-    g = { y0: e.clientY, lastY: e.clientY, lastT: Date.now(), v: 0, live: false, id: e.pointerId,
-          h: Math.max(120, sheet.getBoundingClientRect().height), dismissible: !!scrim.querySelector("[data-dismiss], [data-up=\"close\"]") };
+  if (!dialog.querySelector(".dlg-x") && dialog.querySelector('[data-dismiss], [data-up="close"]')) {
+    const x = document.createElement("button");
+    x.type = "button"; x.className = "dlg-x"; x.title = "Close (Esc)"; x.setAttribute("aria-label", "Close"); x.textContent = "✕";
+    x.tabIndex = -1;  // Esc does the same; Tab goes to the dialog's own buttons
+    x.onclick = () => dismissSheet();
+    dialog.prepend(x);
+    dialog.classList.add("has-x");
+  }
+  scrim.addEventListener("mousedown", e => {
+    if (e.target !== scrim) return;
+    e.preventDefault();  // the focus stays in the dialog
+    if (prefersReducedMotion()) return;
+    dialog.classList.remove("is-nudged");
+    void dialog.offsetWidth;  // restart the shake
+    dialog.classList.add("is-nudged");
   });
-  sheet.addEventListener("pointermove", e => {
-    if (!g || e.pointerId !== g.id) return;
-    const raw = e.clientY - g.y0;
-    if (!g.live) {
-      if (Math.abs(raw) < 8) return;  // a click inside the sheet stays a click
-      if (sheet.scrollTop > 0) { g = null; return; }
-      g.live = true;
-      sheet.setPointerCapture(e.pointerId);
-      sheet.classList.remove("is-settling"); scrim.classList.remove("is-settling");
-      sheet.classList.add("is-dragging", "is-dragged"); scrim.classList.add("is-dragging", "is-dragged");
-    }
-    const now = Date.now();
-    g.v = (e.clientY - g.lastY) / Math.max(1, now - g.lastT);  // px/ms
-    g.lastY = e.clientY; g.lastT = now;
-    // Down is the dismissal, so it travels 1:1 (unless it can't be dismissed); up resists
-    const d = raw >= 0 && g.dismissible ? raw : rubberBand(raw, g.h * 0.12);
-    sheet.style.transform = `translateY(${d}px)`;
-    scrim.style.opacity = String(Math.max(0, Math.min(1, 1 - (Math.max(0, d) / g.h) * 0.9)));
+  dialog.addEventListener("animationend", e => { if (e.animationName === "dlgNudge") dialog.classList.remove("is-nudged"); });
+  scrim.addEventListener("keydown", e => {
+    if (e.key !== "Tab") return;
+    const stops = [...dialog.querySelectorAll('button, input, select, textarea, a[href], summary, [tabindex]:not([tabindex="-1"])')]
+      .filter(el => !el.disabled && el.tabIndex !== -1 && el.offsetParent !== null);
+    if (!stops.length) return;
+    const first = stops[0], last = stops[stops.length - 1];
+    if (!dialog.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   });
-  const release = e => {
-    if (!g || e.pointerId !== g.id) return;
-    const drag = g; g = null;
-    if (!drag.live) return;
-    const d = Math.max(0, drag.lastY - drag.y0);
-    sheet.classList.remove("is-dragging"); scrim.classList.remove("is-dragging");
-    if (drag.dismissible && (d + drag.v * 120 > drag.h * 0.35 || drag.v > 0.5) && e.type !== "pointercancel") {
-      if (dismissSheet({ velocity: drag.v, from: d, height: drag.h })) return;
-    }
-    // Springs back; under less motion the drag still works, it just doesn't settle
-    const ms = prefersReducedMotion() ? 0 : settleMs(d, drag.v, 471);
-    sheet.style.setProperty("--sheet-settle-ms", ms + "ms"); scrim.style.setProperty("--sheet-settle-ms", ms + "ms");
-    sheet.classList.add("is-settling"); scrim.classList.add("is-settling");
-    requestAnimationFrame(() => { sheet.style.transform = "translateY(0)"; scrim.style.opacity = ""; });
-    setTimeout(() => {
-      if (!sheet.isConnected) return;
-      sheet.classList.remove("is-settling", "is-dragged"); scrim.classList.remove("is-settling", "is-dragged");
-      sheet.style.transform = ""; scrim.style.opacity = "";
-    }, ms + 60);
-  };
-  sheet.addEventListener("pointerup", release);
-  sheet.addEventListener("pointercancel", release);
 }
-/* Every new sheet: the app behind shrinks back and dims, and the sheet becomes draggable */
 new MutationObserver(() => {
   const root = $("#dialog-root"), open = root.querySelector(".scrim:not(.is-closing)");
+  const was = document.body.classList.contains("dialog-open");
+  if (open && !was) {
+    const el = document.activeElement;
+    dialogReturnFocus = el && el !== document.body && !root.contains(el) ? el : null;
+  }
+  if (!open && was && dialogReturnFocus) {
+    if (dialogReturnFocus.isConnected) dialogReturnFocus.focus({ preventScroll: true });
+    dialogReturnFocus = null;
+  }
   document.body.classList.toggle("dialog-open", !!open);
   if (open) bindSheet(open);
 }).observe(document.getElementById("dialog-root"), { childList: true, subtree: true });
@@ -2204,19 +2165,22 @@ function showAsk(ev) {
   setTimeout(() => $("#ask-name").focus(), 50);
 }
 
-/* A confirmation is an action sheet, the way the phone asks: what happens, the action named by
-   its verb (red only when it destroys something), and Cancel on its own underneath */
+/* A confirmation: the question, what happens, and the action named by its verb (red only when
+   it destroys something) next to Cancel. Enter picks the focused button: Cancel when it destroys
+   something, the action otherwise. */
 const DESTRUCTIVE = /^(delete|remove|forget|discard|reset|clear|uninstall)\b/i;
 function confirmBox(title, text, action, onYes) {
-  $("#dialog-root").innerHTML = `<div class="scrim"><div class="dialog action-sheet" role="alertdialog" aria-modal="true" aria-labelledby="cf-title">
-      <div class="as-group"><div class="as-msg"><b id="cf-title">${esc(title)}</b>${esc(text)}</div>
-        <button class="as-btn${DESTRUCTIVE.test(action) ? " destructive" : ""}" id="cf-yes">${esc(action)}</button></div>
-      <button class="as-btn as-cancel" id="cf-no" data-dismiss>Cancel</button>
+  const bad = DESTRUCTIVE.test(action);
+  $("#dialog-root").innerHTML = `<div class="scrim"><div class="dialog confirm" role="alertdialog" aria-modal="true" aria-labelledby="cf-title" aria-describedby="cf-text">
+      <h3 id="cf-title">${esc(title)}</h3>
+      <p class="cf-text" id="cf-text">${esc(text)}</p>
+      <div class="dlg-foot"><button class="btn sec" id="cf-no" data-dismiss>Cancel</button>
+        <button class="btn${bad ? " dan" : ""}" id="cf-yes">${esc(action)}</button></div>
     </div></div>`;
   const close = () => { closeDialogs(); };
   $("#cf-no").onclick = close;
   $("#cf-yes").onclick = () => { close(); onYes(); };
-  $("#cf-no").focus();
+  (bad ? $("#cf-no") : $("#cf-yes")).focus();
 }
 
 /* ---------------------------------------------------------------------
