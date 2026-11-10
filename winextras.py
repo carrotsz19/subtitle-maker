@@ -201,3 +201,73 @@ def bring_to_front(window):
         ui_thread(window, restore)
     except Exception:
         pass
+
+
+# ---- where the window was ----------------------------------------------------------------------
+# Windows' own record of a window's place: its normal size and position (the one it goes back to
+# from maximized), whether it's maximized, and so which screen it's on. Saved as it closes and put
+# back before it first shows, so it opens exactly where it was, maximized or not, on the same
+# monitor. pywebview's own x/y are converted with the first screen's scaling, which lands the
+# window on the wrong monitor when the screens scale differently.
+
+SW_HIDE, SW_SHOWMINIMIZED, SW_SHOWMAXIMIZED = 0, 2, 3
+WPF_RESTORETOMAXIMIZED = 0x2
+
+
+def _placement_struct():
+    import ctypes
+    from ctypes import wintypes
+
+    class WINDOWPLACEMENT(ctypes.Structure):
+        _fields_ = [("length", wintypes.UINT), ("flags", wintypes.UINT), ("showCmd", wintypes.UINT),
+                    ("ptMinPosition", wintypes.POINT), ("ptMaxPosition", wintypes.POINT),
+                    ("rcNormalPosition", wintypes.RECT)]
+
+    wp = WINDOWPLACEMENT()
+    wp.length = ctypes.sizeof(WINDOWPLACEMENT)
+    return wp
+
+
+def get_placement(hwnd):
+    """{"rect": [left, top, right, bottom], "maximized": bool} for the window, or None."""
+    if not WINDOWS:
+        return None
+    import ctypes
+
+    wp = _placement_struct()
+    try:
+        if not ctypes.windll.user32.GetWindowPlacement(hwnd, ctypes.byref(wp)):
+            return None
+    except Exception:
+        return None
+    r = wp.rcNormalPosition
+    # Minimized when closed: it reopens the way it was before (maximized if it was)
+    maximized = wp.showCmd == SW_SHOWMAXIMIZED or (wp.showCmd == SW_SHOWMINIMIZED and bool(wp.flags & WPF_RESTORETOMAXIMIZED))
+    return {"rect": [r.left, r.top, r.right, r.bottom], "maximized": maximized}
+
+
+def set_placement(hwnd, saved, min_size=(200, 150)):
+    """Put the window back where get_placement found it, without showing it. Only if that place is
+    still on a screen that's connected now (a monitor may have been unplugged). True if it was."""
+    if not WINDOWS or not isinstance(saved, dict):
+        return False
+    import ctypes
+    from ctypes import wintypes
+
+    try:
+        left, top, right, bottom = (int(v) for v in saved["rect"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    if right - left < min_size[0] or bottom - top < min_size[1]:
+        return False
+    # Enough of the title bar has to be on a connected screen to grab it
+    bar = wintypes.RECT(left + 40, top, right - 40, top + 30)
+    try:
+        if not ctypes.windll.user32.MonitorFromRect(ctypes.byref(bar), 0):  # MONITOR_DEFAULTTONULL
+            return False
+        wp = _placement_struct()
+        wp.showCmd = SW_HIDE  # placed, still hidden: pywebview shows it next
+        wp.rcNormalPosition = wintypes.RECT(left, top, right, bottom)
+        return bool(ctypes.windll.user32.SetWindowPlacement(hwnd, ctypes.byref(wp)))
+    except Exception:
+        return False

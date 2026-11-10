@@ -125,6 +125,23 @@ def clean_fixes(fixes):
     return list(pairs.values())[-MAX_FIXES:]
 
 
+def dark_mode():
+    """Will the window be dark? Then it starts dark too, instead of flashing white."""
+    theme = load_settings()["theme"]
+    if theme != "system":
+        return theme == "dark"
+    if sys.platform != "win32":
+        return False
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
+            return winreg.QueryValueEx(key, "AppsUseLightTheme")[0] == 0
+    except OSError:
+        return False
+
+
 def save_settings(settings):
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     SETTINGS_FILE.write_text(json.dumps(settings, indent=2), encoding="utf-8")

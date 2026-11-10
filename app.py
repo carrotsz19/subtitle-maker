@@ -31,6 +31,7 @@ import uninstall  # noqa: E402
 import update  # noqa: E402
 import winapp  # noqa: E402
 import winextras  # noqa: E402
+from paths import dark_mode  # noqa: E402
 from paths import (DEFAULT_SETTINGS, ERROR_LOG, LANGUAGES, LEVELS, SETTINGS_FILE, data_dir, load_history,  # noqa: E402
                    load_settings, save_history, save_settings)
 
@@ -122,23 +123,6 @@ def watchdog():
             "Subtitle Maker", 0x5 | 0x30 | 0x40000)  # Retry/Cancel, warning icon, on top
         if answer == 2:  # Cancel
             os._exit(1)
-
-
-def dark_mode():
-    """Will the window be dark? Then it starts dark too, instead of flashing white."""
-    theme = load_settings()["theme"]
-    if theme != "system":
-        return theme == "dark"
-    if sys.platform != "win32":
-        return False
-    try:
-        import winreg
-
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
-            return winreg.QueryValueEx(key, "AppsUseLightTheme")[0] == 0
-    except OSError:
-        return False
 
 
 def console_python():
@@ -843,9 +827,14 @@ class Api:
         """The window is closing: stop everything still running, and remember where the window was."""
         self.cancel()
         self.stop_worker()
-        if GEOMETRY:
+        # Windows' record of the window (size, place, maximized, which screen); elsewhere, its size and place
+        placement = winextras.get_placement(WINDOW_HANDLE[0]) if WINDOW_HANDLE else None
+        if placement or GEOMETRY:
             settings = load_settings()
-            settings["window"] = dict(GEOMETRY)
+            if placement:
+                settings["placement"] = placement
+            if GEOMETRY:
+                settings["window"] = dict(GEOMETRY)
             save_settings(settings)
 
     # ---- settings and folders ---------------------------------------------------------------
@@ -945,12 +934,12 @@ class Api:
 
     def restart(self):
         """Close this window and open the new version (after installing any new packages)."""
-        # A visible console only when there are packages to install, so the wait isn't a mystery
-        flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if getattr(self, "_pending_packages", None) else NO_WINDOW
+        # No console: new packages install behind a small window of their own (finishing.py)
         self._closing_ok = True
         self.stop_worker()
-        subprocess.Popen([console_python(), str(HERE / "update.py"), "--finish", str(os.getpid())],
-                         cwd=str(HERE), creationflags=flags)
+        pythonw = Path(sys.executable).with_name("pythonw.exe")
+        subprocess.Popen([str(pythonw if pythonw.exists() else console_python()), str(HERE / "update.py"), "--finish", str(os.getpid())],
+                         cwd=str(HERE), creationflags=NO_WINDOW)
         self._window.destroy()
 
     # ---- uninstalling ------------------------------------------------------------------------
@@ -997,6 +986,28 @@ class Api:
 
 
 GEOMETRY = {}  # the window's size and place as it's moved and resized, saved when it closes
+WINDOW_HANDLE = []  # the window's handle on Windows, once it exists
+
+
+def place_window(window):
+    """Before the window first shows (on its own thread): put it back exactly where it was last
+    time, maximized if it was, on the same screen. Windows only; elsewhere saved_geometry() does it."""
+    if not winextras.WINDOWS:
+        return
+    try:
+        form = window.native
+        hwnd = int(form.Handle.ToInt64())
+        WINDOW_HANDLE[:] = [hwnd]
+        saved = load_settings().get("placement")
+        if not winextras.set_placement(hwnd, saved):
+            return
+        from System.Windows.Forms import FormStartPosition, FormWindowState
+
+        form.StartPosition = FormStartPosition.Manual  # not centred over the place just set
+        if saved.get("maximized"):
+            form.WindowState = FormWindowState.Maximized  # maximized on the screen it was on
+    except Exception as e:  # opening somewhere else is no reason not to open
+        TIMINGS.mark(f"window placement not restored: {e}")
 
 
 def saved_geometry():
@@ -1025,9 +1036,11 @@ def main():
     api = Api()
     window = webview.create_window(
         "Subtitle Maker", str(HERE / "ui" / "index.html"), js_api=api,
-        **{"width": 1040, "height": 720, **saved_geometry()},
+        # On Windows the exact place comes from place_window(); this is the size before that
+        **{"width": 1040, "height": 720, **(saved_geometry() if not (winextras.WINDOWS and load_settings().get("placement")) else {})},
         min_size=(760, 560), background_color="#15140f" if dark_mode() else "#f3f1ec",
     )
+    window.events.before_show += lambda: place_window(window)
     window.events.resized += lambda width, height: GEOMETRY.update(width=width, height=height)
     window.events.moved += lambda x, y: GEOMETRY.update(x=x, y=y)
     api._window = window

@@ -34,21 +34,12 @@
   --r-control:10px; --r-card:14px; --r-sheet:20px;
   --sidebar:220px;
   --ease-out:cubic-bezier(.16,1,.3,1); --ease-standard:cubic-bezier(.25,.1,.25,1);
-  --spring-snappy:cubic-bezier(.32,.72,0,1); --spring-default:cubic-bezier(.32,.72,0,1);
-  --spring-snappy-ms:369ms; --spring-default-ms:585ms;
-  --spring-spatial:cubic-bezier(.16,1,.3,1); --spring-bouncy:cubic-bezier(.34,1.56,.64,1); --spring-overscroll:cubic-bezier(.32,.72,0,1);
-  --spring-spatial-ms:574ms; --spring-bouncy-ms:734ms; --spring-overscroll-ms:471ms;
-  --ease-sheet:cubic-bezier(.32,.72,0,1);
+  /* Motion, desktop-style: quick, and nothing overshoots. Hover 100 ms, press 80 ms, controls
+     150 ms, things appearing 160-180 ms, leaving 120-130 ms (the names are kept from the phone port) */
+  --ease-in:cubic-bezier(.7,0,.84,0);
+  --spring-snappy:var(--ease-out); --spring-default:var(--ease-out); --spring-spatial:var(--ease-out); --spring-bouncy:var(--ease-out);
+  --spring-snappy-ms:150ms; --spring-default-ms:200ms; --spring-spatial-ms:180ms; --spring-bouncy-ms:220ms;
   color-scheme:light;
-}
-@supports (transition-timing-function:linear(0,1)){
-  :root{
-    --spring-spatial:linear(0,0.0056,0.0209,0.044,0.0732,0.1072,0.1446,0.1844,0.2258,0.268,0.3104,0.3526,0.3941,0.4346,0.4738,0.5115,0.5477,0.5822,0.6149,0.6458,0.6749,0.7022,0.7277,0.7516,0.7738,0.7944,0.8134,0.831,0.8473,0.8622,0.8759,0.8884,0.8999,0.9103,0.9199,0.9285,0.9364,0.9435,0.9499,0.9557,0.9609,0.9656,0.9698,0.9736,0.9769,0.9799,0.9826,0.985,0.9871,0.989,0.9906,0.992,0.9933,0.9944,0.9954,0.9962,0.9969,0.9976,0.9981,0.9986,1);
-    --spring-bouncy:linear(0,0.0136,0.0504,0.1052,0.1729,0.2494,0.331,0.4146,0.4976,0.5779,0.6539,0.7246,0.7889,0.8465,0.8972,0.9408,0.9777,1.0082,1.0326,1.0515,1.0654,1.075,1.0807,1.0833,1.0832,1.0809,1.0769,1.0717,1.0656,1.0589,1.052,1.045,1.0382,1.0317,1.0256,1.0199,1.0149,1.0104,1.0065,1.0032,1.0004,0.9981,0.9963,0.995,0.994,0.9934,0.9931,0.993,0.9931,0.9934,0.9938,0.9943,0.9948,0.9954,0.996,0.9966,0.9971,0.9976,0.9981,0.9986,1);
-    --spring-overscroll:linear(0,0.0107,0.0388,0.079,0.1274,0.1807,0.2366,0.2933,0.3493,0.4037,0.4559,0.5053,0.5518,0.595,0.635,0.6719,0.7057,0.7365,0.7645,0.7899,0.8129,0.8335,0.8521,0.8688,0.8837,0.8971,0.909,0.9196,0.929,0.9374,0.9448,0.9514,0.9572,0.9624,0.9669,0.971,0.9745,0.9776,0.9804,0.9828,0.9849,0.9868,0.9885,0.9899,0.9912,0.9923,0.9933,0.9941,0.9949,0.9955,0.9961,0.9966,0.997,0.9974,0.9977,0.998,0.9983,0.9985,0.9987,0.9989,1);
-    --spring-snappy:linear(0,0.0089,0.033,0.0689,0.1139,0.1653,0.221,0.2792,0.3385,0.3977,0.4557,0.5117,0.5653,0.6159,0.6633,0.7073,0.7477,0.7847,0.8181,0.8482,0.8751,0.8989,0.9198,0.938,0.9538,0.9673,0.9788,0.9884,0.9963,1.0027,1.0079,1.0119,1.015,1.0172,1.0187,1.0195,1.0199,1.0199,1.0195,1.0188,1.018,1.017,1.0159,1.0148,1.0136,1.0124,1.0113,1.0101,1.0091,1.008,1.0071,1.0062,1.0053,1.0046,1.0039,1.0032,1.0027,1.0022,1.0017,1.0014,1);
-    --spring-default:linear(0,0.0098,0.036,0.0745,0.1218,0.1752,0.2322,0.2909,0.35,0.4081,0.4645,0.5184,0.5694,0.6172,0.6616,0.7024,0.7398,0.7738,0.8045,0.8321,0.8567,0.8785,0.8978,0.9147,0.9294,0.9422,0.9533,0.9628,0.9709,0.9777,0.9834,0.9882,0.9921,0.9953,0.9979,1,1.0016,1.0028,1.0037,1.0043,1.0047,1.0049,1.005,1.005,1.0049,1.0047,1.0045,1.0042,1.0039,1.0036,1.0033,1.003,1.0027,1.0025,1.0022,1.002,1.0017,1.0015,1.0013,1.0012,1);
-  }
 }
 /* Dark: when Windows is dark (unless Settings says Light), or when Settings says Dark */
 @media (prefers-color-scheme:dark){
@@ -137,7 +128,7 @@ main.main{ overflow-y:auto; padding:26px 30px 48px; }
 .block + .block{ margin-top:22px; }
 .foot{ font-size:12.5px; color:var(--dim); margin:7px 16px 0; }
 .grp{ background:var(--panel); border-radius:var(--r-card); box-shadow:var(--elev-1); overflow:hidden; }
-.grp-row{ display:flex; align-items:center; gap:12px; min-height:52px; padding:9px 16px; position:relative; }
+.grp-row{ display:flex; align-items:center; gap:12px; min-height:48px; padding:8px 16px; position:relative; }
 .grp-row + .grp-row::before{ content:""; position:absolute; top:0; right:0; left:16px; height:1px; background:var(--hairline); }
 .grp-row.has-icon + .grp-row.has-icon::before{ left:58px; }
 .grp-row.tap{ cursor:pointer; transition:background-color .12s var(--ease-standard); }
@@ -166,7 +157,7 @@ main.main{ overflow-y:auto; padding:26px 30px 48px; }
 .checkrow{ display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:14px; }
 .checkrow input{ width:18px; height:18px; margin:2px 0 0; accent-color:var(--accent); flex-shrink:0; }
 .list{ margin:0; padding-left:18px; } .list li + li{ margin-top:4px; }
-.row-title{ font-size:15px; font-weight:500; }
+.row-title{ font-size:14px; font-weight:500; }
 .row-sub{ font-size:12.5px; color:var(--dim); }
 .tile-icon{ width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:var(--panel-2); color:var(--dim); }
 .grp.inset .tile-icon{ background:var(--panel); }
@@ -182,20 +173,20 @@ main.main{ overflow-y:auto; padding:26px 30px 48px; }
 
 /* ---------- controls ---------- */
 button{ font:inherit; cursor:pointer; }
-.btn{ border:0; border-radius:var(--r-control); padding:10px 18px; min-height:40px; background:var(--accent); color:var(--on-tint); font-weight:700; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+.btn{ border:0; border-radius:8px; padding:8px 16px; min-height:36px; font-size:13.5px; background:var(--accent); color:var(--on-tint); font-weight:700; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
 .btn:hover{ filter:brightness(1.06); }
 .btn[disabled]{ opacity:.45; cursor:default; }
 .btn.sec{ background:var(--panel-2); color:var(--ink); }
 .btn.ghost{ background:transparent; color:var(--dim); box-shadow:inset 0 0 0 1px var(--line); }
 .btn.sec:hover, .btn.ghost:hover{ filter:none; background:var(--fill-tertiary); }
 .btn.sm{ padding:6px 12px; min-height:32px; font-size:12.5px; }
-.btn.big{ min-height:50px; width:100%; font-size:15px; border-radius:var(--r-card); }
+.btn.big{ min-height:42px; width:100%; font-size:14px; border-radius:var(--r-control); }
 .iconbtn{ border:0; background:transparent; color:var(--dim); width:32px; height:32px; border-radius:99px; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
 .iconbtn:hover{ color:var(--ink); background:var(--fill-tertiary); }
 .iconbtn:disabled{ opacity:.35; pointer-events:none; }
 .linkbtn{ border:0; background:none; padding:0; color:var(--accent); font-weight:600; }
 .linkbtn:hover{ text-decoration:underline; }
-input[type=text]{ font:inherit; font-size:15px; width:100%; padding:10px 12px; border-radius:var(--r-control); border:1px solid var(--line); background:var(--panel); color:var(--ink); transition:border-color .16s var(--ease-standard), box-shadow .16s var(--ease-standard); }
+input[type=text]{ font:inherit; font-size:14px; width:100%; padding:8px 11px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--ink); transition:border-color .16s var(--ease-standard), box-shadow .16s var(--ease-standard); }
 input[type=text]:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
 :where(button, [tabindex], input):focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 .seg{ display:inline-flex; gap:3px; background:var(--panel-2); padding:3px; border-radius:var(--r-control); }
@@ -206,12 +197,6 @@ input[type=text]:focus{ outline:none; border-color:var(--accent); box-shadow:0 0
 .radio{ width:20px; height:20px; border-radius:99px; box-shadow:inset 0 0 0 2px var(--line); flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:box-shadow .16s var(--ease-standard); }
 [aria-checked="true"] .radio{ box-shadow:inset 0 0 0 6px var(--accent); }
 
-.btn, .iconbtn, .seg button, .navbtn, .sidecard, .grp-row.tap, .drop{
-  transition:transform var(--spring-snappy-ms) var(--spring-snappy), filter .16s var(--ease-standard),
-             background-color .16s var(--ease-standard), color .16s var(--ease-standard), box-shadow .2s var(--ease-standard);
-}
-.btn:active:not([disabled]), .iconbtn:active, .seg button:active{ transform:scale(.96); }
-.navbtn:active, .sidecard:active, .grp-row.tap:active{ transform:scale(.985); }
 
 /* ---------- drop zone ---------- */
 .drop{ display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:10px; padding:34px 20px; border-radius:var(--r-card); background:var(--panel); box-shadow:var(--elev-1); position:relative; cursor:pointer; }
@@ -219,16 +204,16 @@ input[type=text]:focus{ outline:none; border-color:var(--accent); box-shadow:0 0
 .drop:hover::after{ border-color:var(--faint); }
 .drop .big-icon{ width:52px; height:52px; border-radius:var(--r-card); background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; transition:transform var(--spring-default-ms) var(--spring-default); }
 .drop b{ font-size:16px; }
-body.dragging .drop{ background:var(--accent-soft); transform:scale(1.01); }
+body.dragging .drop{ background:var(--accent-soft); }
 body.dragging .drop::after{ border-color:var(--accent); }
-body.dragging .drop .big-icon{ transform:translateY(-4px) scale(1.06); }
+body.dragging .drop .big-icon{ transform:translateY(-2px); }
 .drop.compact{ flex-direction:row; padding:14px 18px; gap:14px; text-align:left; justify-content:flex-start; }
 .drop.compact .big-icon{ width:36px; height:36px; border-radius:var(--r-control); }
 .drop.compact b{ font-size:14px; }
 
 /* ---------- progress ---------- */
 .bar{ height:10px; border-radius:99px; background:var(--panel-2); overflow:hidden; }
-.bar > i{ display:block; height:100%; width:0; border-radius:99px; background:var(--accent); transition:width .5s var(--ease-out); }
+.bar > i{ display:block; height:100%; width:0; border-radius:99px; background:var(--accent); transition:width 250ms linear; }
 .bar.thin{ height:5px; }
 .bar.ok > i{ background:var(--ok); }
 .bar.indeterminate > i{ width:35%; animation:slide 1.4s var(--ease-standard) infinite; }
@@ -246,11 +231,10 @@ details summary::-webkit-details-marker{ display:none; }
 details summary::before{ content:"›"; display:inline-block; width:14px; transition:transform .2s var(--ease-standard); }
 details[open] summary::before{ transform:rotate(90deg); }
 
-.success{ width:52px; height:52px; border-radius:99px; background:var(--ok-soft); color:var(--ok); display:flex; align-items:center; justify-content:center; animation:pop var(--spring-default-ms) cubic-bezier(.34,1.56,.64,1) both; }
-@keyframes pop{ from{ transform:scale(.6); opacity:0 } to{ transform:none; opacity:1 } }
+.success{ width:52px; height:52px; border-radius:99px; background:var(--ok-soft); color:var(--ok); display:flex; align-items:center; justify-content:center; }
 
 /* ---------- dialog ---------- */
-.scrim{ position:fixed; inset:0; background:rgba(0,0,0,.42); display:flex; align-items:center; justify-content:center; z-index:60; padding:20px; animation:fadeIn var(--spring-default-ms) var(--ease-out) both; }
+.scrim{ position:fixed; inset:0; display:flex; justify-content:center; z-index:60; }
 /* What's new: a fixed header and button, and a timeline between them, oldest at the top */
 .dialog.news-sheet{ display:flex; flex-direction:column; padding:8px 0 0; overflow:hidden; max-width:520px; }
 .nv-head{ display:flex; align-items:center; gap:12px; padding:12px 24px 14px; }
@@ -258,8 +242,8 @@ details[open] summary::before{ transform:rotate(90deg); }
 .nv-head .sub{ font-size:12.5px; color:var(--dim); margin-top:2px; }
 .nv-body{ flex:1; min-height:0; overflow-y:auto; padding:6px 24px 4px; border-top:1px solid var(--line); border-bottom:1px solid var(--line);
   mask-image:linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%); }
-.nv-foot{ display:flex; padding:14px 24px 20px; }
-.nv-foot .btn{ flex:1; }
+.nv-foot{ display:flex; justify-content:flex-end; padding:12px 20px 16px; }
+.nv-foot .btn{ min-width:88px; min-height:34px; padding:7px 16px; font-size:13.5px; }
 .timeline{ position:relative; padding:14px 0 6px 26px; }
 .timeline::before{ content:""; position:absolute; left:6px; top:22px; bottom:22px; width:2px; border-radius:2px; background:var(--line); }
 .nv{ position:relative; padding-bottom:22px; }
@@ -278,9 +262,8 @@ details[open] summary::before{ transform:rotate(90deg); }
 .nv details .when-open, .nv details[open] .when-shut{ display:none; }
 .nv details[open] .when-open{ display:inline; }
 .nv details[open] summary{ margin-bottom:-2px; }
-.dialog{ background:var(--panel); border-radius:var(--r-sheet); padding:22px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; box-shadow:var(--elev-3); animation:dialogIn var(--spring-default-ms) var(--spring-default) both; }
+.dialog{ background:var(--panel); width:100%; overflow-y:auto; }
 @keyframes fadeIn{ from{ opacity:0 } to{ opacity:1 } }
-@keyframes dialogIn{ from{ opacity:0; transform:translateY(12px) scale(.985) } to{ opacity:1; transform:none } }
 .player{ display:flex; align-items:center; gap:12px; background:var(--panel-2); border-radius:var(--r-card); padding:10px 14px 10px 10px; }
 .playbtn{ width:44px; height:44px; border-radius:99px; border:0; background:var(--accent); color:var(--on-tint); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .wave{ display:flex; align-items:center; gap:2px; height:32px; flex:1; }
@@ -294,7 +277,7 @@ details[open] summary::before{ transform:rotate(90deg); }
 .chip:hover{ background:var(--accent-soft); color:var(--accent); }
 
 #toast-root{ position:fixed; right:20px; bottom:20px; z-index:80; display:flex; flex-direction:column; align-items:flex-end; gap:8px; pointer-events:none; }
-.toast{ background:var(--ink); color:var(--bg); padding:11px 15px; border-radius:var(--r-card); font-size:13px; font-weight:600; max-width:360px; box-shadow:var(--elev-2); animation:dialogIn var(--spring-snappy-ms) var(--spring-snappy) both; }
+.toast{ background:var(--ink); color:var(--bg); font-size:13px; font-weight:600; max-width:360px; }
 .toast.bad{ background:var(--bad); color:#fff; }
 
 .steps{ margin:0; padding-left:20px; } .steps li + li{ margin-top:6px; }
@@ -303,12 +286,13 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 @media (max-width:860px){ .meters{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
 
 /* ---------- settings: switches and the subtitle preview ---------- */
-.switch{ width:50px; height:30px; border-radius:99px; border:0; padding:2px; background:var(--line); flex-shrink:0; position:relative;
-  transition:background-color .2s var(--ease-standard); }
-.switch span{ display:block; width:26px; height:26px; border-radius:99px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25);
+.switch{ width:40px; height:22px; border-radius:99px; border:0; padding:2px; background:var(--line); flex-shrink:0; position:relative;
+  transition:background-color 150ms var(--ease-standard); }
+.switch:hover{ filter:brightness(.96); }
+.switch span{ display:block; width:18px; height:18px; border-radius:99px; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25);
   transition:transform var(--spring-snappy-ms) var(--spring-snappy); }
 .switch[aria-checked="true"]{ background:var(--ok); }
-.switch[aria-checked="true"] span{ transform:translateX(20px); }
+.switch[aria-checked="true"] span{ transform:translateX(18px); }
 .grp-row .seg{ flex-shrink:0; }
 .frames{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .frame{ aspect-ratio:16/9; border-radius:10px; position:relative; overflow:hidden; display:flex; align-items:flex-end; justify-content:center;
@@ -318,7 +302,7 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 .prefs-input{ max-width:100%; }
 
 /* ---------- checking the lines before saving ---------- */
-.rv-head{ position:sticky; top:-26px; z-index:5; background:var(--bg); padding:14px 0 12px; margin-top:-14px; }
+.rv-head{ position:sticky; top:-26px; z-index:5; background:var(--bg); padding:14px 0 12px; margin-top:-14px; margin-bottom:12px; box-shadow:0 1px 0 var(--line); }
 .rv-tools{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .rv-tools input[type="text"]{ width:auto; flex:1; min-width:140px; font-size:14px; padding:8px 10px; }
 .rv-tools .checkrow{ flex:none; align-items:center; color:var(--dim); }
@@ -328,15 +312,21 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 .rv-name{ display:inline-flex; align-items:center; gap:4px; }
 .rv-names select{ font:inherit; font-size:12.5px; padding:5px 6px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--dim); max-width:140px; }
 .rv-row select:disabled{ opacity:.45; }
+select{ cursor:pointer; transition:border-color 100ms var(--ease-standard), background-color 100ms var(--ease-standard); }
+select:hover:not(:disabled){ border-color:var(--faint); }
 .rv-list{ background:var(--panel); border-radius:var(--r-card); box-shadow:var(--elev-1); }
-.rv-row{ display:grid; grid-template-columns:32px 52px auto 1fr auto auto; gap:8px; align-items:start; padding:8px 10px 8px 8px; position:relative; }
+.rv-row{ display:grid; grid-template-columns:32px 52px auto 1fr auto; gap:0 8px; align-items:start; padding:8px 10px 8px 8px; position:relative; }
 .rv-row + .rv-row::before{ content:""; position:absolute; top:0; left:52px; right:0; height:1px; background:var(--hairline); }
-.rv-row.no-spk{ grid-template-columns:32px 52px 1fr auto auto; }
+.rv-row.no-spk{ grid-template-columns:32px 52px 1fr auto; }
+/* "Too long" goes under the line, so the box being typed in never changes width */
+.rv-row .rv-warn{ grid-column:4; grid-row:2; }
+.rv-row.no-spk .rv-warn{ grid-column:3; }
+.rv-warn:not(:empty){ padding:2px 0 2px 8px; }
 .rv-time{ font:inherit; font-size:12px; color:var(--faint); margin-top:4px; padding:4px 4px; border:0; border-radius:6px; background:none;
   font-variant-numeric:tabular-nums; cursor:pointer; text-align:left; }
 .rv-time:hover, .rv-time[aria-expanded="true"]{ background:var(--fill-tertiary); color:var(--ink); }
 .rv-acts{ display:flex; gap:2px; }
-.rv-acts .iconbtn.quiet{ opacity:0; transition:opacity .15s; }
+.rv-acts .iconbtn.quiet{ opacity:.35; transition:opacity 100ms var(--ease-standard); }
 .rv-row:hover .rv-acts .iconbtn.quiet, .rv-row:focus-within .rv-acts .iconbtn.quiet{ opacity:1; }
 .rv-timing{ grid-column:2 / -1; display:flex; flex-wrap:wrap; gap:14px; align-items:center; padding:2px 0 6px; font-size:13px; color:var(--dim); }
 .rv-timing .nudge{ display:flex; align-items:center; gap:4px; }
@@ -349,7 +339,6 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
   background:transparent; color:var(--ink); overflow:hidden; field-sizing:content; min-height:34px; }
 .rv-row textarea:hover{ background:var(--fill-tertiary); }
 .rv-row textarea:focus{ outline:none; border-color:var(--accent); background:var(--panel); box-shadow:0 0 0 3px var(--accent-soft); }
-.rv-warn{ padding-top:7px; }
 .rv-row.gone textarea, .rv-row.gone .rv-time{ text-decoration:line-through; opacity:.45; }
 .rv-row.playing .rv-play{ color:var(--accent); background:var(--accent-soft); }
 
@@ -374,7 +363,7 @@ body.wizard aside.side{ display:none; }
 .wiz .lede{ color:var(--dim); font-size:15px; margin:6px 0 22px; }
 .wiz-body{ flex:1; }
 .wiz-nav{ display:flex; gap:10px; padding-top:22px; }
-.wiz-nav .btn{ min-height:46px; padding:10px 22px; font-size:15px; }
+.wiz-nav .btn{ min-height:40px; padding:9px 22px; font-size:14px; }
 .hero-icon{ display:block; border-radius:18px; margin-bottom:18px; box-shadow:var(--elev-2); }
 .facts{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
 .fact{ background:var(--panel); box-shadow:var(--elev-1); border-radius:var(--r-card); padding:14px; }
@@ -402,29 +391,26 @@ body.wizard aside.side{ display:none; }
 /* --- screens: drilling in slides from the right, going back from the left, tabs crossfade --- */
 .screen-visible > *{ animation:navEnter var(--spring-spatial-ms) var(--spring-spatial) backwards; }
 .screen-visible.nav-back > *{ animation-name:navEnterBack; }
-.screen-visible.nav-tab > *{ animation:fadeIn var(--spring-snappy-ms) var(--ease-standard) backwards; }
-@keyframes navEnter{ from{ opacity:0; transform:translateX(14px) } to{ opacity:1; transform:translateX(0) } }
-@keyframes navEnterBack{ from{ opacity:0; transform:translateX(-14px) } to{ opacity:1; transform:translateX(0) } }
-/* --- lists and cards arrive in turn: 18 ms apart, the ninth on all together --- */
-.anim-card{ animation:fadeSlideIn var(--spring-spatial-ms) var(--spring-spatial) backwards; animation-delay:calc(min(var(--i, 0), 8) * 18ms); }
-@keyframes fadeSlideIn{ from{ opacity:0; transform:translateY(10px) } to{ opacity:1; transform:translateY(0) } }
+.screen-visible.nav-tab > *{ animation:fadeIn 120ms var(--ease-standard) backwards; }
+@keyframes navEnter{ from{ opacity:0; transform:translateX(8px) } to{ opacity:1; transform:translateX(0) } }
+@keyframes navEnterBack{ from{ opacity:0; transform:translateX(-8px) } to{ opacity:1; transform:translateX(0) } }
 /* bars grow in when they appear; a tick pops */
 .screen-visible .bar:not(.indeterminate) > i{ transform-origin:left center; animation:barGrow var(--spring-spatial-ms) var(--spring-spatial) backwards; }
 @keyframes barGrow{ from{ transform:scaleX(0) } }
 .success, .step.done .dot{ animation:checkIconIn var(--spring-bouncy-ms) var(--spring-bouncy) both; }
-@keyframes checkIconIn{ from{ opacity:0; transform:scale(.5) } to{ opacity:1; transform:scale(1) } }
+@keyframes checkIconIn{ from{ opacity:0; transform:scale(.85) } to{ opacity:1; transform:none } }
 
-/* --- press: buttons compress, rows highlight instead of shrinking --- */
-.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .switch, .playbtn{
-  transition:transform var(--spring-snappy-ms) var(--spring-snappy), background-color .2s var(--ease-standard), filter .2s var(--ease-standard), color .2s var(--ease-standard); }
-.btn:active:not([disabled]), .seg button:active, .chip:active{ transform:scale(.96); filter:none; }
-.btn.big:active:not([disabled]){ transform:scale(.97); }
-.iconbtn:active, .playbtn:active{ transform:scale(.9); }
-.navbtn:active, .sidecard:active{ transform:scale(.97); }
-.drop:active{ transform:scale(.985); }
-.grp-row.tap{ transition:background-color .12s var(--ease-standard); }
-.grp-row.tap:active{ transform:none; background:var(--fill-secondary, var(--fill-tertiary)); }
-.btn[disabled]:active{ transform:none; }
+/* --- hover and press: colour only, the way desktop controls answer; icon buttons dip a touch --- */
+.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .playbtn, .grp-row.tap{
+  transition:background-color 100ms var(--ease-standard), filter 100ms var(--ease-standard), color 100ms var(--ease-standard),
+             box-shadow 100ms var(--ease-standard), transform 80ms var(--ease-standard); }
+.btn:active:not([disabled]){ filter:brightness(.92); }
+.btn.sec:active:not([disabled]), .btn.ghost:active:not([disabled]){ filter:none; background:var(--line); }
+.seg button:active, .chip:active{ filter:brightness(.95); }
+.iconbtn:active, .playbtn:active{ transform:scale(.94); }
+.navbtn:active, .sidecard:active{ background:var(--fill-secondary); }
+.grp-row.tap:active{ background:var(--fill-secondary, var(--fill-tertiary)); }
+.btn:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
 
 /* --- dialogs: a window in the middle, the way desktop apps ask. It fades and scales in quickly,
    Esc or the corner ✕ closes it, and a click outside gives it a shake instead of closing it (so a
@@ -433,36 +419,42 @@ body.wizard aside.side{ display:none; }
 .dialog{ position:relative; max-width:460px; border-radius:12px; max-height:min(86vh, 720px); padding:22px 24px 20px;
   box-shadow:0 0 0 1px rgba(0,0,0,.06), 0 10px 24px rgba(0,0,0,.12), 0 30px 70px rgba(0,0,0,.18);
   animation:dlgIn 170ms var(--ease-out) both; }
-@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .dialog{ box-shadow:0 0 0 1px rgba(255,255,255,.08), 0 10px 24px rgba(0,0,0,.35), 0 30px 70px rgba(0,0,0,.45); } }
-:root[data-theme="dark"] .dialog{ box-shadow:0 0 0 1px rgba(255,255,255,.08), 0 10px 24px rgba(0,0,0,.35), 0 30px 70px rgba(0,0,0,.45); }
-@keyframes dlgIn{ from{ opacity:0; transform:scale(.965) } to{ opacity:1; transform:none } }
-.scrim.is-closing{ animation:veyraFadeOut 130ms var(--ease-standard) both; }
-.dialog.is-closing{ animation:dlgOut 130ms var(--ease-standard) both; }
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .scrim{ background:rgba(0,0,0,.5); }
+  :root:not([data-theme="light"]) .dialog{ box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 0 0 1px rgba(255,255,255,.13), 0 12px 28px rgba(0,0,0,.5), 0 32px 72px rgba(0,0,0,.55); } }
+:root[data-theme="dark"] .scrim{ background:rgba(0,0,0,.5); }
+:root[data-theme="dark"] .dialog{ box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 0 0 1px rgba(255,255,255,.13), 0 12px 28px rgba(0,0,0,.5), 0 32px 72px rgba(0,0,0,.55); }
+@keyframes dlgIn{ from{ opacity:0; transform:scale(.97) } to{ opacity:1; transform:none } }
+.scrim.is-closing{ animation:veyraFadeOut 120ms var(--ease-in) both; }
+.dialog.is-closing{ animation:dlgOut 120ms var(--ease-in) both; }
 @keyframes veyraFadeOut{ to{ opacity:0 } }
-@keyframes dlgOut{ to{ opacity:0; transform:scale(.975) } }
-.dialog.is-nudged{ animation:dlgNudge 260ms var(--ease-standard); }
-@keyframes dlgNudge{ 20%{ transform:translateX(-6px) } 45%{ transform:translateX(5px) } 70%{ transform:translateX(-3px) } 100%{ transform:none } }
+@keyframes dlgOut{ to{ opacity:0; transform:scale(.985) } }
+.dialog.is-nudged{ animation:dlgNudge 180ms var(--ease-standard); }
+@keyframes dlgNudge{ 25%{ transform:translateX(-3px) } 55%{ transform:translateX(3px) } 80%{ transform:translateX(-1.5px) } 100%{ transform:none } }
 /* the corner ✕ (added to every dialog that can be closed) */
 .dlg-x{ all:unset; box-sizing:border-box; position:absolute; top:12px; right:12px; width:28px; height:28px; border-radius:7px; display:flex;
-  align-items:center; justify-content:center; color:var(--faint); cursor:pointer; font-size:13px; z-index:2; transition:background-color .12s var(--ease-standard), color .12s; }
+  align-items:center; justify-content:center; color:var(--faint); cursor:pointer; z-index:2; transition:background-color 100ms var(--ease-standard), color 100ms; }
+.dlg-x svg{ width:12px; height:12px; }
 .dlg-x:hover{ background:var(--fill-tertiary); color:var(--ink); }
 .dlg-x:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
 .dialog.has-x h3{ padding-right:30px; }
-.dialog.news-sheet .dlg-x{ top:18px; right:16px; }
+.dialog.news-sheet .dlg-x{ top:16px; right:14px; }
+.nv-head{ padding-right:48px !important; }
 /* a confirmation: the question, what happens, then Cancel and the action at the bottom right */
 .dialog.confirm{ max-width:420px; padding:22px 24px 18px; }
 .confirm .cf-text{ font-size:13.5px; color:var(--dim); line-height:1.5; margin:8px 0 0; }
-.dlg-foot{ display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+.dlg-foot{ display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:20px; }
+.stack > .dlg-foot{ margin-top:6px; }
 .dlg-foot .btn{ min-width:88px; min-height:34px; padding:7px 16px; font-size:13.5px; }
+.dlg-foot .note{ margin-right:auto; }
 
 /* --- toasts: bottom right, sliding in from the side, like Windows notifications --- */
-#toast-root{ top:auto; bottom:20px; right:20px; left:auto; transform:none; align-items:flex-end; }
 .toast{ display:flex; align-items:center; gap:10px; padding:10px 12px 10px 16px; border-radius:10px; pointer-events:auto;
-  box-shadow:0 2px 8px rgba(0,0,0,.08), 0 12px 28px rgba(0,0,0,.16); animation:toastSlideIn 200ms var(--ease-out); }
+  box-shadow:0 2px 8px rgba(0,0,0,.08), 0 12px 28px rgba(0,0,0,.16); animation:toastSlideIn 160ms var(--ease-out); }
 .toast-dismiss{ all:unset; box-sizing:border-box; flex-shrink:0; width:20px; height:20px; border-radius:99px; display:flex; align-items:center; justify-content:center; opacity:.7; font-size:11px; cursor:pointer; position:relative; }
-.toast-dismiss::after{ content:""; position:absolute; inset:-12px; }
-.toast-dismiss:hover{ opacity:1; }
-.toast.is-leaving{ animation:toastOut .22s var(--ease-standard) both; pointer-events:none; }
+.toast-dismiss::after{ content:""; position:absolute; inset:-4px; }
+.toast-dismiss:hover{ opacity:1; background:rgba(127,127,127,.22); }
+.toast.is-leaving{ animation:toastOut 130ms var(--ease-in) both; pointer-events:none; }
 @keyframes toastSlideIn{ from{ opacity:0; transform:translateX(16px) } to{ opacity:1; transform:none } }
 @keyframes toastOut{ to{ opacity:0; transform:translateX(12px) } }
 
@@ -480,15 +472,22 @@ body.wizard aside.side{ display:none; }
    (a short cross-fade moves nothing on screen); dragging a sheet still works, it just doesn't settle. --- */
 @media (prefers-reduced-motion:reduce){
   *{ transition:none !important; }
-  .screen-visible > *, .anim-card, .scrim, .dialog, .toast, .dialog.is-closing, .scrim.is-closing, .toast.is-leaving{
+  .screen-visible > *, .scrim, .dialog, .toast, .dialog.is-closing, .scrim.is-closing, .toast.is-leaving{
     animation-name:fadeIn !important; animation-duration:.12s !important; animation-delay:0ms !important; animation-timing-function:linear !important; }
   .dialog.is-closing, .scrim.is-closing, .toast.is-leaving{ animation-name:veyraFadeOut !important; }
+  .dialog.is-nudged{ animation:none !important; }
+  body.dragging .drop .big-icon{ transform:none !important; }
+  .bar.indeterminate > i{ width:100% !important; animation:pulse 1.6s ease-in-out infinite alternate !important; }
   .screen-visible .bar > i, .success, .step.done .dot{ animation:none !important; }
   .btn:active, .iconbtn:active, .seg button:active, .navbtn:active, .sidecard:active, .drop:active, .chip:active, .playbtn:active{ transform:none !important; }
 }
 html.reduce-motion *{ transition:none !important; }
-html.reduce-motion .screen-visible > *, html.reduce-motion .anim-card, html.reduce-motion .scrim, html.reduce-motion .dialog, html.reduce-motion .toast{
+html.reduce-motion .screen-visible > *, html.reduce-motion .scrim, html.reduce-motion .dialog, html.reduce-motion .toast{
   animation-name:fadeIn !important; animation-duration:.12s !important; animation-delay:0ms !important; animation-timing-function:linear !important; }
+html.reduce-motion .dialog.is-nudged{ animation:none !important; }
+html.reduce-motion body.dragging .drop .big-icon{ transform:none !important; }
+html.reduce-motion .bar.indeterminate > i{ width:100% !important; animation:pulse 1.6s ease-in-out infinite alternate !important; }
+@keyframes pulse{ from{ opacity:.35 } to{ opacity:.8 } }
 html.reduce-motion .dialog.is-closing, html.reduce-motion .scrim.is-closing, html.reduce-motion .toast.is-leaving{
   animation-name:veyraFadeOut !important; animation-duration:.12s !important; animation-timing-function:linear !important; }
 html.reduce-motion .screen-visible .bar > i, html.reduce-motion .success, html.reduce-motion .step.done .dot{ animation:none !important; }
@@ -669,18 +668,7 @@ function arrive(el, dir) {
   void el.offsetWidth;
   el.classList.add("screen-visible");
   clearTimeout(el.arrived);
-  el.arrived = setTimeout(() => el.classList.remove("screen-visible", "nav-back", "nav-tab"), 900);
-  let i = 0;
-  for (const item of el.querySelectorAll(".grp > .grp-row, .rv-row, .card, .drop, .banner")) {
-    if (item.parentElement.closest(".card") && !item.matches(".grp-row")) continue;
-    if (item.getBoundingClientRect().top > window.innerHeight) break;  // below the fold: no waiting for it
-    item.style.setProperty("--i", i++);
-    item.classList.add("anim-card");
-    item.addEventListener("animationend", function done(e) {
-      if (e.target !== item) return;
-      item.classList.remove("anim-card"); item.style.removeProperty("--i"); item.removeEventListener("animationend", done);
-    });
-  }
+  el.arrived = setTimeout(() => el.classList.remove("screen-visible", "nav-back", "nav-tab"), 300);
 }
 
 /* ---------- sheets ---------- */
@@ -713,7 +701,7 @@ function bindSheet(scrim) {
   scrim.dataset.bound = "1";
   if (!dialog.querySelector(".dlg-x") && dialog.querySelector('[data-dismiss], [data-up="close"]')) {
     const x = document.createElement("button");
-    x.type = "button"; x.className = "dlg-x"; x.title = "Close (Esc)"; x.setAttribute("aria-label", "Close"); x.textContent = "✕";
+    x.type = "button"; x.className = "dlg-x"; x.title = "Close (Esc)"; x.setAttribute("aria-label", "Close"); x.innerHTML = ICON.x;
     x.tabIndex = -1;  // Esc does the same; Tab goes to the dialog's own buttons
     x.onclick = () => dismissSheet();
     dialog.prepend(x);
@@ -728,7 +716,21 @@ function bindSheet(scrim) {
     dialog.classList.add("is-nudged");
   });
   dialog.addEventListener("animationend", e => { if (e.animationName === "dlgNudge") dialog.classList.remove("is-nudged"); });
+  // Focus starts inside: the field marked autofocus, else the main button (Cancel when the main
+  // button destroys something). Dialogs that put it somewhere themselves keep it there.
+  const main = () => [...dialog.querySelectorAll(".dlg-foot .btn, .nv-foot .btn")].reverse()
+    .find(b => !b.disabled && !b.matches(".sec, .ghost"));
+  if (!dialog.contains(document.activeElement)) {
+    const first = dialog.querySelector("[autofocus]") || (main() && main().matches(".dan") ? dialog.querySelector("[data-dismiss]") : main());
+    if (first) first.focus({ preventScroll: true });
+  }
   scrim.addEventListener("keydown", e => {
+    // Enter anywhere but a control of its own presses the main button, as in desktop dialogs
+    if (e.key === "Enter" && !e.target.closest("button, input, textarea, select, summary, a")) {
+      const b = main();
+      if (b) { e.preventDefault(); b.click(); }
+      return;
+    }
     if (e.key !== "Tab") return;
     const stops = [...dialog.querySelectorAll('button, input, select, textarea, a[href], summary, [tabindex]:not([tabindex="-1"])')]
       .filter(el => !el.disabled && el.tabIndex !== -1 && el.offsetParent !== null);
@@ -2052,15 +2054,15 @@ function renderUpdateSheet() {
       actions = u.blocking ? "" : `<button class="btn sec" data-up="close">Close</button>`; break;
     case "ok":
       body = `<div class="row"><span class="pill ok">Up to date</span><span class="sm dim">You have the latest version (${esc(installedText())}).</span></div>`;
-      actions = `<div class="grow"></div><button class="btn" data-up="close">Done</button>`; break;
+      actions = `<button class="btn" data-up="close">Done</button>`; break;
     case "available":
       body = `${u.blocking ? lockNote : ""}<div class="between"><span class="sm dim">${d.switch ? "Version" : "New version"}</span><span class="sm dim mono">${esc(versionText(d.latest))}</span></div>
         ${d.switch ? `<p>${switchNote(d)}</p>` : ""}
         ${d.switch === "main" ? "" : `<div><h2 style="margin-left:0">What's new</h2>${newsList(d.news, d.more)}</div>`}
         <p class="sm dim">Takes about a minute. Your voice clips, settings, models and history are kept.</p>`;
-      actions = u.blocking ? `<div class="grow"></div><button class="btn" data-up="install">Update now</button>`
-        : S.run ? `<span class="sm dim grow">You can update once the current video is finished.</span><button class="btn sec" data-up="close">Later</button>`
-        : `<button class="btn sec" data-up="close">Later</button><div class="grow"></div><button class="btn" data-up="install">${d.switch ? "Switch now" : "Update now"}</button>`; break;
+      actions = u.blocking ? `<button class="btn" data-up="install">Update now</button>`
+        : S.run ? `<span class="sm dim note">You can update once the current video is finished.</span><button class="btn sec" data-up="close">Later</button>`
+        : `<button class="btn sec" data-up="close">Later</button><button class="btn" data-up="install">${d.switch ? "Switch now" : "Update now"}</button>`; break;
     case "installing": case "installed": {
       const dl = p.download || {}, ins = p.install || {};
       body = `<div class="steplist">
@@ -2070,13 +2072,13 @@ function renderUpdateSheet() {
         </div>
         ${u.state === "installed" ? `<p class="sm dim">${u.packages ? "This update needs new parts, so a small window shows them installing while it restarts (a minute or two)."
           : "Restart to start using the new version."}</p>` : ""}`;
-      actions = u.state === "installed" ? `${u.blocking ? "" : `<button class="btn sec" data-up="close">Later</button>`}<div class="grow"></div><button class="btn" data-up="restart">Restart now</button>`
-        : `<div class="grow"></div><button class="btn" disabled>Updating…</button>`; break;
+      actions = u.state === "installed" ? `${u.blocking ? "" : `<button class="btn sec" data-up="close">Later</button>`}<button class="btn" data-up="restart">Restart now</button>`
+        : `<button class="btn" disabled>Updating…</button>`; break;
     }
     default:
       body = `${u.blocking ? lockNote : ""}<div class="banner bad selectable">${esc(u.error || "Something went wrong.")}</div>`;
       // Locked but GitHub can't be reached: being offline is no risk, so it can be used until it's back
-      actions = `${u.blocking ? `<button class="btn sec" data-up="offline">Keep using it offline</button>` : `<button class="btn sec" data-up="close">Close</button>`}<div class="grow"></div><button class="btn" data-up="retry">Try again</button>`;
+      actions = `${u.blocking ? `<button class="btn sec" data-up="offline">Keep using it offline</button>` : `<button class="btn sec" data-up="close">Close</button>`}<button class="btn" data-up="retry">Try again</button>`;
   }
   const fresh = !root.querySelector("#update-sheet");
   root.innerHTML = `<div class="scrim" id="update-sheet" ${fresh ? "" : 'style="animation:none"'}><div class="dialog stack${u.blocking ? " blocking" : ""}" role="dialog" aria-modal="true" aria-labelledby="up-title" ${fresh ? "" : 'style="animation:none"'}>
@@ -2084,7 +2086,7 @@ function renderUpdateSheet() {
         u.blocking && !["installing", "installed"].includes(u.state) ? "Important security update" : { checking: u.blocking ? "Important security update" : "Checking for updates", ok: "Subtitle Maker is up to date",
           available: u.blocking ? "Important security update" : updateTitle(d), installing: "Updating Subtitle Maker",
           installed: "Update installed" }[u.state] || "The update didn't work"}</h3></div>
-      ${body}<div class="row">${actions}</div></div></div>`;
+      ${body}<div class="dlg-foot">${actions}</div></div></div>`;
   root.querySelectorAll("[data-up]").forEach(b => b.onclick = () => UPDATE_ACTIONS[b.dataset.up]());
 }
 
@@ -2141,9 +2143,9 @@ function showAsk(ev) {
       <audio id="ask-audio" src="${ev.clip}" preload="auto"></audio>
       <div><h2 style="margin-left:0">Their longest lines</h2>
         ${ev.lines.map(l => `<div class="quote"><span class="t">${clock(l.start)}</span><span class="selectable">“${esc(l.text)}”</span></div>`).join("")}</div>
-      <div><input type="text" id="ask-name" placeholder="Their name" autocomplete="off" maxlength="40">
+      <div><input type="text" id="ask-name" placeholder="Their name" autocomplete="off" maxlength="40" autofocus>
         ${voices.length ? `<div class="chips" style="margin-top:8px">${voices.map(v => `<button class="chip" data-name="${esc(v)}">${esc(v)}</button>`).join("")}</div>` : ""}</div>
-      <div class="row"><button class="btn ghost" id="ask-keep" data-dismiss>Keep “${esc(ev.label)}”</button><div class="grow"></div>
+      <div class="dlg-foot"><button class="btn sec" id="ask-keep" data-dismiss>Keep “${esc(ev.label)}”</button>
         <button class="btn" id="ask-save">Save name</button></div>
     </div></div>`;
   const audio = $("#ask-audio"), play = $("#ask-play"), bars_ = [...document.querySelectorAll("#ask-wave i")];
@@ -2162,7 +2164,6 @@ function showAsk(ev) {
   $("#ask-keep").onclick = () => send("");
   $("#ask-name").onkeydown = e => { if (e.key === "Enter") send(e.target.value.trim()); };
   document.querySelectorAll("#dialog-root .chip").forEach(c => c.onclick = () => { $("#ask-name").value = c.dataset.name; $("#ask-name").focus(); });
-  setTimeout(() => $("#ask-name").focus(), 50);
 }
 
 /* A confirmation: the question, what happens, and the action named by its verb (red only when
@@ -2200,7 +2201,7 @@ function showUninstall(p) {
           <span>Keep my ${p.voices.length} voice clip${p.voices.length > 1 ? "s" : ""}<br><span class="sm dim">Moved to <span class="selectable">${esc(p.voices_to)}</span></span></span></label>` : ""}
       <p class="sm dim">Your videos and .srt files are not touched.${p.program ? "" : " This Tools folder stays too, since the installer didn't make it."}
         The window closes and a small window finishes the removal.</p>
-      <div class="row"><button class="btn sec" id="un-cancel" data-dismiss>Cancel</button><div class="grow"></div>
+      <div class="dlg-foot"><button class="btn sec" id="un-cancel" data-dismiss>Cancel</button>
         <button class="btn dan" id="un-go">Uninstall</button></div>
     </div></div>`;
   $("#un-cancel").onclick = () => { closeDialogs(); };
@@ -2274,6 +2275,8 @@ const ACTIONS = {
     rvSnap("time");
     rvSetTime(i, key, c[key] + parseFloat(el.dataset.d));
     render();
+    const again = $(`#review [data-act="rv-nudge"][data-i="${i}"][data-k="${key}"][data-d="${el.dataset.d}"]`);
+    if (again) again.focus();
   },
   "rv-split": el => {
     const r = S.review, i = +el.dataset.i, c = r.cues[i], text = c.text.trim();
@@ -2353,9 +2356,11 @@ const ACTIONS = {
     const key = el.dataset.k;
     if (el.classList.contains("switch")) {
       el.setAttribute("aria-checked", String(el.getAttribute("aria-checked") !== "true"));
-      if (!prefersReducedMotion()) await new Promise(done => setTimeout(done, 300));
-    }
-    S.info.settings = await api().save_prefs({ [key]: JSON.parse(el.dataset.v) });
+      // Saving runs while the knob slides (150 ms); the redraw waits for both
+      const [saved] = await Promise.all([api().save_prefs({ [key]: JSON.parse(el.dataset.v) }),
+        new Promise(done => setTimeout(done, prefersReducedMotion() ? 0 : 150))]);
+      S.info.settings = saved;
+    } else S.info.settings = await api().save_prefs({ [key]: JSON.parse(el.dataset.v) });
     if (key === "theme") applyTheme();
     if (key === "less_motion") applyLessMotion();
     render();

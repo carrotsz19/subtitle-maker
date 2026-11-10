@@ -366,15 +366,11 @@ def finish(wait_pid, reopen=True):
     except OSError:
         pending = []
     if pending:
-        print("Finishing the update: installing new Python packages (a minute or two)...")
-        try:
-            for name in pending:
-                pip(name, quiet=False)
-            PENDING_FILE.unlink(missing_ok=True)
-        except (OSError, subprocess.CalledProcessError) as e:
-            print(f"That didn't work ({e}). Run Setup.bat to fix it.")
-            input("Press Enter to close.")
-            return
+        import finishing  # a small window saying what's happening, instead of a console
+
+        if not finishing.install(pending):
+            return  # the window said what went wrong and how to fix it
+        PENDING_FILE.unlink(missing_ok=True)
     if reopen:
         pythonw = Path(sys.executable).with_name("pythonw.exe")
         subprocess.Popen([str(pythonw if pythonw.exists() else sys.executable), str(HERE / "app.py")], cwd=str(HERE),

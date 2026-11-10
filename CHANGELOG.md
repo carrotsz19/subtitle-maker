@@ -4,6 +4,14 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 0.3.0 · 10 November 2026
+
+- **Feels like a desktop app.** Pop-ups open in the middle of the window, with Cancel and the action together at the bottom right, a close button in the corner, Esc to close and Enter for the main button. A click outside no longer closes them, so nothing you typed is lost. Messages show at the bottom right.
+- **Quicker, calmer motion.** Screens, switches and dialogs move in a fraction of a second, with no bouncing, and buttons darken when pressed instead of shrinking. Switches, buttons, fields and rows are sized for a mouse.
+- **Opens where you left it.** After a restart or an update, the window opens on the same screen, at the same size and place, and maximized if it was.
+- **No more terminal while updating.** When an update needs new parts, a small window says what it's installing instead of a console full of text.
+- In the check, "Too long" shows under the line instead of squeezing the box you're typing in, Split and Join are always visible, and the time buttons keep their place when pressed.
+
 ## 0.2.5 · 10 November 2026
 
 - **Named once, named everywhere.** Name someone in the first video's check, and the next videos in the queue name them by themselves.
@@ -11,7 +19,6 @@ A release (see "Releasing a new version" in the README) needs its section here f
 - **Change who's talking.** In the check, pick "+ Someone else…" on a line for a person detection missed, use "+ Add person", or move all of one person's lines to another when it split someone in two. Giving two people the same name puts them together.
 - People added in the check are remembered for later videos too, from the lines as you checked them.
 - **Ready to check.** When the whole queue is transcribed, it plays the done sound, and shows a notification if you're in another window.
-- **Feels like a desktop app.** Pop-ups open in the middle of the window, with Cancel and the action at the bottom right, a ✕ in the corner and Esc to close. A click outside no longer closes them, so nothing you typed is lost. Messages show at the bottom right.
 - Fixed: cancelling a check, or closing the window during one, lost that video's lines. Now it stays To check.
 - Fixed: uninstalling left behind videos that were waiting to be checked.
 - Fixed in the check: renaming a speaker no longer swallows your next click, Ctrl+Z works right after changing a line's speaker, Enter skips deleted lines, and replacing a word with nothing in every future video asks first.
