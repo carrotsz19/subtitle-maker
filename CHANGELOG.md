@@ -7,7 +7,7 @@ A release (see "Releasing a new version" in the README) needs its section here f
 ## 0.3.0 · 10 November 2026
 
 - **Feels like a desktop app.** Pop-ups open in the middle of the window, with Cancel and the action together at the bottom right, a close button in the corner, Esc to close and Enter for the main button. A click outside no longer closes them, so nothing you typed is lost. Messages show at the bottom right.
-- **Quicker, calmer motion.** Screens, switches and dialogs move in a fraction of a second, with no bouncing, and buttons darken when pressed instead of shrinking. Switches, buttons, fields and rows are sized for a mouse.
+- **Smooth, natural motion.** Everything moves on soft springs that pick up from wherever they are if you click again mid-way: dialogs grow in over a blurred backdrop, notifications stack and slide, the highlights in the sidebar and in switches glide to your choice, and buttons give a little when pressed. Screens slide in the direction you're going. In the check, lines slide into place when you split, join, delete or undo. Switches, buttons, fields and rows are sized for a mouse, and Less animations keeps everything still.
 - **Opens where you left it.** After a restart or an update, the window opens on the same screen, at the same size and place, and maximized if it was.
 - **No more terminal while updating.** When an update needs new parts, a small window says what it's installing instead of a console full of text.
 - In the check, "Too long" shows under the line instead of squeezing the box you're typing in, Split and Join are always visible, and the time buttons keep their place when pressed.

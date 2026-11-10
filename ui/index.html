@@ -34,11 +34,25 @@
   --r-control:10px; --r-card:14px; --r-sheet:20px;
   --sidebar:220px;
   --ease-out:cubic-bezier(.16,1,.3,1); --ease-standard:cubic-bezier(.25,.1,.25,1);
-  /* Motion, desktop-style: quick, and nothing overshoots. Hover 100 ms, press 80 ms, controls
-     150 ms, things appearing 160-180 ms, leaving 120-130 ms (the names are kept from the phone port) */
+  /* Motion: things that move are on springs, the way macOS and iOS move them. Each curve below is a
+     real damped spring (Apple's response / dampingFraction), sampled into linear() by a small script;
+     the -ms value is how long that spring takes to settle to within 0.1%, so it isn't a speed to tune.
+     Most of the travel is over in the first third. Hover is not a spring: colours ease in 130 ms.
+       snappy  response .30 s, damping .80 (1.5% overshoot): controls, press release, pills, switch knobs
+       default response .35 s, damping .85 (0.6%): the sidebar highlight, small moves
+       spatial response .42 s, damping .86 (0.5%): dialogs, screens, rows changing place
+       bouncy  response .42 s, damping .68 (5.4%): only where it delights (a tick, the drop target lifting)
+     Fades are never on a spring (a spring's S-curve and overshoot are wrong for opacity): they run
+     beside it as their own short ease-out. */
   --ease-in:cubic-bezier(.7,0,.84,0);
-  --spring-snappy:var(--ease-out); --spring-default:var(--ease-out); --spring-spatial:var(--ease-out); --spring-bouncy:var(--ease-out);
-  --spring-snappy-ms:150ms; --spring-default-ms:200ms; --spring-spatial-ms:180ms; --spring-bouncy-ms:220ms;
+  --spring-snappy-ms:420ms;
+  --spring-snappy:linear(0, 0.006 1.3%, 0.026 2.8%, 0.057 4.3%, 0.097 5.8%, 0.195 8.8%, 0.434 15.3%, 0.539 18.3%, 0.641 21.5%, 0.722 24.5%, 0.792 27.5%, 0.849 30.5%, 0.898 33.8%, 0.936 37%, 0.966 40.5%, 0.989 44.5%, 1.004 48.8%, 1.013 53.8%, 1.015 62.3%, 1);
+  --spring-default-ms:460ms;
+  --spring-default:linear(0, 0.005 1.3%, 0.023 2.8%, 0.05 4.3%, 0.093 6%, 0.189 9.3%, 0.414 16%, 0.516 19.3%, 0.609 22.5%, 0.69 25.8%, 0.76 29%, 0.817 32.3%, 0.864 35.5%, 0.904 39%, 0.939 43%, 0.966 47.5%, 0.986 52.5%, 0.998 58%, 1.006 71.3%, 1);
+  --spring-spatial-ms:540ms;
+  --spring-spatial:linear(0, 0.005 1.3%, 0.022 2.8%, 0.054 4.5%, 0.095 6.3%, 0.19 9.5%, 0.408 16.3%, 0.508 19.5%, 0.605 23%, 0.684 26.3%, 0.752 29.5%, 0.809 32.8%, 0.858 36.3%, 0.898 39.8%, 0.934 44%, 0.962 48.5%, 0.981 53.5%, 0.994 59%, 1.002 65.3%, 1.005 73%, 1);
+  --spring-bouncy-ms:680ms;
+  --spring-bouncy:linear(0, 0.008 1.3%, 0.029 2.5%, 0.061 3.8%, 0.111 5.3%, 0.16 6.5%, 0.225 8%, 0.493 13.8%, 0.604 16.3%, 0.713 19%, 0.798 21.5%, 0.869 24%, 0.932 26.8%, 0.979 29.5%, 1.013 32.3%, 1.032 34.5%, 1.045 37%, 1.052 39.5%, 1.054 42.5%, 1.047 47.8%, 1.013 62.3%, 1.003 70%, 0.997 81.8%, 1);
   color-scheme:light;
 }
 /* Dark: when Windows is dark (unless Settings says Light), or when Settings says Dark */
@@ -117,7 +131,7 @@ aside.side{ background:var(--panel); border-right:1px solid var(--line); display
 .sidecard{ border-radius:var(--r-card); padding:12px; background:var(--panel-2); font-size:12.5px; cursor:pointer; text-align:left; border:0; color:var(--ink); font-family:inherit; width:100%; }
 .sidecard:hover{ background:var(--fill-tertiary); box-shadow:inset 0 0 0 1px var(--line); }
 .sidecard b{ display:block; font-size:13px; margin-bottom:2px; }
-main.main{ overflow-y:auto; padding:26px 30px 48px; }
+main.main{ overflow-y:auto; scrollbar-gutter:stable; padding:26px 30px 48px; }
 .inner{ max-width:760px; margin:0 auto; }
 .topbar{ margin-bottom:20px; }
 .topbar p{ color:var(--dim); margin-top:3px; }
@@ -131,7 +145,7 @@ main.main{ overflow-y:auto; padding:26px 30px 48px; }
 .grp-row{ display:flex; align-items:center; gap:12px; min-height:48px; padding:8px 16px; position:relative; }
 .grp-row + .grp-row::before{ content:""; position:absolute; top:0; right:0; left:16px; height:1px; background:var(--hairline); }
 .grp-row.has-icon + .grp-row.has-icon::before{ left:58px; }
-.grp-row.tap{ cursor:pointer; transition:background-color .12s var(--ease-standard); }
+.grp-row.tap{ cursor:pointer; }
 .grp-row.tap:hover{ background:var(--fill-tertiary); }
 .grp-row.danger{ color:var(--bad); font-weight:600; justify-content:center; }
 /* Settings, iPhone style */
@@ -202,33 +216,39 @@ input[type=text]:focus{ outline:none; border-color:var(--accent); box-shadow:0 0
 .drop{ display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:10px; padding:34px 20px; border-radius:var(--r-card); background:var(--panel); box-shadow:var(--elev-1); position:relative; cursor:pointer; }
 .drop::after{ content:""; position:absolute; inset:8px; border-radius:10px; border:1.5px dashed var(--line); pointer-events:none; transition:border-color .16s var(--ease-standard); }
 .drop:hover::after{ border-color:var(--faint); }
-.drop .big-icon{ width:52px; height:52px; border-radius:var(--r-card); background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; transition:transform var(--spring-default-ms) var(--spring-default); }
+.drop .big-icon{ width:52px; height:52px; border-radius:var(--r-card); background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; transition:transform var(--spring-bouncy-ms) var(--spring-bouncy); }
 .drop b{ font-size:16px; }
 body.dragging .drop{ background:var(--accent-soft); }
 body.dragging .drop::after{ border-color:var(--accent); }
-body.dragging .drop .big-icon{ transform:translateY(-2px); }
+body.dragging .drop .big-icon{ transform:translateY(-4px) scale(1.08); }
 .drop.compact{ flex-direction:row; padding:14px 18px; gap:14px; text-align:left; justify-content:flex-start; }
 .drop.compact .big-icon{ width:36px; height:36px; border-radius:var(--r-control); }
 .drop.compact b{ font-size:14px; }
 
 /* ---------- progress ---------- */
 .bar{ height:10px; border-radius:99px; background:var(--panel-2); overflow:hidden; }
-.bar > i{ display:block; height:100%; width:0; border-radius:99px; background:var(--accent); transition:width 250ms linear; }
+.bar{ --p:0; }  /* set here so a bar inside a bar's card never inherits another one's value */
+/* The fill is as wide as the bar and slides in from the left, so only a transform moves (no layout
+   while a video runs). --p is how full it is, 0 to 1. It's fed every 250 ms and takes a little
+   longer than that to get there, so it keeps moving between numbers without falling behind the
+   percentage beside it. A redraw carries it on from where it is (barsNow / barsCarry). */
+.bar > i{ display:block; height:100%; width:100%; border-radius:99px; background:var(--accent);
+  transform:translateX(calc(var(--p) * 100% - 100%)); transition:transform 280ms linear; }
 .bar.thin{ height:5px; }
 .bar.ok > i{ background:var(--ok); }
-.bar.indeterminate > i{ width:35%; animation:slide 1.4s var(--ease-standard) infinite; }
+.bar.indeterminate > i{ width:35%; transform:translateX(-100%); animation:slide 1.4s var(--ease-standard) infinite; }
 @keyframes slide{ from{ transform:translateX(-100%) } to{ transform:translateX(290%) } }
 .big-pct{ font-size:40px; font-weight:800; letter-spacing:-.03em; line-height:1; }
 .meters{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
 .meter{ background:var(--panel-2); border-radius:var(--r-control); padding:10px 12px; }
 .meter span{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); }
 .meter b{ display:block; font-size:16px; font-weight:700; margin:1px 0 6px; font-variant-numeric:tabular-nums; }
-.meter .bar > i{ background:var(--dim); }
+.meter .bar > i{ background:var(--dim); transition:transform 450ms var(--ease-standard); }  /* a gauge: it eases to each reading */
 .meter.hot .bar > i{ background:var(--accent); }
 .log{ max-height:150px; overflow-y:auto; background:var(--panel-2); border-radius:var(--r-control); padding:10px 12px; white-space:pre-wrap; color:var(--dim); margin-top:10px; }
 details summary{ cursor:pointer; color:var(--dim); font-size:12.5px; font-weight:600; list-style:none; }
 details summary::-webkit-details-marker{ display:none; }
-details summary::before{ content:"›"; display:inline-block; width:14px; transition:transform .2s var(--ease-standard); }
+details summary::before{ content:"›"; display:inline-block; width:14px; transition:transform var(--spring-snappy-ms) var(--spring-snappy); }
 details[open] summary::before{ transform:rotate(90deg); }
 
 .success{ width:52px; height:52px; border-radius:99px; background:var(--ok-soft); color:var(--ok); display:flex; align-items:center; justify-content:center; }
@@ -287,12 +307,17 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 
 /* ---------- settings: switches and the subtitle preview ---------- */
 .switch{ width:40px; height:22px; border-radius:99px; border:0; padding:2px; background:var(--line); flex-shrink:0; position:relative;
-  transition:background-color 150ms var(--ease-standard); }
+  transition:background-color 200ms var(--ease-standard), filter 130ms var(--ease-standard); }
 .switch:hover{ filter:brightness(.96); }
+/* The knob springs across. While the mouse is down it grows 4 px wider towards where it is about
+   to go (quickly, like any press), as it does on iOS, and springs back to round as it travels.
+   It is one knob whose width changes: 18 px, alone in its switch, so nothing else is laid out. */
 .switch span{ display:block; width:18px; height:18px; border-radius:99px; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25);
-  transition:transform var(--spring-snappy-ms) var(--spring-snappy); }
+  transition:transform var(--spring-snappy-ms) var(--spring-snappy), width var(--spring-snappy-ms) var(--spring-snappy); }
+.switch:active span{ width:22px; transition:transform 110ms var(--ease-out), width 110ms var(--ease-out); }
 .switch[aria-checked="true"]{ background:var(--ok); }
 .switch[aria-checked="true"] span{ transform:translateX(18px); }
+.switch[aria-checked="true"]:active span{ transform:translateX(14px); }
 .grp-row .seg{ flex-shrink:0; }
 .frames{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .frame{ aspect-ratio:16/9; border-radius:10px; position:relative; overflow:hidden; display:flex; align-items:flex-end; justify-content:center;
@@ -312,9 +337,9 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 .rv-name{ display:inline-flex; align-items:center; gap:4px; }
 .rv-names select{ font:inherit; font-size:12.5px; padding:5px 6px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--dim); max-width:140px; }
 .rv-row select:disabled{ opacity:.45; }
-select{ cursor:pointer; transition:border-color 100ms var(--ease-standard), background-color 100ms var(--ease-standard); }
+select{ cursor:pointer; transition:border-color 130ms var(--ease-standard), background-color 130ms var(--ease-standard); }
 select:hover:not(:disabled){ border-color:var(--faint); }
-.rv-list{ background:var(--panel); border-radius:var(--r-card); box-shadow:var(--elev-1); }
+.rv-list{ background:var(--panel); border-radius:var(--r-card); box-shadow:var(--elev-1); position:relative; }
 .rv-row{ display:grid; grid-template-columns:32px 52px auto 1fr auto; gap:0 8px; align-items:start; padding:8px 10px 8px 8px; position:relative; }
 .rv-row + .rv-row::before{ content:""; position:absolute; top:0; left:52px; right:0; height:1px; background:var(--hairline); }
 .rv-row.no-spk{ grid-template-columns:32px 52px 1fr auto; }
@@ -326,7 +351,7 @@ select:hover:not(:disabled){ border-color:var(--faint); }
   font-variant-numeric:tabular-nums; cursor:pointer; text-align:left; }
 .rv-time:hover, .rv-time[aria-expanded="true"]{ background:var(--fill-tertiary); color:var(--ink); }
 .rv-acts{ display:flex; gap:2px; }
-.rv-acts .iconbtn.quiet{ opacity:.35; transition:opacity 100ms var(--ease-standard); }
+.rv-acts .iconbtn.quiet{ opacity:.35; }
 .rv-row:hover .rv-acts .iconbtn.quiet, .rv-row:focus-within .rv-acts .iconbtn.quiet{ opacity:1; }
 .rv-timing{ grid-column:2 / -1; display:flex; flex-wrap:wrap; gap:14px; align-items:center; padding:2px 0 6px; font-size:13px; color:var(--dim); }
 .rv-timing .nudge{ display:flex; align-items:center; gap:4px; }
@@ -383,57 +408,91 @@ body.wizard aside.side{ display:none; }
 .step:not(.active):not(.done) .grow > b{ color:var(--dim); font-weight:500; }
 
 /* =================================================================
-   MOTION: IronLog's phone app, ported (live/index-iron.html and its
-   ui-standard / hig-pass notes). Spring tokens only. Motion answers what
-   changed: arriving on a screen animates, a redraw caused by a click
-   doesn't replay anything.
+   MOTION. Things that move are on springs (the tokens at the top), and a
+   change of mind halfway is followed from where the thing is, not from
+   where it started: states are CSS transitions, which retarget, and the
+   script carries on from the place on screen when it has to redraw.
+   Only transform and opacity move (and the width of two small things that
+   nothing else is laid out around: a segmented control's pill and a
+   switch's knob). Motion answers what changed: arriving on a screen
+   animates, a redraw caused by a click doesn't replay anything.
    ================================================================= */
-/* --- screens: drilling in slides from the right, going back from the left, tabs crossfade --- */
-.screen-visible > *{ animation:navEnter var(--spring-spatial-ms) var(--spring-spatial) backwards; }
-.screen-visible.nav-back > *{ animation-name:navEnterBack; }
-.screen-visible.nav-tab > *{ animation:fadeIn 120ms var(--ease-standard) backwards; }
-@keyframes navEnter{ from{ opacity:0; transform:translateX(8px) } to{ opacity:1; transform:translateX(0) } }
-@keyframes navEnterBack{ from{ opacity:0; transform:translateX(-8px) } to{ opacity:1; transform:translateX(0) } }
-/* bars grow in when they appear; a tick pops */
-.screen-visible .bar:not(.indeterminate) > i{ transform-origin:left center; animation:barGrow var(--spring-spatial-ms) var(--spring-spatial) backwards; }
-@keyframes barGrow{ from{ transform:scaleX(0) } }
-.success, .step.done .dot{ animation:checkIconIn var(--spring-bouncy-ms) var(--spring-bouncy) both; }
-@keyframes checkIconIn{ from{ opacity:0; transform:scale(.85) } to{ opacity:1; transform:none } }
+/* --- screens: drilling in, the new one comes 12 px in from the right on a spring, and from the
+   left going back, as one sheet (every section together), while the old one fades out over it
+   and drifts the other way (the .view-ghost, see arrive()). Between tabs nothing travels: the old
+   one fades out quickly and the new one fades in. The fade is its own short ease-out beside the
+   spring. --- */
+.screen-visible > *{ animation:navEnter var(--spring-spatial-ms) var(--spring-spatial) backwards, fadeIn 180ms var(--ease-out) backwards; }
+.screen-visible.nav-back > *{ animation-name:navEnterBack, fadeIn; }
+.screen-visible.nav-tab > *{ animation:fadeIn 180ms var(--ease-out) backwards; }
+@keyframes navEnter{ from{ transform:translateX(12px) } }
+@keyframes navEnterBack{ from{ transform:translateX(-12px) } }
+/* the old screen's copy sits in a window the size of the page area, so it can't draw outside it */
+.view-ghost{ position:fixed; overflow:hidden; z-index:6; pointer-events:none; }
+.view-ghost > *{ position:absolute; margin:0; max-width:none; }
+/* bars fill up when they appear (no spring: a bar that overshoots is showing a wrong number) */
+.screen-visible .bar:not(.indeterminate) > i{ animation:barGrow 420ms var(--ease-out) backwards; }
+@keyframes barGrow{ from{ transform:translateX(-100%) } }
+/* a tick pops with a little bounce and draws itself, once, when it turns up */
+.screen-visible .success, .step.done.just .dot{ animation:checkIconIn var(--spring-bouncy-ms) var(--spring-bouncy) backwards, fadeIn 150ms var(--ease-out) backwards; }
+@keyframes checkIconIn{ from{ transform:scale(.6) } }
+.screen-visible .success svg path{ stroke-dasharray:20 24; animation:tickDraw 340ms var(--ease-out) 140ms backwards; }
+@keyframes tickDraw{ from{ stroke-dashoffset:22 } }
 
-/* --- hover and press: colour only, the way desktop controls answer; icon buttons dip a touch --- */
-.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .playbtn, .grp-row.tap{
-  transition:background-color 100ms var(--ease-standard), filter 100ms var(--ease-standard), color 100ms var(--ease-standard),
-             box-shadow 100ms var(--ease-standard), transform 80ms var(--ease-standard); }
-.btn:active:not([disabled]){ filter:brightness(.92); }
+/* --- hover and press. Hover is a quick colour change, never a spring. A press is physical: the
+   control dips a little straight away and springs back when let go. It's a mouse, not a thumb, so
+   the dip is small (small things dip more than wide ones, or a wide button would move many pixels). --- */
+.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .playbtn, .grp-row.tap, .rv-time, .dlg-x, .toast-dismiss, .back, .linkbtn{
+  transition:background-color 130ms var(--ease-standard), filter 130ms var(--ease-standard), color 130ms var(--ease-standard),
+             box-shadow 130ms var(--ease-standard), opacity 130ms var(--ease-standard),
+             transform var(--spring-snappy-ms) var(--spring-snappy); }
+/* going down is quicker and plain; the spring above is for coming back up */
+:is(.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .playbtn, .grp-row.tap, .rv-time, .dlg-x, .toast-dismiss, .back, .linkbtn):active{
+  transition:background-color 60ms var(--ease-standard), filter 60ms var(--ease-standard), color 60ms var(--ease-standard),
+             box-shadow 60ms var(--ease-standard), opacity 60ms var(--ease-standard), transform 110ms var(--ease-out); }
+.btn:active:not([disabled]){ filter:brightness(.92); transform:scale(.97); }
+.btn.sm:active:not([disabled]){ transform:scale(.96); }
+.btn.big:active:not([disabled]){ transform:scale(.988); }
 .btn.sec:active:not([disabled]), .btn.ghost:active:not([disabled]){ filter:none; background:var(--line); }
-.seg button:active, .chip:active{ filter:brightness(.95); }
-.iconbtn:active, .playbtn:active{ transform:scale(.94); }
-.navbtn:active, .sidecard:active{ background:var(--fill-secondary); }
-.grp-row.tap:active{ background:var(--fill-secondary, var(--fill-tertiary)); }
+.seg button:active{ filter:brightness(.95); }
+.seg button:not([aria-selected="true"]):active{ transform:scale(.96); }
+.chip:active{ filter:brightness(.95); transform:scale(.97); }
+.iconbtn:active, .playbtn:active, .dlg-x:active{ transform:scale(.94); }
+.toast-dismiss:active{ transform:scale(.92); }
+.rv-time:active{ transform:scale(.95); }
+.navbtn:active, .sidecard:active{ background:var(--fill-secondary); transform:scale(.98); }
+.drop:active{ transform:scale(.992); }
+.linkbtn:active{ opacity:.6; }
+.grp-row.tap:active{ background:var(--fill-secondary, var(--fill-tertiary)); transform:scale(.992); }
 .btn:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
 
-/* --- dialogs: a window in the middle, the way desktop apps ask. It fades and scales in quickly,
-   Esc or the corner ✕ closes it, and a click outside gives it a shake instead of closing it (so a
-   stray click never throws away what you typed). Blocking ones have no ✕ and ignore Esc. --- */
-.scrim{ align-items:center; padding:24px; background:rgba(20,18,16,.32); animation:fadeIn 140ms var(--ease-out) both; }
+/* --- dialogs: a window in the middle, the way desktop apps ask. The backdrop fades in (and softens
+   the app behind it a little) and the window, which is inside it, fades in with it while it grows
+   from 95% on a spring; closing shrinks it and fades both back. They are transitions, so closing
+   one that is still opening carries on from where it is. A dialog that redraws itself (the update
+   one) keeps these two elements and changes what's inside, so it never opens twice. Esc or the
+   corner ✕ closes it, and a click outside gives it a shake instead of closing it (so a stray
+   click never throws away what you typed). Blocking ones have no ✕ and ignore Esc. --- */
+.scrim{ align-items:center; padding:24px; background:rgba(20,18,16,.32); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
+  transition:opacity 200ms var(--ease-standard); }
 .dialog{ position:relative; max-width:460px; border-radius:12px; max-height:min(86vh, 720px); padding:22px 24px 20px;
   box-shadow:0 0 0 1px rgba(0,0,0,.06), 0 10px 24px rgba(0,0,0,.12), 0 30px 70px rgba(0,0,0,.18);
-  animation:dlgIn 170ms var(--ease-out) both; }
+  transition:transform var(--spring-spatial-ms) var(--spring-spatial); }
+@starting-style{
+  .scrim{ opacity:0; }
+  .dialog{ transform:scale(.95); }
+}
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]) .scrim{ background:rgba(0,0,0,.5); }
   :root:not([data-theme="light"]) .dialog{ box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 0 0 1px rgba(255,255,255,.13), 0 12px 28px rgba(0,0,0,.5), 0 32px 72px rgba(0,0,0,.55); } }
 :root[data-theme="dark"] .scrim{ background:rgba(0,0,0,.5); }
 :root[data-theme="dark"] .dialog{ box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 0 0 1px rgba(255,255,255,.13), 0 12px 28px rgba(0,0,0,.5), 0 32px 72px rgba(0,0,0,.55); }
-@keyframes dlgIn{ from{ opacity:0; transform:scale(.97) } to{ opacity:1; transform:none } }
-.scrim.is-closing{ animation:veyraFadeOut 120ms var(--ease-in) both; }
-.dialog.is-closing{ animation:dlgOut 120ms var(--ease-in) both; }
-@keyframes veyraFadeOut{ to{ opacity:0 } }
-@keyframes dlgOut{ to{ opacity:0; transform:scale(.985) } }
-.dialog.is-nudged{ animation:dlgNudge 180ms var(--ease-standard); }
-@keyframes dlgNudge{ 25%{ transform:translateX(-3px) } 55%{ transform:translateX(3px) } 80%{ transform:translateX(-1.5px) } 100%{ transform:none } }
+/* leaving is quicker than arriving, and doesn't bounce (closeDialogs() waits for the fade) */
+.scrim.is-closing{ opacity:0; transition:opacity 170ms var(--ease-standard); }
+.dialog.is-closing{ transform:scale(.96); transition:transform 170ms var(--ease-standard); }
 /* the corner ✕ (added to every dialog that can be closed) */
 .dlg-x{ all:unset; box-sizing:border-box; position:absolute; top:12px; right:12px; width:28px; height:28px; border-radius:7px; display:flex;
-  align-items:center; justify-content:center; color:var(--faint); cursor:pointer; z-index:2; transition:background-color 100ms var(--ease-standard), color 100ms; }
+  align-items:center; justify-content:center; color:var(--faint); cursor:pointer; z-index:2; }
 .dlg-x svg{ width:12px; height:12px; }
 .dlg-x:hover{ background:var(--fill-tertiary); color:var(--ink); }
 .dlg-x:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
@@ -448,51 +507,68 @@ body.wizard aside.side{ display:none; }
 .dlg-foot .btn{ min-width:88px; min-height:34px; padding:7px 16px; font-size:13.5px; }
 .dlg-foot .note{ margin-right:auto; }
 
-/* --- toasts: bottom right, sliding in from the side, like Windows notifications --- */
+/* --- toasts: bottom right. One rises into the corner on the same spring the ones already there
+   slide up on to make room (toast() moves them), so the stack moves as one; it grows from its
+   bottom edge, which stays level. They slide back down when one leaves. Leaving goes off to the
+   right. --- */
 .toast{ display:flex; align-items:center; gap:10px; padding:10px 12px 10px 16px; border-radius:10px; pointer-events:auto;
-  box-shadow:0 2px 8px rgba(0,0,0,.08), 0 12px 28px rgba(0,0,0,.16); animation:toastSlideIn 160ms var(--ease-out); }
+  box-shadow:0 2px 8px rgba(0,0,0,.08), 0 12px 28px rgba(0,0,0,.16); transform-origin:50% 100%;
+  animation:toastIn var(--spring-spatial-ms) var(--spring-spatial) backwards, fadeIn 150ms var(--ease-out) backwards; }
 .toast-dismiss{ all:unset; box-sizing:border-box; flex-shrink:0; width:20px; height:20px; border-radius:99px; display:flex; align-items:center; justify-content:center; opacity:.7; font-size:11px; cursor:pointer; position:relative; }
 .toast-dismiss::after{ content:""; position:absolute; inset:-4px; }
 .toast-dismiss:hover{ opacity:1; background:rgba(127,127,127,.22); }
-.toast.is-leaving{ animation:toastOut 130ms var(--ease-in) both; pointer-events:none; }
-@keyframes toastSlideIn{ from{ opacity:0; transform:translateX(16px) } to{ opacity:1; transform:none } }
-@keyframes toastOut{ to{ opacity:0; transform:translateX(12px) } }
+/* a leaving toast steps out of the stack (so the others can close the gap while it goes) */
+.toast.is-leaving{ position:absolute; right:0; pointer-events:none; }
+@keyframes toastIn{ from{ transform:translateY(14px) scale(.96) } }
 
-/* --- segmented controls: the selection slides (only when it changes) --- */
+/* --- segmented controls: the selection is a pill that slides to the new choice on a spring (only
+   when the choice changes), and dips a little while it's pressed. It moves with a transform and
+   its width changes with it (never stretched, which would squash its corners): it's out of the
+   flow, so its width lays out nothing else. syncSegs() sets --x and the width. --- */
 .seg.has-pill{ position:relative; }
 .seg.has-pill button{ position:relative; z-index:1; }
 .seg.has-pill button[aria-selected="true"]{ background:transparent; box-shadow:none; }
 .seg-pill{ position:absolute; top:3px; left:0; height:calc(100% - 6px); width:0; z-index:0; pointer-events:none;
   border-radius:7px; background:var(--bg-elevated); box-shadow:0 1px 2px rgba(0,0,0,.1), 0 3px 8px rgba(0,0,0,.06);
+  transform:translateX(var(--x, 0px)) scale(var(--press, 1));
   transition:transform var(--spring-snappy-ms) var(--spring-snappy), width var(--spring-snappy-ms) var(--spring-snappy); }
-/* the switch knob springs across */
-.switch span{ transition:transform var(--spring-snappy-ms) var(--spring-snappy) !important; }
+.seg.has-pill:has(button[aria-selected="true"]:active) .seg-pill{ --press:.95; }
 
-/* --- less motion: Windows' setting or Settings > Less animations. Things still appear and go
-   (a short cross-fade moves nothing on screen); dragging a sheet still works, it just doesn't settle. --- */
+/* --- checking the lines: a row taken out to be faded away (see rvMoved()) --- */
+.rv-ghost{ position:absolute; left:0; right:0; margin:0; pointer-events:none; }
+
+/* --- less motion: Windows' setting or Settings > Less animations. Nothing travels, grows or
+   bounces. Every spring is given no time at all, so whatever it moves is simply there; colours
+   and fades keep their short transitions, since they move nothing; things appear with a short
+   fade; and the script's own animations (rows, toasts, screens, the shake) are skipped by
+   prefersReducedMotion(). Both lists below must say the same. --- */
 @media (prefers-reduced-motion:reduce){
-  *{ transition:none !important; }
-  .screen-visible > *, .scrim, .dialog, .toast, .dialog.is-closing, .scrim.is-closing, .toast.is-leaving{
-    animation-name:fadeIn !important; animation-duration:.12s !important; animation-delay:0ms !important; animation-timing-function:linear !important; }
-  .dialog.is-closing, .scrim.is-closing, .toast.is-leaving{ animation-name:veyraFadeOut !important; }
-  .dialog.is-nudged{ animation:none !important; }
+  :root{ --spring-snappy-ms:0ms; --spring-default-ms:0ms; --spring-spatial-ms:0ms; --spring-bouncy-ms:0ms; }
+  .screen-visible > *, .toast{ animation:fadeIn .12s linear backwards !important; }
+  .scrim, .loader{ transition:opacity .12s linear !important; }
+  .dialog{ transform:none !important; transition:none !important; }
+  .bar > i{ transition:none !important; }
   body.dragging .drop .big-icon{ transform:none !important; }
-  .bar.indeterminate > i{ width:100% !important; animation:pulse 1.6s ease-in-out infinite alternate !important; }
-  .screen-visible .bar > i, .success, .step.done .dot{ animation:none !important; }
-  .btn:active, .iconbtn:active, .seg button:active, .navbtn:active, .sidecard:active, .drop:active, .chip:active, .playbtn:active{ transform:none !important; }
+  .bar.indeterminate > i{ width:100% !important; transform:none !important; animation:pulse 1.6s ease-in-out infinite alternate !important; }
+  .screen-visible .bar > i, .success, .success svg path, .step.done .dot{ animation:none !important; }
+  :is(.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .playbtn, .grp-row.tap, .rv-time, .dlg-x, .toast-dismiss):active{ transform:none !important; }
+  .switch:active span{ width:18px !important; }
+  .switch[aria-checked="true"]:active span{ transform:translateX(18px) !important; }
+  .seg-pill{ --press:1 !important; }
 }
-html.reduce-motion *{ transition:none !important; }
-html.reduce-motion .screen-visible > *, html.reduce-motion .scrim, html.reduce-motion .dialog, html.reduce-motion .toast{
-  animation-name:fadeIn !important; animation-duration:.12s !important; animation-delay:0ms !important; animation-timing-function:linear !important; }
-html.reduce-motion .dialog.is-nudged{ animation:none !important; }
+html.reduce-motion{ --spring-snappy-ms:0ms; --spring-default-ms:0ms; --spring-spatial-ms:0ms; --spring-bouncy-ms:0ms; }
+html.reduce-motion .screen-visible > *, html.reduce-motion .toast{ animation:fadeIn .12s linear backwards !important; }
+html.reduce-motion .scrim, html.reduce-motion .loader{ transition:opacity .12s linear !important; }
+html.reduce-motion .dialog{ transform:none !important; transition:none !important; }
+html.reduce-motion .bar > i{ transition:none !important; }
 html.reduce-motion body.dragging .drop .big-icon{ transform:none !important; }
-html.reduce-motion .bar.indeterminate > i{ width:100% !important; animation:pulse 1.6s ease-in-out infinite alternate !important; }
+html.reduce-motion .bar.indeterminate > i{ width:100% !important; transform:none !important; animation:pulse 1.6s ease-in-out infinite alternate !important; }
 @keyframes pulse{ from{ opacity:.35 } to{ opacity:.8 } }
-html.reduce-motion .dialog.is-closing, html.reduce-motion .scrim.is-closing, html.reduce-motion .toast.is-leaving{
-  animation-name:veyraFadeOut !important; animation-duration:.12s !important; animation-timing-function:linear !important; }
-html.reduce-motion .screen-visible .bar > i, html.reduce-motion .success, html.reduce-motion .step.done .dot{ animation:none !important; }
-html.reduce-motion .btn:active, html.reduce-motion .iconbtn:active, html.reduce-motion .seg button:active, html.reduce-motion .navbtn:active,
-html.reduce-motion .sidecard:active, html.reduce-motion .drop:active, html.reduce-motion .chip:active, html.reduce-motion .playbtn:active{ transform:none !important; }
+html.reduce-motion .screen-visible .bar > i, html.reduce-motion .success, html.reduce-motion .success svg path, html.reduce-motion .step.done .dot{ animation:none !important; }
+html.reduce-motion :is(.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .playbtn, .grp-row.tap, .rv-time, .dlg-x, .toast-dismiss):active{ transform:none !important; }
+html.reduce-motion .switch:active span{ width:18px !important; }
+html.reduce-motion .switch[aria-checked="true"]:active span{ transform:translateX(18px) !important; }
+html.reduce-motion .seg-pill{ --press:1 !important; }
 </style>
 </head>
 <body>
@@ -626,19 +702,54 @@ function toast(text, bad) {
   words.textContent = text;
   const close = document.createElement("button");
   close.className = "toast-dismiss"; close.type = "button"; close.setAttribute("aria-label", "Dismiss"); close.textContent = "✕";
-  close.onclick = () => animateOut(t, "is-leaving", 400);
+  close.onclick = () => toastLeave(t);
   t.append(words, close);
-  $("#toast-root").append(t);
-  setTimeout(() => animateOut(t, "is-leaving", 400), bad ? 5000 : 3200);
+  toastShift(() => $("#toast-root").append(t));
+  setTimeout(() => toastLeave(t), bad ? 5000 : 3200);
+}
+/* Toasts stack in the corner. When one comes or goes the layout puts the others in their new
+   places at once, so each is then slid there from where it was on screen (which is also right
+   if it was still moving from the last time). */
+function toastShift(change) {
+  const root = $("#toast-root");
+  const was = prefersReducedMotion() ? [] : [...root.children].filter(t => !t.classList.contains("is-leaving"))
+    .map(t => [t, t.getBoundingClientRect().top]);
+  change();
+  const edge = root.getBoundingClientRect().top;
+  was.forEach(([t, top]) => {
+    if (!t.isConnected || t.classList.contains("is-leaving")) return;
+    const dy = top - (edge + t.offsetTop);  // where it was drawn, less where the layout now has it
+    if (t.slide) t.slide.cancel();
+    if (Math.abs(dy) > .5) t.slide = t.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], spring("spatial"));
+  });
+}
+/* Leaving: it steps out of the stack where it stands (so the rest can close up while it goes),
+   and goes off to the right from however it looks now, which may be still arriving. */
+function toastLeave(t) {
+  if (!t.isConnected || t.classList.contains("is-leaving")) return;
+  const root = $("#toast-root"), calm = prefersReducedMotion(), look = getComputedStyle(t);
+  const from = { transform: look.transform, opacity: look.opacity };
+  toastShift(() => {
+    t.style.bottom = `${root.offsetHeight - t.offsetTop - t.offsetHeight}px`;
+    t.style.width = `${t.offsetWidth + 1}px`;  // offsetWidth rounds down, and a pixel short would wrap the words
+    t.classList.add("is-leaving");
+  });
+  if (t.slide) t.slide.cancel();
+  const out = t.animate([from, { transform: calm ? from.transform : "translateX(32px) scale(.96)", opacity: 0 }],
+    { duration: calm ? 120 : 200, easing: calm ? "linear" : "cubic-bezier(.4,0,1,1)", fill: "forwards" });
+  const gone = () => t.remove();
+  out.finished.then(gone, gone);
+  setTimeout(gone, 400);  // a hidden window doesn't run animations, and it must go regardless
 }
 
 /* ---------------------------------------------------------------------
    Navigation
 --------------------------------------------------------------------- */
 /* ---------------------------------------------------------------------
-   Motion: IronLog's phone app. Arriving on a screen animates (from the
-   right when drilling in, the left going back, a crossfade between tabs);
-   a redraw caused by a click replays nothing.
+   Motion. Arriving on a screen animates (from the right when drilling in,
+   the left going back, a crossfade between tabs); a redraw caused by a
+   click replays nothing, but what was already moving carries on from where
+   it is. With less motion asked for, none of the script's animations run.
 --------------------------------------------------------------------- */
 const LESS_MOTION = () => S.info && S.info.settings && S.info.settings.less_motion;
 function applyLessMotion() { document.documentElement.classList.toggle("reduce-motion", !!LESS_MOTION()); }
@@ -646,34 +757,155 @@ function prefersReducedMotion() {
   if (document.documentElement.classList.contains("reduce-motion")) return true;
   try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; }
 }
-/* Play an exit animation, then remove. The timeout matters: animationend doesn't fire for a
-   hidden element or a cancelled animation, and the element must go regardless. */
+/* The spring tokens from the stylesheet, for the animations the script starts itself */
+const springs = {};
+function spring(name) {
+  if (prefersReducedMotion()) return { duration: 0, easing: "linear" };  // (nothing that uses these runs then anyway)
+  if (!springs[name]) {
+    const css = getComputedStyle(document.documentElement);
+    springs[name] = { duration: parseFloat(css.getPropertyValue(`--spring-${name}-ms`)) || 400,
+      easing: css.getPropertyValue(`--spring-${name}`).trim() || "ease-out" };
+  }
+  return { ...springs[name] };
+}
+const EASE = "cubic-bezier(.25,.1,.25,1)";  // --ease-standard, for the script's plain fades
+
+/* Play an exit (the class starts a CSS transition or animation), then remove. Only the element's
+   own ending counts, not one of something inside it. The timeout matters: the end event doesn't
+   fire for a hidden element or when nothing was left to animate, and the element must go regardless. */
 function animateOut(el, cls, maxMs) {
   if (!el) return;
   if (prefersReducedMotion()) { el.remove(); return; }
   if (el.classList.contains(cls)) return;
   el.classList.add(cls);
   let done = false;
-  const finish = () => { if (!done) { done = true; if (el.isConnected) el.remove(); } };
-  el.addEventListener("animationend", finish, { once: true });
+  const finish = e => { if (e && e.target !== el) return; if (!done) { done = true; if (el.isConnected) el.remove(); } };
+  el.addEventListener("animationend", finish);
+  el.addEventListener("transitionend", finish);
   setTimeout(finish, maxMs || 400);
 }
 
-/* Arriving: the screen's sections come in from the side it was reached from, and its lists and
-   cards rise one after another. Only this arrival animates: the classes come off afterwards. */
-function arrive(el, dir) {
+/* The screen being left, kept for a moment so it can fade out over the one arriving. It's a copy
+   that can't be clicked or found by the script (no ids), held exactly where the screen was drawn
+   (however far it was scrolled) inside a window the size of the page area, so none of it shows
+   outside that. A very big screen (a long list of lines) goes without: copying thousands of rows
+   would cost more than the fade shows. */
+function viewGhost(el) {
+  document.querySelectorAll(".view-ghost").forEach(g => g.remove());
+  if (prefersReducedMotion() || !el.firstElementChild || el.getElementsByTagName("*").length > 1500) return null;
+  const main = $("main.main"), area = main.getBoundingClientRect(), box = el.getBoundingClientRect();
+  const left = area.left + main.clientLeft, top = area.top + main.clientTop;
+  // left while it was still arriving itself: carry on from how solid it had got
+  const solid = el.classList.contains("screen-visible") ? getComputedStyle(el.firstElementChild).opacity : "1";
+  const copy = el.cloneNode(true);
+  copy.removeAttribute("id");
+  copy.querySelectorAll("[id]").forEach(n => n.removeAttribute("id"));
+  copy.classList.remove("screen-visible", "nav-back", "nav-tab");
+  Object.assign(copy.style, { left: `${box.left - left}px`, top: `${box.top - top}px`, width: `${box.width}px`, opacity: solid });
+  const ghost = document.createElement("div");
+  ghost.className = "view-ghost";
+  ghost.inert = true;
+  ghost.setAttribute("aria-hidden", "true");
+  Object.assign(ghost.style, { left: `${left}px`, top: `${top}px`, width: `${main.clientWidth}px`, height: `${main.clientHeight}px` });
+  ghost.append(copy);
+  return ghost;
+}
+
+/* Arriving: the screen springs in from the side it was reached from while the screen that was
+   there (the ghost, if there is one) fades out the other way. Between tabs neither travels, and
+   the old one is gone before the new one is solid. Only this arrival animates: the classes come
+   off afterwards. */
+function arrive(el, dir, ghost) {
   if (prefersReducedMotion()) return;
   el.classList.remove("screen-visible", "nav-back", "nav-tab");
   if (dir === "back") el.classList.add("nav-back"); else if (dir === "tab") el.classList.add("nav-tab");
   void el.offsetWidth;
   el.classList.add("screen-visible");
   clearTimeout(el.arrived);
-  el.arrived = setTimeout(() => el.classList.remove("screen-visible", "nav-back", "nav-tab"), 300);
+  // the spatial spring (540 ms) and the tick's bounce (680 ms) both fit in this
+  el.arrived = setTimeout(() => el.classList.remove("screen-visible", "nav-back", "nav-tab"), 720);
+  if (!ghost) return;
+  el.after(ghost);
+  const copy = ghost.firstElementChild, away = dir === "back" ? 10 : dir === "tab" ? 0 : -10;
+  const fade = copy.animate([{ opacity: copy.style.opacity, transform: "none" }, { opacity: 0, transform: `translateX(${away}px)` }],
+    { duration: dir === "tab" ? 120 : 180, easing: EASE, fill: "forwards" });
+  const gone = () => ghost.remove();
+  fade.finished.then(gone, gone);
+  setTimeout(gone, 400);
+}
+
+/* A redraw replaces every element, so anything caught part-way through a move would jump to its
+   end. holdMotion() notes, just before a redraw, where such things are on screen; carryMotion()
+   starts their replacements from there. That covers the button being let go of (so its spring
+   back isn't cut off), segmented pills (syncSegs reads segNow), progress bars and the lines being
+   checked. `pressed` is the button the mouse last went down on; it's forgotten once its spring
+   back is over (a redraw can come a moment after the click, when Python answers), or at once if
+   the press is called off. */
+let pressed = null, letGo = 0, segNow = {};
+document.addEventListener("pointerdown", e => { clearTimeout(letGo); pressed = e.target.closest ? e.target.closest("button") : null; }, true);
+document.addEventListener("pointerup", () => { clearTimeout(letGo); letGo = setTimeout(() => { pressed = null; }, 450); }, true);
+document.addEventListener("pointercancel", () => { clearTimeout(letGo); pressed = null; }, true);
+function pressKey(b) {
+  if (b.id) return "#" + CSS.escape(b.id);
+  if (!b.dataset.act) return null;
+  return ["act", "k", "v", "i", "d"].filter(k => b.dataset[k] != null).map(k => `[data-${k}="${CSS.escape(b.dataset[k])}"]`).join("");
+}
+const segKey = (seg, i) => { const first = seg.querySelector("button[data-act]"); return first ? `${first.dataset.act}:${first.dataset.k || ""}` : `seg${i}`; };
+function holdMotion(el) {
+  segNow = {};
+  if (prefersReducedMotion()) return null;
+  const held = { rows: rvPlaces(el), bars: barsNow(el) };
+  if (pressed && el.contains(pressed)) {
+    const scale = new DOMMatrix(getComputedStyle(pressed).transform).a, key = pressKey(pressed);
+    if (key && scale < .995) held.press = { key, scale };
+  }
+  el.querySelectorAll(".seg.has-pill").forEach((seg, i) => {
+    const pill = seg.querySelector(".seg-pill");
+    if (!pill || pill.style.opacity === "0") return;
+    const a = seg.getBoundingClientRect(), b = pill.getBoundingClientRect();
+    segNow[segKey(seg, i)] = { x: b.left - a.left - seg.clientLeft, w: b.width };
+  });
+  return held;
+}
+function carryMotion(el, held) {
+  segNow = {};
+  if (!held) return;
+  if (held.press) {
+    // put at the size the old one had, then let go: its own transition springs it back, so a
+    // press that lands meanwhile turns it round from wherever it is, like any other press
+    const again = el.querySelector(held.press.key);
+    if (again) flip(again, () => { again.style.transform = `scale(${held.press.scale})`; }, () => { again.style.transform = ""; });
+  }
+  barsCarry(el, held.bars);
+  rvMoved(el, held.rows);
+}
+/* Starts an element's own CSS transition from somewhere else: `from` puts it there with
+   transitions off, `to` puts it back with them on */
+function flip(el, from, to) {
+  el.style.transition = "none";
+  from();
+  void el.offsetWidth;
+  el.style.transition = "";
+  to();
+}
+/* Progress bars with a name (data-bar) carry on across a redraw from where their fill had got to,
+   instead of jumping to the new number */
+function barsNow(root) {
+  const now = {};
+  root.querySelectorAll(".bar[data-bar]:not(.indeterminate) > i").forEach(fill => { now[fill.parentElement.dataset.bar] = getComputedStyle(fill).transform; });
+  return now;
+}
+function barsCarry(root, was) {
+  if (prefersReducedMotion()) return;
+  root.querySelectorAll(".bar[data-bar]:not(.indeterminate) > i").forEach(fill => {
+    const from = was[fill.parentElement.dataset.bar];
+    if (from && from !== "none") flip(fill, () => { fill.style.transform = from; }, () => { fill.style.transform = ""; });
+  });
 }
 
 /* ---------- sheets ---------- */
-/* Closing: the sheet carries on down and off the screen (at the speed it was flung, if it was),
-   the backdrop fades, and the app behind comes forward again. */
+/* Closing: the window shrinks a little and fades with the backdrop, from wherever it is (it may
+   still be opening), and is taken away once the fade is over. */
 function closeDialogs() {
   const root = $("#dialog-root"), scrim = root.querySelector(".scrim:not(.is-closing)");
   if (!scrim) { root.innerHTML = ""; return; }
@@ -681,7 +913,7 @@ function closeDialogs() {
   scrim.style.pointerEvents = "none";
   const dialog = scrim.querySelector(".dialog");
   if (dialog) dialog.classList.add("is-closing");
-  animateOut(scrim, "is-closing", 210);
+  animateOut(scrim, "is-closing", 260);  // the fade is 170 ms and the shrink 200
 }
 /* Dismissing (Escape or the corner ✕) does what the dialog's own Cancel, Later or Close does.
    A dialog without one (the security lock) can't be dismissed. */
@@ -695,39 +927,55 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") dismissSheet
 /* Each dialog: a corner ✕ when it can be closed, a shake for a click outside it, Tab kept inside
    it, and the focus put back where it was once it closes */
 let dialogReturnFocus = null;
+/* The corner ✕ is there exactly when the dialog has a button that closes it. A dialog redrawn
+   in place (the update one) can gain or lose that button, and hands back the ✕ it had (`kept`)
+   so the same one stays under the mouse. */
+function sheetX(dialog, kept) {
+  const can = !!dialog.querySelector('[data-dismiss], [data-up="close"]');
+  let x = dialog.querySelector(".dlg-x");
+  if (can && !x) {
+    x = kept;
+    if (!x) {
+      x = document.createElement("button");
+      x.type = "button"; x.className = "dlg-x"; x.title = "Close (Esc)"; x.setAttribute("aria-label", "Close"); x.innerHTML = ICON.x;
+      x.tabIndex = -1;  // Esc does the same; Tab goes to the dialog's own buttons
+      x.onclick = () => dismissSheet();
+    }
+    dialog.prepend(x);
+  } else if (!can && x) x.remove();
+  dialog.classList.toggle("has-x", can);
+}
+// The main button: the last one in the footer that isn't a quiet one
+const sheetMain = dialog => [...dialog.querySelectorAll(".dlg-foot .btn, .nv-foot .btn")].reverse()
+  .find(b => !b.disabled && !b.matches(".sec, .ghost"));
+// Focus starts inside: the field marked autofocus, else the main button (Cancel when the main
+// button destroys something). Dialogs that put it somewhere themselves keep it there.
+function sheetFocus(dialog) {
+  if (dialog.contains(document.activeElement)) return;
+  const main = sheetMain(dialog);
+  const first = dialog.querySelector("[autofocus]") || (main && main.matches(".dan") ? dialog.querySelector("[data-dismiss]") : main);
+  if (first) first.focus({ preventScroll: true });
+}
 function bindSheet(scrim) {
   const dialog = scrim.querySelector(".dialog");
   if (!dialog || scrim.dataset.bound) return;
   scrim.dataset.bound = "1";
-  if (!dialog.querySelector(".dlg-x") && dialog.querySelector('[data-dismiss], [data-up="close"]')) {
-    const x = document.createElement("button");
-    x.type = "button"; x.className = "dlg-x"; x.title = "Close (Esc)"; x.setAttribute("aria-label", "Close"); x.innerHTML = ICON.x;
-    x.tabIndex = -1;  // Esc does the same; Tab goes to the dialog's own buttons
-    x.onclick = () => dismissSheet();
-    dialog.prepend(x);
-    dialog.classList.add("has-x");
-  }
+  sheetX(dialog);
+  let shake = null;
   scrim.addEventListener("mousedown", e => {
     if (e.target !== scrim) return;
     e.preventDefault();  // the focus stays in the dialog
     if (prefersReducedMotion()) return;
-    dialog.classList.remove("is-nudged");
-    void dialog.offsetWidth;  // restart the shake
-    dialog.classList.add("is-nudged");
+    // A shake that dies away. It moves `translate`, not `transform`, so it adds to whatever the
+    // window is doing (it may still be growing in) instead of replacing it.
+    if (shake) shake.cancel();
+    shake = dialog.animate({ translate: ["0px", "-7px", "6px", "-4px", "2px", "0px"] }, { duration: 380, easing: "ease-out" });
   });
-  dialog.addEventListener("animationend", e => { if (e.animationName === "dlgNudge") dialog.classList.remove("is-nudged"); });
-  // Focus starts inside: the field marked autofocus, else the main button (Cancel when the main
-  // button destroys something). Dialogs that put it somewhere themselves keep it there.
-  const main = () => [...dialog.querySelectorAll(".dlg-foot .btn, .nv-foot .btn")].reverse()
-    .find(b => !b.disabled && !b.matches(".sec, .ghost"));
-  if (!dialog.contains(document.activeElement)) {
-    const first = dialog.querySelector("[autofocus]") || (main() && main().matches(".dan") ? dialog.querySelector("[data-dismiss]") : main());
-    if (first) first.focus({ preventScroll: true });
-  }
+  sheetFocus(dialog);
   scrim.addEventListener("keydown", e => {
     // Enter anywhere but a control of its own presses the main button, as in desktop dialogs
     if (e.key === "Enter" && !e.target.closest("button, input, textarea, select, summary, a")) {
-      const b = main();
+      const b = sheetMain(dialog);
       if (b) { e.preventDefault(); b.click(); }
       return;
     }
@@ -757,30 +1005,28 @@ new MutationObserver(() => {
 }).observe(document.getElementById("dialog-root"), { childList: true, subtree: true });
 
 /* Segmented controls get a pill that slides to the selection, and only when it changes:
-   a redraw with the same selection leaves it where it is */
+   a redraw with the same selection leaves it where it is. It starts from where the old pill was
+   on screen (segNow, noted just before a redraw: it may have been part-way to somewhere else, or
+   still pressed in), else from the last place it was sent: --x moves it and its width goes
+   from the old choice's to the new one's (it's out of the flow, so that lays out nothing else). */
 const segLast = {};
 function syncSegs(root) {
   root.querySelectorAll(".seg").forEach((seg, i) => {
-    const first = seg.querySelector("button[data-act]");
-    const key = first ? `${first.dataset.act}:${first.dataset.k || ""}` : `seg${i}`;
+    const key = segKey(seg, i);
     const on = seg.querySelector('button[aria-selected="true"]');
     let pill = seg.querySelector(".seg-pill");
     const fresh = !pill;
     if (fresh) { pill = document.createElement("span"); pill.className = "seg-pill"; pill.setAttribute("aria-hidden", "true"); seg.prepend(pill); }
     seg.classList.add("has-pill");
     if (!on) { pill.style.opacity = "0"; return; }
-    const to = { x: on.offsetLeft, w: on.offsetWidth }, from = segLast[key];
-    const moves = !!from && (from.x !== to.x || from.w !== to.w) && !prefersReducedMotion();
+    const to = { x: on.offsetLeft, w: on.offsetWidth }, from = segNow[key] || segLast[key];
+    const moves = !!from && (Math.abs(from.x - to.x) > .5 || Math.abs(from.w - to.w) > .5) && !prefersReducedMotion();
+    const place = at => { pill.style.setProperty("--x", `${at.x}px`); pill.style.width = `${at.w}px`; };
     pill.style.opacity = "1";
-    if (fresh || moves) {
-      pill.style.transition = "none";
-      const start = moves ? from : to;
-      pill.style.transform = `translateX(${start.x}px)`; pill.style.width = `${start.w}px`;
-      void pill.offsetWidth;
-      pill.style.transition = "";
-    }
-    pill.style.transform = `translateX(${to.x}px)`; pill.style.width = `${to.w}px`;
+    if (fresh || moves) flip(pill, () => place(moves ? from : to), () => place(to));
+    else place(to);
     segLast[key] = to;
+    delete segNow[key];
   });
 }
 
@@ -793,7 +1039,8 @@ async function go(view, dir = "tab", page = null) {
   if (view === "settings") S.page = page;
   document.querySelectorAll(".navbtn").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
   const btn = $(`.navbtn[data-view="${view}"]`);
-  $("#nav-pill").style.transform = `translateY(${btn.offsetTop}px)`;
+  const pill = $("#nav-pill"), put = () => { pill.style.transform = `translateY(${btn.offsetTop}px)`; };
+  if (pill.style.transform) put(); else flip(pill, put, () => {});
   const seq = ++goSeq;
   try {
     if (view === "history") S.history = await api().history();
@@ -812,11 +1059,14 @@ $("#pc-card").onclick = () => go("settings", "tab", "quality");
 
 function render(animate) {
   const el = $("#view");
+  // arriving somewhere: the old screen fades out over the new. A redraw: what was moving carries on.
+  const ghost = animate ? viewGhost(el) : null, held = animate ? null : holdMotion(el);
+  if (animate) $("main.main").scrollTop = 0;  // a new screen starts at its top (after the copy of the old one is taken where it stood)
   document.body.classList.toggle("wizard", !!S.setup);
   el.innerHTML = S.setup ? viewSetup() : { make: viewMake, history: viewHistory, settings: viewSettings, help: viewHelp }[S.view]();
   bind(el);
-  if (animate) arrive(el, animate === true ? "in" : animate);
-  else el.classList.remove("screen-visible", "nav-back", "nav-tab");
+  if (animate) arrive(el, animate === true ? "in" : animate, ghost);
+  else { el.classList.remove("screen-visible", "nav-back", "nav-tab"); carryMotion(el, held); }
   renderSide();
 }
 
@@ -1045,7 +1295,7 @@ setInterval(() => {
   if (!r || r.kind !== "make" || !card || !r.total) return;
   const done = shownDone(r), whole = overallShown(r);
   $("#run-pct", card).textContent = pctText(whole);
-  card.querySelector(".bar > i").style.width = `${whole * 100}%`;
+  card.querySelector(".bar").style.setProperty("--p", whole);
   $("#run-stage", card).innerHTML = stageText(r, done);
 }, 250);
 
@@ -1054,7 +1304,7 @@ function viewRunning() {
   const left = queueLeft();
   const res = r.res || {};
   const meter = (label, value, frac, hot) => `<div class="meter${hot ? " hot" : ""}"><span>${label}</span><b>${value}</b>
-      <div class="bar thin"><i style="width:${Math.round(Math.min(1, frac || 0) * 100)}%"></i></div></div>`;
+      <div class="bar thin" data-bar="meter-${label}" style="--p:${Math.min(1, frac || 0).toFixed(2)}"><i></i></div></div>`;
   const meters = r.res ? `<div class="meters">
       ${res.gpu != null ? meter("GPU", res.gpu + "%", res.gpu / 100, true) + meter("VRAM", `${gb(res.vram_used)} / ${gb(res.vram_total)} GB`, res.vram_used / res.vram_total, res.vram_used / res.vram_total > .9) : ""}
       ${meter("CPU", Math.round(res.cpu) + "%", res.cpu / 100, res.gpu == null)}
@@ -1067,9 +1317,9 @@ function viewRunning() {
     <div><div class="between" style="align-items:flex-end;margin-bottom:8px">
         <div><div class="big-pct mono" id="run-pct">${r.total ? pctText(pct) : "…"}</div></div>
         <div class="sm dim right mono" id="run-stage">${stageText(r, done)}</div></div>
-      <div class="bar ${r.total ? "" : "indeterminate"}"><i style="width:${pct * 100}%"></i></div></div>
+      <div class="bar ${r.total ? "" : "indeterminate"}" data-bar="run" style="--p:${pct}"><i></i></div></div>
     ${r.speakers != null ? `<div><div class="between sm"><span class="dim">Working out who's talking</span><span class="mono dim" id="run-spk">${Math.round(r.speakers * 100)}%</span></div>
-        <div class="bar thin ok" style="margin-top:6px"><i style="width:${r.speakers * 100}%"></i></div></div>` : ""}
+        <div class="bar thin ok" data-bar="speakers" style="margin-top:6px;--p:${r.speakers}"><i></i></div></div>` : ""}
     ${meters}
     <details ${r.logOpen ? "open" : ""} data-act="log"><summary>Details</summary><div class="log code selectable" id="run-log">${esc(r.log.slice(-40).join("\n"))}</div></details>
   </div>`;
@@ -1140,9 +1390,15 @@ function rvTooLong(i) {
   const r = S.review;
   return evenLines(rvLabel(i) + r.cues[i].text.trim(), r.max_chars, r.max_lines).length > r.max_lines;
 }
+/* Every line has a number of its own (uid) that it keeps for as long as it exists, through
+   retiming, undo and redo, so the list can tell which row is which when it's redrawn. It's given
+   when the lines arrive and when a split makes a new one (and by rvRow, should a line ever turn
+   up without). It never leaves this page. */
+let rvUid = 0;
+function rvTag(cues) { cues.forEach(c => { if (!c.uid) c.uid = ++rvUid; }); return cues; }
 function rvRow(c, i) {
   const r = S.review, spk = r.hasNames;
-  return `<div class="rv-row${spk ? "" : " no-spk"}${c.gone ? " gone" : ""}" data-i="${i}">
+  return `<div class="rv-row${spk ? "" : " no-spk"}${c.gone ? " gone" : ""}" data-i="${i}" data-id="${c.uid || rvTag([c])[0].uid}">
     <button class="iconbtn rv-play" data-act="rv-play" data-i="${i}" title="Play this line">${ICON.play}</button>
     <button class="rv-time" data-act="rv-timing" data-i="${i}" aria-expanded="${r.timing === i}" title="Change when it shows">${clock(c.start)}</button>
     ${spk ? `<select data-rv="speaker" data-i="${i}" aria-label="Who says line ${i + 1}" title="Who says this line" ${c.gone ? "disabled" : ""}>${Object.entries(r.names).map(([k, n]) =>
@@ -1156,6 +1412,78 @@ function rvRow(c, i) {
       <button class="iconbtn" data-act="rv-del" data-i="${i}" title="${c.gone ? "Bring back this line" : "Delete this line"}" aria-label="${c.gone ? "Bring back this line" : "Delete this line"}">${c.gone ? ICON.again : ICON.x}</button></div>
     ${r.timing === i && !c.gone ? rvTiming(c, i) : ""}
   </div>`;
+}
+/* The lines move, they don't jump. Splitting, joining, deleting and undoing redraw the whole
+   list, so the rows on screen are noted before the redraw (rvPlaces) and afterwards each is slid
+   from where it was to where it is now (rvMoved): the rows below a split move down to make room
+   and the new half fades in under the first, a row joined away fades out as the rows below close
+   up, a deleted line dims to its crossed-out look. Rows are matched by the line's own number
+   (data-id, see rvTag), which undo and redo bring back with the line, so a row only fades in if
+   its line really is new and only fades out if its line really is gone. Only rows on or near the
+   screen are measured or moved, however long the list. */
+function rvNear(list) {
+  // rows run in order down the page, so the first one near the screen is found by halving
+  const rows = list.children, top = -200, bottom = innerHeight + 200, near = [];
+  let lo = 0, hi = rows.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (rows[mid].getBoundingClientRect().bottom < top) lo = mid + 1; else hi = mid; }
+  for (let i = lo; i < rows.length && near.length < 80; i++) {
+    const box = rows[i].getBoundingClientRect();
+    if (box.top > bottom) break;
+    near.push({ row: rows[i], box });
+  }
+  return near;
+}
+function rvPlaces(el) {
+  const list = el.querySelector(".rv-list");
+  if (!list) return null;
+  list.querySelectorAll(".rv-ghost").forEach(g => g.remove());
+  const ids = new Set();  // every line there was, on screen or not (reading an attribute costs nothing next to the redraw)
+  for (const row of list.children) ids.add(row.dataset.id);
+  return { ids, rows: rvNear(list).map(({ row, box }) => ({ row, id: row.dataset.id,
+    top: box.top, gone: row.classList.contains("gone"), timing: !!row.querySelector(".rv-timing") })) };
+}
+function rvMoved(el, was) {
+  const list = el.querySelector(".rv-list");
+  if (!was || !list || !was.rows.length) return;
+  const move = spring("spatial"), old = new Map(was.rows.map(r => [r.id, r]));
+  let shift = 0;  // how far the last matched row had to come: rows from off screen come as far
+  rvNear(list).forEach(({ row, box }) => {
+    const from = old.get(row.dataset.id);
+    if (!from) {
+      if (was.ids.has(row.dataset.id)) {  // it was off screen: it comes along with the rest
+        if (Math.abs(shift) > .5) row.animate([{ transform: `translateY(${shift}px)` }, { transform: "none" }], move);
+      } else {  // a new line: it comes out from under the one above, once the rows below have started to make room
+        row.animate([{ transform: "translateY(-12px)" }, { transform: "none" }], move);
+        row.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, delay: 70, easing: EASE, fill: "backwards" });
+      }
+      return;
+    }
+    shift = from.top - box.top;
+    if (Math.abs(shift) > .5) row.animate([{ transform: `translateY(${shift}px)` }, { transform: "none" }], move);
+    const gone = row.classList.contains("gone");
+    if (gone !== from.gone) row.querySelectorAll("textarea, .rv-time").forEach(n =>
+      n.animate([{ opacity: from.gone ? .45 : 1 }, { opacity: gone ? .45 : 1 }], { duration: 240, easing: EASE }));
+    const panel = row.querySelector(".rv-timing");
+    if (panel && !from.timing) panel.animate([{ opacity: 0, transform: "translateY(-6px)" }, { opacity: 1, transform: "none" }], move);
+  });
+  // A line that's gone (joined into the one above, or a split undone): the old row is put back
+  // where it was, out of the flow and out of reach, and slips away up into the line above it,
+  // quickly and only a little way, so it's gone before it can cross the line that took its words
+  const here = new Set(S.review.cues.map(c => String(c.uid))), base = list.getBoundingClientRect().top;
+  was.rows.forEach(r => {
+    if (here.has(r.id)) return;
+    const g = r.row;
+    [g, ...g.querySelectorAll("[id], [data-i], [data-act], [data-rv]")].forEach(n => ["id", "data-i", "data-id", "data-act", "data-rv"].forEach(a => n.removeAttribute(a)));
+    g.classList.add("rv-ghost");
+    g.classList.remove("playing");
+    g.inert = true;
+    g.style.top = `${r.top - base}px`;
+    list.append(g);
+    const fade = g.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-6px) scale(.985)" }], { duration: 120, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" });
+    const done = () => g.remove();
+    fade.finished.then(done, done);
+    setTimeout(done, 400);
+  });
 }
 /* Times as 1:02.35 (or 1:02:03.40 past an hour), and back */
 function stamp(t) {
@@ -1909,7 +2237,7 @@ function downloadRows(level) {
     return `<div class="grp-row has-icon">
       <div class="tile-icon ${have ? "t-ok" : "t-accent"}">${have ? ICON.tick : ICON.down}</div>
       <div class="grow"><div class="between"><span class="row-title">${esc(it.label)}</span><span class="sm dim mono">${status}</span></div>
-        ${have ? "" : `<div class="bar thin${d.done != null && !d.total ? " indeterminate" : ""}" style="margin-top:7px"><i style="width:${pct * 100}%"></i></div>`}</div>
+        ${have ? "" : `<div class="bar thin${d.done != null && !d.total ? " indeterminate" : ""}" data-bar="get-${esc(it.key)}" style="margin-top:7px;--p:${pct}"><i></i></div>`}</div>
     </div>`;
   }).join("")}</div>`;
 }
@@ -2041,9 +2369,12 @@ function renderUpdateSheet() {
   const step = (key, title, detail, i) => {
     const order = ["download", "install", "done"], at = order.indexOf(u.current || "download");
     const state = u.state === "installed" ? (i < 2 ? "done" : "active") : at > i ? "done" : at === i ? "active" : "";
-    return `<div class="step ${state}"><span class="dot">${state === "done" ? ICON.tick : i + 1}</span>
+    // a tick pops once, when its step finishes, not on every redraw of the progress
+    const ticked = u.ticked || (u.ticked = {}), just = state === "done" && !ticked[key];
+    if (state === "done") ticked[key] = true;
+    return `<div class="step ${state}${just ? " just" : ""}"><span class="dot">${state === "done" ? ICON.tick : i + 1}</span>
       <div class="grow"><b>${title}</b>${state === "active" && detail ? `<div class="sm dim mono" style="margin:2px 0 6px">${detail.text}</div>
-        <div class="bar thin${detail.frac == null ? " indeterminate" : ""}"><i style="width:${(detail.frac || 0) * 100}%"></i></div>` : ""}</div></div>`;
+        <div class="bar thin${detail.frac == null ? " indeterminate" : ""}" data-bar="update-${key}" style="--p:${detail.frac || 0}"><i></i></div>` : ""}</div></div>`;
   };
   let body, actions;
   const lockNote = `<div class="banner bad">This version has a security problem, so it can't be used until it's updated.${
@@ -2080,13 +2411,24 @@ function renderUpdateSheet() {
       // Locked but GitHub can't be reached: being offline is no risk, so it can be used until it's back
       actions = `${u.blocking ? `<button class="btn sec" data-up="offline">Keep using it offline</button>` : `<button class="btn sec" data-up="close">Close</button>`}<button class="btn" data-up="retry">Try again</button>`;
   }
-  const fresh = !root.querySelector("#update-sheet");
-  root.innerHTML = `<div class="scrim" id="update-sheet" ${fresh ? "" : 'style="animation:none"'}><div class="dialog stack${u.blocking ? " blocking" : ""}" role="dialog" aria-modal="true" aria-labelledby="up-title" ${fresh ? "" : 'style="animation:none"'}>
-      <div class="row"><div class="tile-icon t-accent">${ICON.again}</div><h3 id="up-title">${
+  const inside = `<div class="row"><div class="tile-icon t-accent">${ICON.again}</div><h3 id="up-title">${
         u.blocking && !["installing", "installed"].includes(u.state) ? "Important security update" : { checking: u.blocking ? "Important security update" : "Checking for updates", ok: "Subtitle Maker is up to date",
           available: u.blocking ? "Important security update" : updateTitle(d), installing: "Updating Subtitle Maker",
           installed: "Update installed" }[u.state] || "The update didn't work"}</h3></div>
-      ${body}<div class="dlg-foot">${actions}</div></div></div>`;
+      ${body}<div class="dlg-foot">${actions}</div>`;
+  // Redrawn while it's open (progress, or the check coming back): the backdrop and the window stay
+  // the ones they are and only what's inside changes, so it never opens again, and one caught
+  // still opening simply carries on. The ✕ is kept (or added, or taken away, with the button that
+  // closes it), the focus goes back inside, and the progress bar moves on from where it was.
+  const box = root.querySelector("#update-sheet:not(.is-closing) > .dialog");
+  if (box) {
+    const x = box.querySelector(".dlg-x"), bars = barsNow(box);
+    box.classList.toggle("blocking", !!u.blocking);
+    box.innerHTML = inside;
+    sheetX(box, x);
+    barsCarry(box, bars);
+    sheetFocus(box);
+  } else root.innerHTML = `<div class="scrim" id="update-sheet"><div class="dialog stack${u.blocking ? " blocking" : ""}" role="dialog" aria-modal="true" aria-labelledby="up-title">${inside}</div></div>`;
   root.querySelectorAll("[data-up]").forEach(b => b.onclick = () => UPDATE_ACTIONS[b.dataset.up]());
 }
 
@@ -2292,7 +2634,7 @@ const ACTIONS = {
     // The time is shared out by length, which is close to how long each part takes to say
     const cut = Math.round((c.start + (c.end - c.start) * left.length / (left.length + right.length)) * 100) / 100;
     rvSnap("split", i);
-    r.cues.splice(i, 1, { ...c, text: left, end: cut }, { ...c, text: right, start: cut });
+    r.cues.splice(i, 1, { ...c, text: left, end: cut }, { ...c, text: right, start: cut, uid: ++rvUid });  // the second half is a new line
     r.timing = null; r.caret = null;
     render();
   },
@@ -2355,10 +2697,16 @@ const ACTIONS = {
   pref: async el => {
     const key = el.dataset.k;
     if (el.classList.contains("switch")) {
-      el.setAttribute("aria-checked", String(el.getAttribute("aria-checked") !== "true"));
-      // Saving runs while the knob slides (150 ms); the redraw waits for both
-      const [saved] = await Promise.all([api().save_prefs({ [key]: JSON.parse(el.dataset.v) }),
-        new Promise(done => setTimeout(done, prefersReducedMotion() ? 0 : 150))]);
+      const on = el.getAttribute("aria-checked") !== "true";
+      el.setAttribute("aria-checked", String(on));
+      // Saving runs while the knob springs across; the redraw waits for both. 260 ms is when the
+      // knob is within a fraction of a pixel of its place (the spring's last settling is too small
+      // to see). Clicked again meanwhile, the knob turns round where it is and only the last
+      // click redraws, so it is never cut off part-way.
+      const turn = el.turn = (el.turn || 0) + 1;
+      const [saved] = await Promise.all([api().save_prefs({ [key]: on }),
+        new Promise(done => setTimeout(done, prefersReducedMotion() ? 0 : 260))]);
+      if (turn !== el.turn) return;
       S.info.settings = saved;
     } else S.info.settings = await api().save_prefs({ [key]: JSON.parse(el.dataset.v) });
     if (key === "theme") applyTheme();
@@ -2448,8 +2796,8 @@ const ACTIONS = {
   people: el => { S.people = +el.dataset.v; render(); api().save_prefs({ people: S.people }); },
   voices: async () => { S.info.voices = await api().open_voices(); },
   "goto-settings": () => go("settings", "tab", "quality"),
-  "settings-page": el => { S.page = el.dataset.page; render("in"); $("main.main").scrollTop = 0; },
-  "settings-back": () => { S.page = null; render("back"); $("main.main").scrollTop = 0; },
+  "settings-page": el => { S.page = el.dataset.page; render("in"); },
+  "settings-back": () => { S.page = null; render("back"); },
   start: () => next(),
   cancel: () => { S.cancelAll = true; api().cancel(); },
   reveal: el => api().reveal(el.dataset.path),
@@ -2523,7 +2871,7 @@ const app = {
     const r = await api().open_srt(path);
     if (r.error) return toast(r.error, true);
     S.review = { mode: "file", file: r.file, path: r.path, video: r.video, style: "none", max_chars: r.max_chars, max_lines: r.max_lines,
-      names: {}, hasNames: false, cues: r.cues, formatted: r.formatted };
+      names: {}, hasNames: false, cues: rvTag(r.cues), formatted: r.formatted };
     if (S.view !== "make") go("make", "in"); else render(true);
   },
 
@@ -2591,7 +2939,7 @@ const app = {
       case "review": {
         const names = Object.keys(ev.names).length ? ev.names : null;
         S.review = { file: ev.file, style: ev.style, max_chars: ev.max_chars, max_lines: ev.max_lines,
-          names: names || {}, hasNames: !!names, cues: ev.cues.map(c => ({ ...c })) };
+          names: names || {}, hasNames: !!names, cues: rvTag(ev.cues.map(c => ({ ...c }))) };
         if (S.view === "make") render(true); else toast("The subtitles are ready to check.");
         return;
       }
@@ -2657,10 +3005,10 @@ function patchRunning() {
   const fresh = tmp.firstElementChild;
   // The main bar slides back and forth until the length is known; stop that once it is
   card.querySelector(".bar").classList.toggle("indeterminate", !S.run.total);
-  // Keep the log's open state and scroll, and animate bars from their current widths
-  card.querySelectorAll(".bar > i").forEach((old, i) => {
-    const nu = fresh.querySelectorAll(".bar > i")[i];
-    if (nu) old.style.width = nu.style.width;
+  // Keep the log's open state and scroll, and move the bars on from where they are
+  card.querySelectorAll(".bar").forEach((old, i) => {
+    const nu = fresh.querySelectorAll(".bar")[i];
+    if (nu) old.style.setProperty("--p", nu.style.getPropertyValue("--p"));
   });
   ["#run-pct", "#run-stage", "#run-spk"].forEach(sel => { const a = $(sel, card), b = $(sel, fresh); if (a && b) a.innerHTML = b.innerHTML; });
   const oldMeters = $(".meters", card), newMeters = $(".meters", fresh);
@@ -2677,6 +3025,16 @@ function patchRunning() {
   log.textContent = S.run.log.slice(-40).join("\n");
   if (stick) log.scrollTop = log.scrollHeight;
 }
+
+/* Opening a "Details" by hand fades in what it shows (a redraw that finds one already open shows
+   it as it is). The click comes before the browser opens it, so this looks a frame later. */
+document.addEventListener("click", e => {
+  const summary = e.target.closest ? e.target.closest("summary") : null, box = summary && summary.parentElement;
+  if (!box || box.tagName !== "DETAILS") return;
+  requestAnimationFrame(() => {
+    if (box.open) [...box.children].forEach(n => { if (n !== summary) n.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: "cubic-bezier(.16,1,.3,1)" }); });
+  });
+}, true);
 
 /* Drag highlighting. app.py receives the drop itself, because only it can see full file paths. */
 let dragDepth = 0;
