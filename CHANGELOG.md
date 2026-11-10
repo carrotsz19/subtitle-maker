@@ -4,7 +4,7 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
-## 0.2.5 · 2 November 2026
+## 0.2.5 · 10 November 2026
 
 - **Named once, named everywhere.** Name someone in the first video's check, and the next videos in the queue name them by themselves.
 - **Hear each speaker.** A play button next to each name in the check plays a few seconds of their voice.
