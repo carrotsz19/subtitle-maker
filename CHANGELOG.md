@@ -4,6 +4,17 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 0.2.5 · 10 November 2026
+
+- **Named once, named everywhere.** Name someone in the first video's check, and the next videos in the queue name them by themselves.
+- **Hear each speaker.** A play button next to each name in the check plays a few seconds of their voice.
+- **Change who's talking.** In the check, pick "+ Someone else…" on a line for a person detection missed, use "+ Add person", or move all of one person's lines to another when it split someone in two. Giving two people the same name puts them together.
+- People added in the check are remembered for later videos too, from the lines as you checked them.
+- **Ready to check.** When the whole queue is transcribed, it plays the done sound, and shows a notification if you're in another window.
+- Fixed: cancelling a check, or closing the window during one, lost that video's lines. Now it stays To check.
+- Fixed: uninstalling left behind videos that were waiting to be checked.
+- Fixed in the check: renaming a speaker no longer swallows your next click, Ctrl+Z works right after changing a line's speaker, Enter skips deleted lines, and replacing a word with nothing in every future video asks first.
+
 ## 0.2.4 · 2 November 2026
 
 - **Check the lines after the whole queue.** With several videos queued, each one is only transcribed at first, so you can leave the PC while they all run. Once they're done, the check screen opens for the first video, then the next, in queue order. Name people there too: nobody is asked for names halfway through any more.

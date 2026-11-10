@@ -325,6 +325,9 @@ kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px
 .rv-names{ display:flex; flex-wrap:wrap; gap:8px; }
 .rv-names label{ margin:0; display:flex; align-items:center; gap:6px; text-transform:none; letter-spacing:0; font-size:13px; color:var(--dim); font-weight:600; }
 .rv-names input{ width:160px; font-size:14px; padding:7px 10px; }
+.rv-name{ display:inline-flex; align-items:center; gap:4px; }
+.rv-names select{ font:inherit; font-size:12.5px; padding:5px 6px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--dim); max-width:140px; }
+.rv-row select:disabled{ opacity:.45; }
 .rv-list{ background:var(--panel); border-radius:var(--r-card); box-shadow:var(--elev-1); }
 .rv-row{ display:grid; grid-template-columns:32px 52px auto 1fr auto auto; gap:8px; align-items:start; padding:8px 10px 8px 8px; position:relative; }
 .rv-row + .rv-row::before{ content:""; position:absolute; top:0; left:52px; right:0; height:1px; background:var(--hairline); }
@@ -865,7 +868,7 @@ function persistQueue() {
 
 function renderSide() {
   if (S.info) persistQueue();
-  const waiting = S.queue.filter(q => q.status === "waiting" || q.status === "working").length;
+  const waiting = S.queue.filter(q => ["waiting", "working", "check", "checking"].includes(q.status)).length;
   const c = $("#queue-count");
   c.textContent = waiting; c.classList.toggle("hide", !waiting);
   if (!S.info) return;
@@ -881,7 +884,7 @@ function renderSide() {
 function viewMake() {
   const busy = S.run && S.run.kind === "make";
   const last = S.queue.filter(q => q.status === "done" || q.status === "failed");
-  const showResult = !busy && !S.queue.some(q => q.status === "waiting") && last.length;
+  const showResult = !busy && !S.queue.some(q => q.status === "waiting" || q.status === "check") && last.length;
   return `
     <div class="topbar"><h1>Make subtitles</h1>
       <p>Drop a video and get a .srt you can import into DaVinci Resolve.</p></div>
@@ -1116,6 +1119,60 @@ function rvLabel(i) {
   const r = S.review, c = r.cues[i];
   return r.style === "name" && r.names[c.speaker] != null ? r.names[c.speaker] + ": " : r.style === "dash" && r.hasNames ? "- " : "";
 }
+/* People: how many lines each has, adding someone detection missed, and moving lines between them */
+function rvLinesOf(k) { return S.review.cues.filter(c => !c.gone && String(c.speaker) === String(k)).length; }
+function rvNewPerson() {
+  const r = S.review, k = String(Object.keys(r.names).reduce((m, x) => Math.max(m, +x), -1) + 1);
+  r.names[k] = `Speaker ${+k + 1}`;
+  return k;
+}
+function rvFocusName(k) {
+  const box = $(`#review input[data-rv="name"][data-k="${k}"]`);
+  if (box) { box.focus(); box.select(); }
+}
+function rvMoveAll(from, to) {
+  const r = S.review;
+  // Deleted lines too, so bringing one back doesn't leave it with someone who's gone
+  r.cues.forEach(c => { if (String(c.speaker) === String(from)) c.speaker = +to; });
+}
+function rvRefreshRow(i) {
+  const w = $("#rv-warn-" + i);
+  if (w) w.innerHTML = !S.review.cues[i].gone && rvTooLong(i) ? '<span class="pill bad">Too long</span>' : "";
+}
+/* The bar of people above the lines: each one's name, a play button for their voice, and a way to
+   move all their lines to someone else (for when detection split one person in two) */
+function rvNamesBar() {
+  const r = S.review;
+  return `<div class="rv-names">${Object.entries(r.names).map(([k, n]) => {
+    const others = Object.entries(r.names).filter(([o]) => o !== k), lines = rvLinesOf(k);
+    return `<span class="rv-name"><label>Speaker ${+k + 1} <input type="text" data-rv="name" data-k="${k}" value="${esc(n)}" maxlength="40"></label>
+      <button class="iconbtn" data-act="rv-play-spk" data-k="${k}" title="Hear ${esc(n)}" aria-label="Hear ${esc(n)}">${ICON.play}</button>
+      ${others.length && lines ? `<select data-rv="move" data-k="${k}" aria-label="Move all of ${esc(n)}'s lines to someone else" title="Moves every one of ${esc(n)}'s lines to the person you pick">
+        <option value="" selected>Move ${lines} line${lines > 1 ? "s" : ""} to…</option>
+        ${others.map(([o, on]) => `<option value="${o}">${esc(on)}</option>`).join("")}</select>`
+        : lines ? "" : `<span class="sm faint" title="Left out when saving, unless they get a line">no lines</span>`}</span>`;
+  }).join("")}
+    <button class="btn ghost sm" data-act="rv-add-person" title="Add someone detection missed, then pick them on their lines">+ Add person</button></div>`;
+}
+/* Redraws only the people bar (the line counts changed), so the lines keep their place and focus */
+function rvUpdateNames() {
+  const old = $("#review .rv-names");
+  if (!old) return;
+  const tmp = document.createElement("div");
+  tmp.innerHTML = rvNamesBar();
+  const bar = tmp.firstElementChild;
+  old.replaceWith(bar);
+  bind(bar);
+}
+/* A rename shown everywhere without redrawing, so a click elsewhere isn't lost */
+function rvShowName(k) {
+  const r = S.review, n = r.names[k];
+  document.querySelectorAll(`#review select option[value="${k}"]`).forEach(o => { o.textContent = n; });
+  document.querySelectorAll(`#review [data-act="rv-play-spk"][data-k="${k}"]`).forEach(b => { b.title = `Hear ${n}`; b.setAttribute("aria-label", `Hear ${n}`); });
+  // "Alex: " is a different length from "Speaker 1: ", so the too-long warnings can change
+  r.cues.forEach((c, i) => { if (String(c.speaker) === String(k)) rvRefreshRow(i); });
+  rvCount();
+}
 function rvTooLong(i) {
   const r = S.review;
   return evenLines(rvLabel(i) + r.cues[i].text.trim(), r.max_chars, r.max_lines).length > r.max_lines;
@@ -1125,14 +1182,15 @@ function rvRow(c, i) {
   return `<div class="rv-row${spk ? "" : " no-spk"}${c.gone ? " gone" : ""}" data-i="${i}">
     <button class="iconbtn rv-play" data-act="rv-play" data-i="${i}" title="Play this line">${ICON.play}</button>
     <button class="rv-time" data-act="rv-timing" data-i="${i}" aria-expanded="${r.timing === i}" title="Change when it shows">${clock(c.start)}</button>
-    ${spk ? `<select data-rv="speaker" data-i="${i}" aria-label="Speaker">${Object.entries(r.names).map(([k, n]) =>
-      `<option value="${k}" ${String(c.speaker) === k ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}
+    ${spk ? `<select data-rv="speaker" data-i="${i}" aria-label="Who says line ${i + 1}" title="Who says this line" ${c.gone ? "disabled" : ""}>${Object.entries(r.names).map(([k, n]) =>
+      `<option value="${k}" ${String(c.speaker) === k ? "selected" : ""}>${esc(n)}</option>`).join("")}
+      <option value="new">+ Someone else…</option></select>` : ""}
     <textarea rows="1" data-rv="text" data-i="${i}" aria-label="Line ${i + 1}" ${c.gone ? "disabled" : ""}>${esc(c.text)}</textarea>
     <span class="rv-warn" id="rv-warn-${i}">${!c.gone && rvTooLong(i) ? `<span class="pill bad" title="Longer than ${r.max_lines} line(s) of ${r.max_chars} characters">Too long</span>` : ""}</span>
     <div class="rv-acts">
       ${c.gone ? "" : `<button class="iconbtn quiet" data-act="rv-split" data-i="${i}" title="Split into two lines (at the cursor)">${ICON.split}</button>
       ${i + 1 < r.cues.length && !r.cues[i + 1].gone ? `<button class="iconbtn quiet" data-act="rv-merge" data-i="${i}" title="Join with the next line">${ICON.merge}</button>` : ""}`}
-      <button class="iconbtn" data-act="rv-del" data-i="${i}" title="${c.gone ? "Undo" : "Delete this line"}">${c.gone ? ICON.again : ICON.x}</button></div>
+      <button class="iconbtn" data-act="rv-del" data-i="${i}" title="${c.gone ? "Bring back this line" : "Delete this line"}" aria-label="${c.gone ? "Bring back this line" : "Delete this line"}">${c.gone ? ICON.again : ICON.x}</button></div>
     ${r.timing === i && !c.gone ? rvTiming(c, i) : ""}
   </div>`;
 }
@@ -1185,7 +1243,8 @@ function rvStep(back) {
   toast(`${back ? "Undid" : "Redid"}: ${RV_WHAT[step.what] || step.what}.`);
 }
 const RV_WHAT = { typing: "typing", split: "split line", join: "joined lines", delete: "deleted line", restore: "brought back line",
-  replace: "replace all", time: "time change", speaker: "speaker change", name: "speaker name" };
+  replace: "replace all", time: "time change", speaker: "speaker change", name: "speaker name",
+  person: "new person", move: "moved lines" };
 function rvUndoButtons() {
   const r = S.review, u = $("#rv-undo"), d = $("#rv-redo");
   if (u) u.disabled = !(r.undo && r.undo.length);
@@ -1198,7 +1257,7 @@ document.addEventListener("keydown", e => {
   const key = e.key.toLowerCase();
   if (key !== "z" && key !== "y") return;
   const t = e.target;
-  if (t && t.matches && t.matches("input, select, textarea") && !t.matches('textarea[data-rv="text"]')) return;
+  if (t && t.matches && t.matches("input, select, textarea") && !t.matches('textarea[data-rv="text"], select[data-rv="speaker"], select[data-rv="move"]')) return;
   if ($("#dialog-root") && $("#dialog-root").innerHTML.trim()) return;
   e.preventDefault();
   rvStep(key === "z" && !e.shiftKey);
@@ -1232,8 +1291,7 @@ function viewReview() {
         <button class="btn ghost sm" data-act="rv-discard">${r.mode === "file" ? "Close" : "Discard"}</button>
         <button class="btn" data-act="rv-save">${r.mode === "file" ? "Save changes" : "Save subtitles"}</button></div>
       ${r.mode === "file" && r.formatted ? `<div class="banner">This file has formatting, like italics, colours or positions. Saving keeps the words and timing but not the formatting, and splits lines the way Settings says. The original is kept as a backup.</div>` : ""}
-      ${r.hasNames ? `<div class="rv-names">${Object.entries(r.names).map(([k, n]) =>
-        `<label>Speaker ${+k + 1} <input type="text" data-rv="name" data-k="${k}" value="${esc(n)}" maxlength="40"></label>`).join("")}</div>` : ""}
+      ${r.hasNames ? rvNamesBar() : ""}
       <div class="rv-tools"><input type="text" id="rv-find" placeholder="Find (e.g. a misheard name)">
         <input type="text" id="rv-repl" placeholder="Replace with"><button class="btn sec sm" data-act="rv-replace">Replace all</button>
         <label class="checkrow sm"><input type="checkbox" id="rv-remember" style="margin:0"> Fix it in every video from now on</label></div>
@@ -1262,7 +1320,7 @@ function bindReview(root) {
       el.onkeydown = e => {
         if (e.key !== "Enter") return;
         e.preventDefault();
-        const next = root.querySelector(`textarea[data-i="${i + 1}"]`);
+        const next = [...document.querySelectorAll('#review textarea[data-rv="text"]')].find(x => +x.dataset.i > i && !x.disabled);
         if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
       };
     } else if (el.dataset.rv === "start" || el.dataset.rv === "end") {
@@ -1274,9 +1332,45 @@ function bindReview(root) {
       };
       el.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } };
     } else if (el.dataset.rv === "speaker") {
-      el.onchange = () => { rvSnap("speaker"); rvUndoButtons(); S.review.cues[i].speaker = +el.value; $("#rv-warn-" + i).innerHTML = rvTooLong(i) ? '<span class="pill bad">Too long</span>' : ""; rvCount(); };
+      el.onchange = () => {
+        if (el.value === "new") {
+          // Someone detection missed: a new person for this line, named straight away
+          rvSnap("person");
+          S.review.cues[i].speaker = +rvNewPerson();
+          render();
+          rvFocusName(String(S.review.cues[i].speaker));
+          return toast("Added a new person for this line. Type their name above.");
+        }
+        rvSnap("speaker"); rvUndoButtons(); S.review.cues[i].speaker = +el.value;
+        // The label's length changed, and so did the line counts in the people bar
+        rvRefreshRow(i); rvCount(); rvUpdateNames();
+      };
+    } else if (el.dataset.rv === "move") {
+      el.onchange = () => {
+        const r = S.review, from = el.dataset.k, to = el.value;
+        if (!to) return;
+        const n = rvLinesOf(from);
+        rvSnap("move");
+        rvMoveAll(from, to);
+        render();
+        toast(`Moved ${n} line${n > 1 ? "s" : ""} from ${r.names[from]} to ${r.names[to]}.`);
+      };
     } else if (el.dataset.rv === "name") {
-      el.onchange = () => { rvSnap("name"); S.review.names[el.dataset.k] = el.value.trim() || `Speaker ${+el.dataset.k + 1}`; render(); };
+      el.onchange = () => {
+        const r = S.review, k = el.dataset.k, name = el.value.trim() || `Speaker ${+k + 1}`;
+        // The same name as someone else is the same person: offer to put their lines together
+        const twin = Object.keys(r.names).find(o => o !== k && r.names[o].trim().toLowerCase() === name.toLowerCase());
+        if (twin) {
+          const n = rvLinesOf(k);
+          el.value = r.names[k];  // stays as it was if they say no
+          return confirmBox(`${r.names[twin]} is already here`, `Put ${n ? `${n} line${n > 1 ? "s" : ""} from ` : ""}Speaker ${+k + 1} together with ${r.names[twin]}'s? They become one person.`,
+            "Put together", () => { rvSnap("move"); rvMoveAll(k, twin); render(); toast(`Speaker ${+k + 1}'s lines are now ${r.names[twin]}'s.`); });
+        }
+        if (name === r.names[k]) { el.value = name; return; }
+        rvSnap("name"); rvUndoButtons(); r.names[k] = name; el.value = name;
+        rvShowName(k);
+      };
+      el.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } };
     }
   });
 }
@@ -2182,6 +2276,24 @@ function updateSave() {
 }
 
 const ACTIONS = {
+  "rv-play-spk": el => {
+    // Their longest line is the clearest few seconds of their voice
+    const r = S.review, k = el.dataset.k;
+    let best = -1;
+    r.cues.forEach((c, i) => { if (!c.gone && String(c.speaker) === k && (best < 0 || c.end - c.start > r.cues[best].end - r.cues[best].start)) best = i; });
+    if (best < 0) return toast(`${r.names[k] || `Speaker ${+k + 1}`} has no lines left.`, true);
+    const btn = document.querySelector(`.rv-row[data-i="${best}"] .rv-play`);
+    if (!btn) return;
+    btn.closest(".rv-row").scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    ACTIONS["rv-play"](btn);
+  },
+  "rv-add-person": () => {
+    rvSnap("person"); rvUndoButtons();
+    const k = rvNewPerson();
+    rvUpdateNames();
+    rvFocusName(k);
+    toast("Name them, then pick them in the speaker box on their lines.");
+  },
   "rv-play": async el => {
     const c = S.review.cues[+el.dataset.i];
     document.querySelectorAll(".rv-row.playing").forEach(x => x.classList.remove("playing"));
@@ -2229,9 +2341,12 @@ const ACTIONS = {
   "rv-del": el => { const c = S.review.cues[+el.dataset.i]; rvSnap(c.gone ? "restore" : "delete"); c.gone = !c.gone; render(); },
   "rv-undo": () => rvStep(true),
   "rv-redo": () => rvStep(false),
-  "rv-replace": async () => {
+  "rv-replace": async (el, sure) => {
     const find = $("#rv-find").value, repl = $("#rv-repl").value;
-    if (!find) return;
+    if (!find) { $("#rv-find").focus(); return toast("Type the word to find first.", true); }
+    if (!repl && !sure && $("#rv-remember") && $("#rv-remember").checked)
+      return confirmBox(`Remove "${find}" from every video?`, "Replace with is empty, so this word is deleted here and in every video from now on. Settings > Accuracy > Word fixes can undo it later.",
+        "Remove it", () => ACTIONS["rv-replace"](el, true));
     const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
     let n = 0;
     if (S.review.cues.some(c => !c.gone && c.text.search(re) >= 0)) rvSnap("replace");  // nothing to undo if nothing matches
@@ -2252,7 +2367,10 @@ const ACTIONS = {
       render("back");
       return toast(`Saved ${res.count} lines to ${baseName(res.path)}.${res.backup ? " The old version is backed up." : ""}`);
     }
-    api().review_done(r.cues.filter(c => !c.gone).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })), r.names);
+    const kept = r.cues.filter(c => !c.gone);
+    // People with no lines left (all moved to someone else) would otherwise show up in History
+    const used = Object.fromEntries(Object.entries(r.names).filter(([k]) => kept.some(c => String(c.speaker) === k)));
+    api().review_done(kept.map(({ start, end, text, speaker }) => ({ start, end, text, speaker })), Object.keys(used).length ? used : r.names);
     S.review = null;
     S.run.stage = "Saving";
     render("back");
@@ -2397,6 +2515,8 @@ function next() {
     const check = S.queue.find(q => q.status === "check");
     if (check) {
       check.status = "checking";
+      // Everything's transcribed and nothing more happens until someone's back: say so (once)
+      if (S.announceChecks) { S.announceChecks = false; api().checks_ready(checksLeft() + 1); }
       S.run = { kind: "make", item: check, checking: true, done: 0, total: 0, stage: "Opening the lines to check", speakers: null, res: null, log: [], startedAt: null };
       api().finish(check.path, check.bundle);
       if (S.view === "make") render(); else renderSide();
@@ -2515,6 +2635,7 @@ const app = {
       }
       case "pending":  // transcribed; checked once the rest of the queue is done
         if (r.item) Object.assign(r.item, { status: "check", bundle: ev.bundle, file: ev.file });
+        S.announceChecks = true;
         break;
       case "discarded":
         if (r.item) r.item.status = "discarded";
@@ -2528,7 +2649,9 @@ const app = {
         else toast(ev.message, true);
         break;
       case "exit": {
-        if (r.item && (r.item.status === "working" || r.item.status === "checking")) r.item.status = ev.cancelled ? "cancelled" : "failed";
+        // A check that's cancelled keeps the video "To check": its lines are still kept on disk
+        if (r.item && r.item.status === "checking" && ev.cancelled) r.item.status = "check";
+        else if (r.item && (r.item.status === "working" || r.item.status === "checking")) r.item.status = ev.cancelled ? "cancelled" : "failed";
         if (r.kind === "prepare") {
           S.run = null;
           S.models = null;

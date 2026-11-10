@@ -129,6 +129,49 @@ assert known_voices.match({0: alex}, "model-a", skip={"Alex"}) == {}
 assert [r["name"] for r in known_voices.forget("Alex")] == ["Jamie"]
 known_voices.forget_all()
 
+# People named in the check are remembered from the lines as checked: someone added in the check
+# counts, a single "yeah" is too little to know a voice by, and a failure never stops the saving
+class PrintsByLine:
+    def __init__(self, fail=False):
+        self.fail = fail
+    def speaker_fingerprints(self, audio, turns):
+        if self.fail:
+            raise RuntimeError("model broke")
+        return {spk: (np.full(4, np.nan) if spk == 3 else np.eye(4)[spk]) for _, _, spk in turns}
+
+checked = [[0, 4, "Hi.", 0], [4, 8, "Hello.", 2], [8, 8.5, "Yeah.", 1], [9, 13, "Mm.", 3]]
+ms.remember_people(PrintsByLine(), None, checked, {0: "Alex", 1: "Sam", 2: "Robin", 3: "Kai"})
+assert sorted(r["name"] for r in known_voices.listing()) == ["Alex", "Robin"]  # Sam too short, Kai's print broken
+known_voices.forget_all()
+ms.remember_people(PrintsByLine(fail=True), None, checked, {0: "Alex"})
+assert known_voices.listing() == []
+known_voices.forget_all()
+
+# The same after the whole queue: a person added in the check has no fingerprint from detection,
+# so the voices come from the kept sound and the checked lines
+import models  # noqa: E402
+
+with tempfile.TemporaryDirectory() as d:
+    sound = Path(d) / "s.npy"
+    np.save(sound, np.zeros(16000 * 14, dtype=np.int16))
+    bundle = Path(d) / "b.json"
+    bundle.write_text(__import__("json").dumps({
+        "input": str(Path(d) / "v.mp4"), "out": str(Path(d) / "v.srt"), "style": "name", "sound": sound.name,
+        "cues": [[0, 4, "Hi.", 0], [4, 8, "Hello.", 0]], "names": {"0": "Speaker 1"},
+        "prints": {"0": [1.0, 0, 0, 0]}, "length": 14, "language": "en"}), encoding="utf-8")
+    real = (ms.review, ms.save_outputs, speakers.SpeakerDetector, models.speakers_ready)
+    ms.review = lambda cues, names, *_: ([[0, 4, "Hi.", 0], [4, 8, "Hello.", 1]], {0: "Alex", 1: "Robin"})
+    ms.save_outputs = lambda *a: "saved"
+    speakers.SpeakerDetector = lambda *a: PrintsByLine()
+    models.speakers_ready = lambda: True
+    try:
+        args = type("A", (), {"finish": str(bundle), "settings": dict(paths.DEFAULT_SETTINGS, remember_voices=True)})()
+        assert ms.finish_later(args) == "saved"
+    finally:
+        ms.review, ms.save_outputs, speakers.SpeakerDetector, models.speakers_ready = real
+    assert sorted(r["name"] for r in known_voices.listing()) == ["Alex", "Robin"], known_voices.listing()
+known_voices.forget_all()
+
 # Filler words
 assert ms.is_filler(" Um,") and ms.is_filler("uh.") and not ms.is_filler("umbrella")
 

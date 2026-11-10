@@ -39,12 +39,17 @@ Double-click  Subtitle Maker.bat
 2. Pick "One person" or "Several people" (and how many, or Guess).
 3. Click "Make subtitles". You see the progress, the time left, and how hard
    the graphics card, CPU and memory are working.
-4. With several people, it plays a few seconds of each voice it can't name,
-   shows their longest lines, and you type who it is.
-5. It shows you the lines before saving: fix any misheard words (Find and replace
-   fixes a name everywhere at once), rename or swap speakers, delete lines, or
-   click a line's play button to hear it. Then click "Save subtitles".
-   (Settings > "Check the lines before saving" turns this step off.)
+4. It transcribes every video in the queue first, so you can leave the PC while
+   it works. When they're all done, it plays a sound (and shows a notification if
+   you're in another window).
+5. Then it shows you each video's lines before saving, one video after another:
+   fix any misheard words (Find and replace fixes a name everywhere at once),
+   delete lines, or click a line's play button to hear it. With several people,
+   type who each speaker is at the top (the play button next to each name plays
+   their voice); anyone you named in one video is named by themselves in the next.
+   Then click "Save subtitles".
+   (Settings > When it's done > "Check the lines before saving" turns this step off.
+   Then, with several people, it asks who each voice is while it works instead.)
 6. When it's done, click "Show in folder". After the first video, the rest of the
    queue starts right away: the speech model stays loaded until you've been idle
    for 3 minutes.
@@ -141,12 +146,12 @@ Either way it downloads the latest version into  C:\Users\<you>\Subtitle Maker ,
 what it needs, puts a "Subtitle Maker" shortcut on the desktop and opens the setup window.
 Run it again any time to repair.
 
-To update: Settings > Updates in the window, or double-click  Update.bat
+To update: Settings > Software update in the window, or double-click  Update.bat
 Your Voices clips, settings and models are kept.
 
 No GitHub account is needed for installing or updating.
 
-To uninstall: Settings > "Uninstall Subtitle Maker..." in the window, or Uninstall.bat.
+To uninstall: Settings > "Uninstall Subtitle Maker..." (at the bottom) in the window, or Uninstall.bat.
 It removes the Python packages, models, settings, program files and desktop shortcut.
 Your videos and .srt files are never touched, and your voice clips are moved to the
 desktop unless you untick that.

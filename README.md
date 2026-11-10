@@ -16,23 +16,26 @@ press Enter. It does the same in the console, with the newest version of `main`:
 irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1 | iex
 ```
 
-**Updating:** Settings > Updates in the window, or `Update.bat`.
+**Updating:** Settings > Software update in the window, or `Update.bat`.
 
-**Experimental version:** newer features before they're fully tested. Switch in Settings > Updates
+**Experimental version:** newer features before they're fully tested. Switch in Settings > Software update
 (Version to follow: Experimental), and back to Stable the same way. To install it fresh:
 
     $env:SUBTITLE_MAKER_BRANCH = 'experimental'; irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1 | iex
 
 **Fixing subtitles:** every video gets a check screen before saving (fix words, names and timing,
 split or join lines). Drop any .srt on the window, or use "Fix an existing .srt…" or History, to fix
-one later; the old version is kept in a backups folder. Settings > Word fixes corrects words it
+one later; the old version is kept in a backups folder. Settings > Accuracy > Word fixes corrects words it
 always gets wrong, in every video.
 
 **Several people:** pick "Several people" (and how many, if you know) and each line is labelled with
 who said it. People you name are remembered (on this PC only), so later videos name them by
-themselves; Settings > Remembered voices lists and forgets them.
+themselves; Settings > Speakers lists and forgets them. With several videos queued, they're all
+transcribed first and checked afterwards, one after another, so nobody has to wait by the PC:
+people are named in each check (the play button next to a name plays their voice), and anyone
+named in one check is named by themselves in the next.
 
-**Uninstalling:** Settings > Uninstall in the window, or `Uninstall.bat`.
+**Uninstalling:** Settings > Uninstall Subtitle Maker in the window, or `Uninstall.bat`.
 
 The full guide is in [README.txt](README.txt).
 
@@ -47,7 +50,7 @@ message decides how an update is announced in the app:
 | `Security:` | The update window opens by itself (it can be closed). |
 | `Hotfix:` or `Fix:` | A banner: an important fix is ready. |
 | `Feature:` | A banner: new features are ready. |
-| anything else | Shown in Settings > Updates only. |
+| anything else | Shown in Settings > Software update only. |
 
 Push to `experimental` first and let the Windows tests pass (Actions tab) before bringing `main` up to it.
 
@@ -55,7 +58,7 @@ Push to `experimental` first and let the Windows tests pass (Actions tab) before
 
 1. Add a section to the top of [CHANGELOG.md](CHANGELOG.md): `## 0.3.0 · 5 November 2026`, then a
    `- ` line per change, written for the people using it. The app shows this version number in
-   Settings > Updates, and after updating it opens a What's new sheet with this list (once).
+   Settings > Software update, and after updating it opens a What's new sheet with this list (once).
 2. Bring `main` up to date with it (as above).
 3. Actions tab > Release > Run workflow on `main`, with the version (`v0.3.0`). It tags `main`
    and makes the GitHub release, with the CHANGELOG section at the top of its notes and the
