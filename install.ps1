@@ -11,7 +11,7 @@
 # window (made here with WPF, which every Windows PC has, since there's no Python yet to show the
 # app's own).
 #
-# For the experimental version (newer, less tested; Settings > Updates switches back to Stable):
+# For the experimental version (newer, less tested; Settings > Software update switches back to Stable):
 #
 #     $env:SUBTITLE_MAKER_BRANCH = 'experimental'; irm https://raw.githubusercontent.com/carrotsz19/subtitle-maker/main/install.ps1 | iex
 

@@ -32,7 +32,7 @@ from paths import data_dir, load_settings, save_settings
 HERE = Path(__file__).parent
 REPO = os.environ.get("SUBTITLE_MAKER_REPO", "carrotsz19/subtitle-maker")
 # Which version to follow: the stable one everybody gets, or the experimental one (newer, less
-# tested). Each is a branch of the repo; Settings > Updates switches between them.
+# tested). Each is a branch of the repo; Settings > Software update switches between them.
 CHANNELS = {"main": "Stable", "experimental": "Experimental"}
 API = os.environ.get("SUBTITLE_MAKER_API", "https://api.github.com") + "/repos/" + REPO  # override for testing
 # GitHub's API allows 60 requests an hour per internet address without signing in, and a school or

@@ -4,6 +4,14 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 1.0.0 · 11 November 2026
+
+- **You decide how much of your PC it uses.** Settings > Hardware has three presets: Balanced (other apps get the processor first, and it's just as fast when nothing else is running), Full speed, and Light (barely noticeable, but slower). Or set your own: a share of the processor, a memory limit, and the graphics card or the processor. Windows itself holds it to them, speaker names included. A change applies from the next video.
+- **See what it's using.** While a video is being made, it shows how much of the processor and memory Subtitle Maker is using, next to your limits.
+- **Says when a limit gets in the way.** Quality shows a level that a limit makes slow, or that won't fit. Starting a queue that may need more memory than you allowed asks first, and a video that runs out says so plainly and can be tried again.
+- On newer graphics cards, "Use less graphics memory" fits the speech model in about half the space.
+- Easier to read: grey text, and switches that are off, stand out more.
+
 ## 0.3.0 · 10 November 2026
 
 - **Feels like a desktop app.** Pop-ups open in the middle of the window, with Cancel and the action together at the bottom right, a close button in the corner, Esc to close and Enter for the main button. A click outside no longer closes them, so nothing you typed is lost. Messages show at the bottom right.
