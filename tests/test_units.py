@@ -910,15 +910,17 @@ if winextras.WINDOWS:
     # edge whose native title bar would still show a little is moved onto the screen instead; so
     # is one whose screen has gone (it keeps its size, and opens maximized if it was)
     probe = made(0x00CF0000)
-    nearly_off = {"rect": [-1000, 100, 60, 700], "maximized": False}
+    # (small enough for any screen: Windows won't keep a window much wider than its screen, and
+    # the test machines' screens are 1024 x 768)
+    nearly_off = {"rect": [-500, 100, 100, 500], "maximized": False}
     assert winextras.set_placement(probe, nearly_off)
-    assert winextras.get_placement(probe)["rect"] == [-1000, 100, 60, 700]
+    assert winextras.get_placement(probe)["rect"] == [-500, 100, 100, 500], winextras.get_placement(probe)
     assert winextras.set_placement(probe, nearly_off, grip=(48, 186, 32))
     moved = winextras.get_placement(probe)["rect"]
-    assert moved[0] >= -8 and moved[2] - moved[0] == 1060 and moved[3] - moved[1] == 600, moved
-    assert winextras.set_placement(probe, {"rect": [-30000, -30000, -29000, -29300], "maximized": False})
+    assert moved[0] >= -8 and moved[2] - moved[0] == 600 and moved[3] - moved[1] == 400, moved
+    assert winextras.set_placement(probe, {"rect": [-30000, -30000, -29400, -29600], "maximized": False})
     gone = winextras.get_placement(probe)["rect"]
-    assert gone[0] > -1000 and gone[1] > -1000 and gone[2] - gone[0] == 1000 and gone[3] - gone[1] == 700, gone
+    assert gone[0] > -1000 and gone[1] > -1000 and gone[2] - gone[0] == 600 and gone[3] - gone[1] == 400, gone
     assert not winextras.set_placement(probe, {"rect": [0, 0, 50, 50], "maximized": False})  # too small to be real
     user32.DestroyWindow(probe)
 
