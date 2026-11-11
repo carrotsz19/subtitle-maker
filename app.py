@@ -246,6 +246,7 @@ class Api:
         self._closing_ok = False  # the app is closing itself (restart, update, uninstall): don't ask
         self._updating = False  # an update is being copied in: closing now would stop it partway
         self._outbox = PageMail(self)  # everything for the page goes through here (see PageMail)
+        self._limit_note = None  # a Hardware limit Windows refused, said once a video starts
         # Look at the PC (nvidia-smi can take a second or two) while the window is still opening,
         # so the page never waits for it
         self._probe = {}
@@ -327,7 +328,7 @@ class Api:
             "voices": self.voices(),
             "platform": sys.platform,
             "version": update.installed(),
-            "release": changelog.current(),  # "0.2.0", from CHANGELOG.md
+            "release": changelog.current(),  # "1.0.0", from CHANGELOG.md
             "folder": str(HERE.resolve()),  # where the program is, for Settings > About
             # What's new since the version last opened: shown once, after an update
             "news": changelog.news(first_run=not SETTINGS_FILE.exists()),
@@ -659,10 +660,15 @@ class Api:
             if self._busy():
                 return False
             self._limits_changed()  # before the job is set, so stopping the old worker can't touch it
+            if self._worker and self._worker.poll() is None:
+                self._memory_hit(self._worker, fresh=True)  # only this video's going over counts
             self._job = {"cancelled": False, "reported": False, "checking": checking}
             if not self._tell_worker({"type": "job", "argv": argv}):
                 self._job = None
                 return False
+            if self._limit_note:  # from a worker started before this video (warming up): say it now
+                self.send({"type": "log", "text": self._limit_note})
+                self._limit_note = None
         return True
 
     def warm(self):
@@ -678,7 +684,7 @@ class Api:
         between videos."""
         worker = self._worker
         if worker and worker.poll() is None and (
-                worker.limits != hardware.limits(load_settings()) or self._memory_hit(worker)):
+                worker.limits != hardware.limits(load_settings()) or getattr(worker, "restart", False)):
             self.stop_worker()
             # Forgotten straight away: its thread, seeing it end, then knows the next job isn't its own
             self._worker = None
@@ -711,6 +717,8 @@ class Api:
         # launcher starts suspended until it's in the job, so the real Python can't start outside it
         flags = NO_WINDOW
         jobbed = winextras.WINDOWS and bool(limits["cpu_percent"] or limits["memory_mb"])
+        if jobbed:
+            env[hardware.ENV_IN_JOB] = "1"
         if winextras.WINDOWS and limits["low_priority"]:
             flags |= BELOW_NORMAL
         if jobbed:
@@ -721,26 +729,45 @@ class Api:
             text=True, encoding="utf-8", errors="replace", bufsize=1,
             cwd=str(HERE), env=env, creationflags=flags,
         )
-        process.limits = limits
-        process.job, problem = winextras.limit_job(process, limits["cpu_percent"], limits["memory_mb"])
-        if jobbed:
-            psutil.Process(process.pid).resume()  # in the job (or not, if Windows refused): off it goes
+        process.limits, process.job = limits, None
+        try:
+            # (a limit Windows refuses is left out and said below: the video still runs)
+            process.job, problem = winextras.limit_job(process, limits["cpu_percent"], limits["memory_mb"])
+            if jobbed:
+                psutil.Process(process.pid).resume()  # in the job (or not, if Windows refused): off it goes
+        except Exception:
+            # Never leave a suspended process behind
+            kill_tree(process)
+            if process.job:
+                process.job.close()
+            raise
         if not winextras.WINDOWS:
             problem = winextras.lower_priority(process, limits["low_priority"]) or problem
         if problem:  # it still runs, only without that limit: say so in Details and startup.log
             TIMINGS.mark(f"hardware limits: {problem}")
-            self.send({"type": "log", "text": f"Couldn't apply every limit in Settings > Hardware ({problem})."})
+            note = f"Couldn't apply every limit in Settings > Hardware ({problem})."
+            if self._job:
+                self.send({"type": "log", "text": note})
+            else:
+                self._limit_note = note  # the window only shows Details while a video runs
         return process
 
-    def _memory_hit(self, process):
+    def _memory_hit(self, process, fresh=False):
+        """Did Windows refuse this process's job memory for going over the limit, during the
+        current video? fresh: a video is starting, so forget earlier ones."""
         job = getattr(process, "job", None)
-        return bool(job and job.handle and job.memory_hit())
+        new = bool(job and job.handle and job.new_hits())
+        process.mem_hit = False if fresh else getattr(process, "mem_hit", False) or new  # (fresh: earlier hits drop)
+        return process.mem_hit
 
     def _plain_error(self, process, message, code=None):
         """The error to show, and whether it was memory running out (see hardware.memory_message)."""
         hit = self._memory_hit(process)
         plain = hardware.memory_message(message, process.limits["memory_mb"], hit=hit, code=code)
-        return plain, plain != message or hit
+        memory = plain != message or hit
+        if memory:
+            process.restart = True  # the next video starts a fresh worker
+        return plain, memory
 
     def _follow_worker(self, worker):
         """Pass the worker's events to the page; each job ends with an "exit" event, as a one-off run does."""
@@ -765,7 +792,9 @@ class Api:
             elif self._job and worker is self._worker:
                 self._job["reported"] |= kind in ("done", "error")
                 self._beep_if_done(event)
-                if kind == "error":
+                if kind == "error" and event.get("memory"):
+                    worker.restart = True
+                elif kind == "error" and not event.get("friendly"):  # (a message meant for the user stays)
                     event["message"], memory = self._plain_error(worker, event["message"])
                     if memory:
                         event.update(memory=True, log=None)
@@ -945,6 +974,14 @@ class Api:
         settings.update(hardware.PRESETS.get(changes.get("hw_preset"), {}))
         settings.update({k: v for k, v in changes.items() if k in self._INSTANT})
         save_settings(settings)
+        # A worker waiting between videos with other limits (or still holding the graphics card
+        # after switching to the processor) is stopped now; the next video starts a fresh one
+        if getattr(self, "_window", None) and self._lock.acquire(blocking=False):
+            try:
+                if not self._busy():
+                    self._limits_changed()
+            finally:
+                self._lock.release()
         return load_settings()  # the cleaned-up version
 
     def reset_prefs(self):
@@ -1055,10 +1092,17 @@ class Api:
         """What to paste when asking for help with a failed video: the error, this PC and the log."""
         settings, version = load_settings(), update.installed()
         hw = self._probe["hardware"]
-        lines = [f"Subtitle Maker {version['sha'][:7] if version else '(version unknown)'} on {platform.platform()}",
+        limits = hardware.limits(settings)
+        lines = [f"Subtitle Maker {changelog.current() or '(version unknown)'}"
+                 f" ({version['sha'][:7] if version else 'build unknown'}) on {platform.platform()}",
                  f"Video: {Path(path).name}", f"Error: {message}",
                  f"Quality: {settings['level']}, run on: {settings['device']}, language: {settings['language'] or 'auto'}",
-                 f"PC: {hw.get('gpu') or 'no NVIDIA GPU'}, {hw.get('ram_gb')} GB RAM, {hw.get('cores')} cores"]
+                 f"Hardware limits: processor {limits['cpu_percent'] or 'no limit'}{'%' if limits['cpu_percent'] else ''}, "
+                 f"memory {str(limits['memory_mb']) + ' MB' if limits['memory_mb'] else 'no limit'}, "
+                 f"{'below normal' if limits['low_priority'] else 'normal'} priority, "
+                 f"less graphics memory {'on' if limits['gpu_low_memory'] else 'off'}",
+                 f"PC: {hw.get('gpu') or 'no NVIDIA GPU'}, {hw.get('ram_gb')} GB RAM, {hw.get('cores')} cores"
+                 f" ({hw.get('threads') or '?'} threads)"]
         try:
             log = ERROR_LOG.read_text(encoding="utf-8", errors="replace")
             lines += ["", "Last error log:", log[-4000:]]

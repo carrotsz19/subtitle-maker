@@ -31,8 +31,9 @@ KEYS = ("cpu_percent", "low_priority", "memory_limit_gb", "gpu_low_memory")
 PRESETS = {
     # 0.3.0 exactly: normal priority, the libraries' own thread counts, no limits
     "full": {"cpu_percent": 100, "low_priority": False, "memory_limit_gb": 0, "gpu_low_memory": False},
-    # The default: no caps, other apps go first (about as fast; a little slower while they're busy)
-    "balanced": {"cpu_percent": 100, "low_priority": True, "memory_limit_gb": 0, "gpu_low_memory": False},
+    # The default ("Share nicely"): no caps, other apps go first (about as fast; a little slower
+    # while they're busy)
+    "share": {"cpu_percent": 100, "low_priority": True, "memory_limit_gb": 0, "gpu_low_memory": False},
     # A quarter of the processor at most, and the smaller format on the graphics card
     "light": {"cpu_percent": 25, "low_priority": True, "memory_limit_gb": 0, "gpu_low_memory": True},
 }
@@ -43,6 +44,10 @@ THREAD_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NU
 # What the worker reads (make_subtitles.py, speakers.py)
 ENV_THREADS, ENV_CPU, ENV_MEMORY, ENV_GPU_LOW = ("SUBTITLE_MAKER_THREADS", "SUBTITLE_MAKER_CPU_PERCENT",
                                                  "SUBTITLE_MAKER_MEMORY_MB", "SUBTITLE_MAKER_GPU_LOW_MEMORY")
+ENV_IN_JOB = "SUBTITLE_MAKER_IN_JOB"  # the worker is in a Job Object: nvidia-smi is started outside it
+# A video a little over the memory limit by the estimate is let through without a warning: the
+# estimates are rounded up, and 4 GB shouldn't warn for one estimated at 4.1
+MEMORY_TOLERANCE = 1.05
 # A video of this length is assumed when the pre-flight check doesn't know how long it is
 ASSUMED_MINUTES = 60
 
@@ -51,9 +56,11 @@ MEMORY_MESSAGE = ("It needed more memory than you allowed. Try a lower quality, 
 OUT_OF_MEMORY = "This PC ran out of memory. Close some other apps, or try a lower quality."
 
 
-def preset_of(settings):
-    """"full", "balanced" or "light" if the settings are exactly one of those, else "custom"."""
-    return next((name for name, values in PRESETS.items() if all(settings.get(k) == v for k, v in values.items())),
+def preset_of(settings, gpu_low_memory=True):
+    """"full", "share" or "light" if the settings are exactly one of those, else "custom".
+    gpu_low_memory=False (a card where that setting changes nothing, or none): it's left out."""
+    keys = [k for k in KEYS if gpu_low_memory or k != "gpu_low_memory"]
+    return next((name for name, values in PRESETS.items() if all(settings.get(k) == values[k] for k in keys)),
                 "custom")
 
 
@@ -81,6 +88,8 @@ def limits(settings, cores=None):
         "memory_mb": settings["memory_limit_gb"] * 1024 or None,
         "low_priority": bool(settings["low_priority"]),
         "gpu_low_memory": bool(settings["gpu_low_memory"]),
+        # Graphics card or processor: switching restarts the worker, which lets go of the graphics memory
+        "device": settings["device"],
     }
 
 
@@ -148,7 +157,7 @@ def memory_check(settings, hw, speakers=False, minutes=ASSUMED_MINUTES):
     level = settings["level"]
     need = memory_needed_mb(level, device_for(settings, hw, level), speakers, minutes)
     limit = settings["memory_limit_gb"] * 1024 or None
-    return {"need_mb": need, "limit_mb": limit, "fits": not limit or need <= limit}
+    return {"need_mb": need, "limit_mb": limit, "fits": not limit or need <= limit * MEMORY_TOLERANCE}
 
 
 # Windows' "out of memory" process exit codes: STATUS_NO_MEMORY, STATUS_COMMITMENT_LIMIT
@@ -176,7 +185,8 @@ def is_memory_error(error=None, code=None):
 
 def memory_message(message, limit_mb=None, hit=False, code=None):
     """The message to show for a video that stopped: a plain one if it ran out of memory (over the
-    limit in Settings, or the whole PC's), else the message as it was."""
+    limit in Settings, or the whole PC's), else the message as it was. hit: Windows said this
+    video went over the limit. (A message meant for the user, a FriendlyError, is never passed in.)"""
     if limit_mb and (hit or is_memory_error(message, code)):
         return MEMORY_MESSAGE
     if is_memory_error(message, code):

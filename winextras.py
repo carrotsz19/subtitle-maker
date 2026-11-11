@@ -279,6 +279,8 @@ def set_placement(hwnd, saved, min_size=(200, 150)):
 # the thread limit and priority still apply.
 
 JOB_OBJECT_LIMIT_JOB_MEMORY = 0x200
+JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x800, 0x2000
+CREATE_BREAKAWAY_FROM_JOB = 0x01000000
 JOB_OBJECT_CPU_RATE_CONTROL_ENABLE, JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP = 0x1, 0x4
 JOB_OBJECT_MSG_JOB_MEMORY_LIMIT = 10
 JobObjectBasicAccountingInformation, JobObjectAssociateCompletionPortInformation = 1, 7
@@ -317,7 +319,9 @@ def _job_structs():
 
 
 class Job:
-    """The limits one worker runs under. memory_hit() says whether it went over its memory limit."""
+    """The limits one worker runs under. new_hits() says whether it went over its memory limit
+    since it was last asked. Each limit is applied on its own: one Windows refuses is left out
+    (and said in problems), the other still holds. Everything in the job ends when it's closed."""
 
     def __init__(self, cpu_percent=None, memory_mb=None):
         import ctypes
@@ -338,28 +342,54 @@ class Job:
         self._ctypes, self._wintypes, self._structs = ctypes, wintypes, _job_structs()
         self.cpu_percent, self.memory_mb = cpu_percent, memory_mb
         self._hit = False
+        self.problems = []
         self.port = None
         self.handle = k32.CreateJobObjectW(None, None)
         if not self.handle:
             raise ctypes.WinError(ctypes.get_last_error())
-        # Windows posts "over the memory limit" to a completion port: that's how memory_hit() knows
+        try:
+            self._apply(cpu_percent, memory_mb)
+        except BaseException:
+            self.close()  # nothing half made is left behind
+            raise
+
+    def _apply(self, cpu_percent, memory_mb):
+        k32, wintypes = self._k32, self._wintypes
+        # Windows posts "over the memory limit" to a completion port: that's how new_hits() knows
         self.port = k32.CreateIoCompletionPort(wintypes.HANDLE(-1), None, None, 1)
         if self.port:
             self._set(JobObjectAssociateCompletionPortInformation, self._structs[3](None, self.port))
+        # Everything in the job ends with it (the app closing, or crashing, takes the whole worker
+        # tree along), and nvidia-smi may leave it: it's started with CREATE_BREAKAWAY_FROM_JOB, so
+        # its memory isn't counted against the limit
+        base = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK
+        self._limit_flags(base)
         if memory_mb:
-            info = self._structs[1]()
-            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_JOB_MEMORY
-            info.JobMemoryLimit = int(memory_mb) * 2**20
-            self._set(JobObjectExtendedLimitInformation, info)
+            try:
+                self._limit_flags(base | JOB_OBJECT_LIMIT_JOB_MEMORY, memory_mb)
+                if self.memory_limit_mb() != int(memory_mb):  # a limit that didn't take mustn't look as if it had
+                    raise OSError(f"it reads back as {self.memory_limit_mb()} MB")
+            except OSError as e:
+                self.memory_mb = None
+                self.problems.append(f"memory limit: {e}")
+                self._limit_flags(base)
         if cpu_percent:
-            # CpuRate is in hundredths of a percent of the whole processor (all its threads)
-            self._set(JobObjectCpuRateControlInformation, self._structs[2](
-                JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP, int(cpu_percent * 100)))
-        # Read them back: a limit that didn't take must not look as if it had
-        if memory_mb and self.memory_limit_mb() != int(memory_mb):
-            raise OSError(f"the memory limit reads back as {self.memory_limit_mb()} MB")
-        if cpu_percent and self.cpu_rate() != cpu_percent:
-            raise OSError(f"the processor limit reads back as {self.cpu_rate()}%")
+            try:
+                # CpuRate is in hundredths of a percent of the whole processor (all its threads)
+                self._set(JobObjectCpuRateControlInformation, self._structs[2](
+                    JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP, int(cpu_percent * 100)))
+                if self.cpu_rate() != cpu_percent:
+                    raise OSError(f"it reads back as {self.cpu_rate()}%")
+            except OSError as e:
+                self.cpu_percent = None
+                self.problems.append(f"processor limit: {e}")
+
+    def _limit_flags(self, flags, memory_mb=None):
+        info = self._structs[1]()
+        info.BasicLimitInformation.LimitFlags = flags
+        if memory_mb:
+            info.JobMemoryLimit = int(memory_mb) * 2**20
+        self._set(JobObjectExtendedLimitInformation, info)
 
     def _set(self, kind, struct):
         ctypes = self._ctypes
@@ -394,19 +424,24 @@ class Job:
         info = self._query(JobObjectBasicAccountingInformation, self._structs[4]())
         return (info.TotalUserTime + info.TotalKernelTime) / 1e7
 
-    def memory_hit(self):
-        """True once anything in the job has been refused memory for going over the limit."""
-        if self.port and not self._hit:
+    def processes(self):
+        """How many processes have been in the job (ended ones too)."""
+        return self._query(JobObjectBasicAccountingInformation, self._structs[4]()).TotalProcesses
+
+    def new_hits(self):
+        """True if anything in the job was refused memory for going over the limit since the last
+        call (the app asks at the start of each video, then when one stops)."""
+        hit = False
+        if self.port:
             ctypes, wintypes = self._ctypes, self._wintypes
             message, key, overlapped = wintypes.DWORD(), ctypes.c_void_p(), ctypes.c_void_p()
             while self._k32.GetQueuedCompletionStatus(self.port, ctypes.byref(message), ctypes.byref(key),
                                                       ctypes.byref(overlapped), 0):
-                if message.value == JOB_OBJECT_MSG_JOB_MEMORY_LIMIT:
-                    self._hit = True
-        return self._hit
+                hit |= message.value == JOB_OBJECT_MSG_JOB_MEMORY_LIMIT
+        return hit
 
     def close(self):
-        """The job's processes have ended: let go of it."""
+        """Let go of the job: anything still in it ends (KILL_ON_JOB_CLOSE)."""
         for handle in (self.port, self.handle):
             if handle:
                 self._k32.CloseHandle(handle)
@@ -418,12 +453,15 @@ def limit_job(process, cpu_percent=None, memory_mb=None):
     limit. Returns (Job or None, why not). Nothing to limit, or not Windows: (None, None)."""
     if not (cpu_percent or memory_mb) or not WINDOWS:
         return None, None
+    job = None
     try:
         job = Job(cpu_percent, memory_mb)
         job.assign(process)
-        return job, None
-    except Exception as e:  # a PC where Windows won't: the video still runs, without this limit
+    except Exception as e:  # a PC where Windows won't: the video still runs, without these limits
+        if job:
+            job.close()
         return None, f"{e.__class__.__name__}: {e}"
+    return job, "; ".join(job.problems) or None
 
 
 def lower_priority(process, low=True):

@@ -217,17 +217,27 @@ def gpu_mb_needed(model_name):
 
 def gpu_stats():
     """(utilisation %, used MB, total MB) from nvidia-smi, or None if unavailable."""
-    try:
-        out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total",
-             "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=5,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        ).stdout
-        util, used, total = (int(x) for x in out.splitlines()[0].split(","))
-        return util, used, total
-    except Exception:
-        return None
+    # In a Job Object (Settings > Hardware), nvidia-smi is started outside it, so its memory (it runs
+    # every couple of seconds) isn't counted against the limit. Where Windows won't allow that (the
+    # app itself in a job that forbids it), it runs inside.
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    for extra in ((0x01000000, 0) if os.environ.get(hardware.ENV_IN_JOB) else (0,)):  # CREATE_BREAKAWAY_FROM_JOB
+        try:
+            out = subprocess.run(
+                ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=5, creationflags=flags | extra,
+            ).stdout
+        except OSError:
+            continue
+        except Exception:
+            return None
+        try:
+            util, used, total = (int(x) for x in out.splitlines()[0].split(","))
+            return util, used, total
+        except Exception:
+            return None
+    return None
 
 
 _OWN = {}  # this process and its children, kept so each one's processor use is measured since the last look
@@ -236,16 +246,26 @@ _OWN = {}  # this process and its children, kept so each one's processor use is 
 def own_usage():
     """(processor % of the whole PC, memory MB) that Subtitle Maker's worker and the processes it
     started use right now: what Settings > Hardware's limits hold, so the window shows it beside them."""
-    me = _OWN.setdefault(os.getpid(), psutil.Process())
+    me = _OWN.get(os.getpid()) or psutil.Process()
     try:
         tree = [me] + me.children(recursive=True)
     except psutil.Error:
         tree = [me]
-    cpu = mem = 0.0
-    for proc in tree:
-        proc = _OWN.setdefault(proc.pid, proc)
+    fresh = [p for p in tree if p.pid not in _OWN]
+    for proc in fresh:  # a process's first reading is always 0: take it, and measure a moment
         try:
-            cpu += proc.cpu_percent()  # % of one thread since the last look (0 the first time)
+            proc.cpu_percent()
+        except psutil.Error:
+            pass
+    if fresh:
+        time.sleep(0.2)
+    known = {p.pid: _OWN.get(p.pid, p) for p in tree}
+    _OWN.clear()  # (ended processes go)
+    _OWN.update(known)
+    cpu = mem = 0.0
+    for proc in known.values():
+        try:
+            cpu += proc.cpu_percent()  # % of one thread since the last look
             info = proc.memory_info()
             mem += getattr(info, "private", 0) or info.rss  # committed memory, as a Job Object counts it
         except psutil.Error:
@@ -1517,7 +1537,7 @@ def main(argv=None):
             log_error(e.__cause__)
         if args.input and not args.prepare:
             remember(args, "failed", error=str(e))
-        emit("error", message=str(e), log=None)
+        emit("error", message=str(e), log=None, friendly=True)  # (said as it is: never taken for memory)
         sys.exit(f"\n{e}")
     except Exception as e:
         if hardware.is_memory_error(e):

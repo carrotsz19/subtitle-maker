@@ -356,7 +356,7 @@ import hardware  # noqa: E402
 import winextras  # noqa: E402
 
 # The default is Balanced: no caps, other apps first
-assert hardware.preset_of(paths.DEFAULT_SETTINGS) == "balanced"
+assert hardware.preset_of(paths.DEFAULT_SETTINGS) == "share"
 assert hardware.PRESETS["full"] == {"cpu_percent": 100, "low_priority": False, "memory_limit_gb": 0, "gpu_low_memory": False}
 assert all(set(p) == set(hardware.KEYS) for p in hardware.PRESETS.values())
 assert all(k in app.Api._INSTANT for k in hardware.KEYS)
@@ -372,7 +372,7 @@ light = saver.save_prefs({"hw_preset": "light"})
 assert hardware.preset_of(light) == "light" and light["cpu_percent"] == 25 and light["gpu_low_memory"] is True
 assert saver.save_prefs({"hw_preset": "nonsense"})["cpu_percent"] == 25, "an unknown preset changes nothing"
 assert saver.save_prefs({"hw_preset": "full", "memory_limit_gb": 8})["memory_limit_gb"] == 8
-assert saver.reset_prefs()["cpu_percent"] == 100 and hardware.preset_of(paths.load_settings()) == "balanced"
+assert saver.reset_prefs()["cpu_percent"] == 100 and hardware.preset_of(paths.load_settings()) == "share"
 paths.save_settings(paths.DEFAULT_SETTINGS)
 
 # Threads: a share of the processor's threads, at least 1, set only when that's fewer than the 4
@@ -395,7 +395,12 @@ assert env[hardware.ENV_GPU_LOW] == "1" and base["PATH"] == "x"
 assert hardware.env_int(hardware.ENV_THREADS, env) == 3 and hardware.env_int(hardware.ENV_THREADS, {}) is None
 assert hardware.env_int(hardware.ENV_CPU, {hardware.ENV_CPU: "lots"}) is None
 assert hardware.limits(capped, cores=12) == {"threads": 3, "cpu_percent": 25, "memory_mb": 4096,
-                                             "low_priority": True, "gpu_low_memory": True}
+                                             "low_priority": True, "gpu_low_memory": True, "device": "auto"}
+assert hardware.limits({**paths.DEFAULT_SETTINGS, "device": "cpu"}, 12) != hardware.limits(paths.DEFAULT_SETTINGS, 12), \
+    "switching to the processor starts a fresh worker (which lets go of the graphics memory)"
+# Light on a card where "Use less graphics memory" changes nothing is still Light, either way
+light_off = {**paths.DEFAULT_SETTINGS, **hardware.PRESETS["light"], "gpu_low_memory": False}
+assert hardware.preset_of(light_off) == "custom" and hardware.preset_of(light_off, gpu_low_memory=False) == "light"
 assert hardware.limits(paths.DEFAULT_SETTINGS, 12) != hardware.limits(capped, 12), "a change starts a fresh worker"
 half = hardware.worker_env({**paths.DEFAULT_SETTINGS, "cpu_percent": 50}, {"PATH": "x"}, cores=12)
 assert half == {"PATH": "x", hardware.ENV_CPU: "50"}, "50% of 12 threads: the cap, threads left alone"
@@ -434,6 +439,11 @@ check = hardware.memory_check(tight, gtx, speakers=True)
 assert not check["fits"] and check["limit_mb"] == 2048 and check["need_mb"] > 2048
 assert hardware.memory_check({**tight, "level": "potato"}, gtx, minutes=10)["fits"]
 assert hardware.memory_check({**paths.DEFAULT_SETTINGS, "memory_limit_gb": 8}, gtx, speakers=True)["fits"]
+# A little over by the (rounded-up) estimate isn't warned about: High with speaker names on the
+# graphics card is estimated at 4.1 GB, and a 4 GB limit lets it through
+four = hardware.memory_check({**paths.DEFAULT_SETTINGS, "memory_limit_gb": 4}, gtx, speakers=True)
+assert four["need_mb"] > 4096 and four["fits"]
+assert not hardware.memory_check({**paths.DEFAULT_SETTINGS, "memory_limit_gb": 3}, gtx, speakers=True)["fits"]
 
 # Running out of memory is said plainly: over the limit in Settings, or the whole PC
 assert hardware.is_memory_error(MemoryError())
@@ -454,12 +464,20 @@ assert hardware.memory_message("Couldn't read the sound", 2048, code=1) == "Coul
 
 # The app's side: a worker's error over its limit becomes the plain message, flagged as memory
 class _FakeJob:
-    handle = 1
-    def memory_hit(self):  # noqa: E301
-        return True
+    handle, hits = 1, [True]
+    def new_hits(self):  # noqa: E301
+        return self.hits.pop(0) if self.hits else False
 class _FakeWorker:  # noqa: E302
     limits, job = hardware.limits(tight), _FakeJob()
-assert saver._plain_error(_FakeWorker(), "It stopped unexpectedly (code 1).") == (hardware.MEMORY_MESSAGE, True)
+worker = _FakeWorker()
+assert saver._plain_error(worker, "It stopped unexpectedly (code 1).") == (hardware.MEMORY_MESSAGE, True)
+assert worker.restart, "the next video starts a fresh worker"
+# Going over in an earlier video doesn't count for the next one (each video starts afresh)
+worker = _FakeWorker()
+worker.job.hits = [True]
+saver._memory_hit(worker, fresh=True)
+assert saver._plain_error(worker, "Something went wrong: ValueError: x") == ("Something went wrong: ValueError: x", False)
+assert not getattr(worker, "restart", False), "a video that went fine doesn't restart the worker"
 _FakeWorker.job = None
 assert saver._plain_error(_FakeWorker(), "Couldn't read the sound") == ("Couldn't read the sound", False)
 
@@ -475,9 +493,27 @@ if winextras.WINDOWS:
     assert job.cpu_rate() == 25 and job.memory_limit_mb() == 200
     child.wait()
     assert child.returncode != 0 and b"MemoryError" in child.stderr.read()
-    assert job.memory_hit(), "Windows said it went over"
+    assert job.new_hits(), "Windows said it went over"
+    assert not job.new_hits(), "and only once"
     job.close()
     assert winextras.limit_job(child) == (None, None), "nothing to limit: no job"
+    # nvidia-smi (here: another Python) started with CREATE_BREAKAWAY_FROM_JOB leaves the job, so
+    # its memory isn't counted; and closing the job ends what's still in it
+    # (the plain interpreter, not the venv's launcher, which starts a second process; started
+    # suspended until it's in the job, as app.py does)
+    base_python = getattr(sys, "_base_executable", sys.executable)
+    child = _sp.Popen([base_python, "-c", "import subprocess, sys, time; subprocess.run([sys.executable, '-c', "
+                       "'pass'], creationflags=0x01000000); print('ran', flush=True); time.sleep(60)"],
+                      stdout=_sp.PIPE, text=True, creationflags=0x4)
+    job, problem = winextras.limit_job(child, memory_mb=4000)
+    import psutil as _ps  # noqa: E402
+
+    _ps.Process(child.pid).resume()
+    assert child.stdout.readline().strip() == "ran"
+    assert job.processes() == 1, f"the breakaway child stayed out of the job ({job.processes()} in it)"
+    job.close()
+    child.wait(timeout=10)
+    assert child.returncode is not None, "closing the job ended the process in it"
 
 # The meters in Settings > Quality: every level says how fast and how accurate it is, out of 5
 assert all(1 <= lv[k] <= 5 for lv in paths.LEVELS.values() for k in ("speed", "accuracy"))

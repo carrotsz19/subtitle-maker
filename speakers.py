@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import sherpa_onnx
 
-from hardware import ENV_THREADS, env_int
+from hardware import ENV_THREADS, env_int, is_memory_error
 from models import EMB_MODEL, SEG_MODEL, SPEAKER_MB, VOICE_MODEL, download_speakers, speakers_ready
 
 SAMPLE_RATE = 16000
@@ -120,7 +120,11 @@ class SpeakerDetector:
             RUNNING.discard(child)
             if turns is None:
                 tail = "".join(errors).strip().splitlines()
-                raise RuntimeError(f"Speaker detection stopped (code {code}): " + (tail[-1] if tail else "no message"))
+                message = f"Speaker detection stopped (code {code}): " + (tail[-1] if tail else "no message")
+                # Out of memory (Windows' exit codes, or an allocation that failed): said as that
+                if is_memory_error("\n".join(tail[-5:]), code):
+                    raise MemoryError(message)
+                raise RuntimeError(message)
             self.progress = 1.0
             return turns
         finally:
