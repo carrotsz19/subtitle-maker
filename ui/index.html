@@ -287,6 +287,7 @@ body.dragging .drop .big-icon{ transform:translateY(-4px) scale(1.08); }
 .meter{ background:var(--panel-2); border-radius:var(--r-control); padding:10px 12px; }
 .meter span{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); }
 .meter b{ display:block; font-size:16px; font-weight:700; margin:1px 0 6px; font-variant-numeric:tabular-nums; }
+.meter .bar{ background:color-mix(in srgb, var(--control) 40%, var(--panel-2)); }  /* (the track: the meter is --panel-2 too) */
 .meter .bar > i{ background:var(--dim); transition:transform 450ms var(--ease-standard); }  /* a gauge: it eases to each reading */
 .meter.hot .bar > i{ background:var(--accent); }
 .log{ max-height:150px; overflow-y:auto; background:var(--panel-2); border-radius:var(--r-control); padding:10px 12px; white-space:pre-wrap; color:var(--dim); margin-top:10px; }
@@ -462,9 +463,20 @@ body.wizard aside.side{ display:none; }
 .lv-warn{ display:flex; gap:6px; align-items:flex-start; font-size:12px; color:var(--accent-ink); margin-top:4px; }
 .lv-warn svg{ flex-shrink:0; margin-top:2px; }
 /* Settings > Hardware */
-.hw-presets{ container-type:inline-size; display:flex; flex-direction:column; gap:10px; }
-.hw-presets .lv{ grid-template-areas:"radio main"; }
-.hw-live{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.hw-presets{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
+.hw-presets .lv{ grid-template-areas:"radio main"; padding:12px 14px; gap:10px 12px; }
+@media (max-width:760px){ .hw-presets{ grid-template-columns:minmax(0,1fr); } }
+.hw-status{ font-size:13px; color:var(--ink); margin:10px 16px 0; }
+.hw-status .dim{ display:block; font-size:12.5px; margin-top:2px; }
+.hw-more > summary{ font-size:13.5px; padding:4px 16px; color:var(--accent-ink); }
+.hw-more-body{ margin-top:14px; }
+.hw-more-body > .block + .block{ margin-top:18px; }
+/* rows whose words run to two lines: the control lines up with the title, not the middle */
+.grp-row:has(#ps-memory_limit_gb), .grp-row:has(#ps-cpu_percent){ align-items:flex-start; }
+.grp-row:has(#ps-memory_limit_gb) .seg button{ padding:6px 10px; }
+.lv:has(.lv-warn){ align-items:start; }
+.lv:has(.lv-warn) > .radio{ margin-top:2px; }
+.hw-live{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; }
 .hw-live .meter b small{ font-size:12px; font-weight:600; color:var(--dim); }
 .hw-note{ font-size:12.5px; color:var(--dim); margin:0; }
 .run-own{ font-size:12px; color:var(--dim); margin-top:-4px; }
@@ -473,9 +485,10 @@ body.wizard aside.side{ display:none; }
 /* the downloads, in the narrow side column: the amount stays on one line beside the name */
 .q-save #downloads .between{ gap:10px; align-items:baseline; }
 .q-save #downloads .between > .mono{ white-space:nowrap; flex-shrink:0; }
-/* two columns once the levels still have room beside a narrow side column (a 1100 px window has
-   about 810 px for the page), and a wider side column in a big window */
-@media (min-width:1060px){
+/* two columns once the levels still have room for their stats beside a narrow side column (a
+   1100 px window has about 810 px for the page: one column there, This PC above the levels), and
+   a wider side column in a big window */
+@media (min-width:1240px){
   .q{ grid-template-columns:minmax(0,1fr) 288px; gap:20px; align-items:start; }
   .q-side{ display:flex; flex-direction:column; gap:16px; position:sticky; top:0; }
   .q-pc{ order:0; }
@@ -851,7 +864,7 @@ const gpuName = hw => hw && hw.gpu ? String(hw.gpu).replace(/^NVIDIA\s+/i, "") :
 const gbText = mb => mb > 0 ? `${gb(mb)} GB` : "";
 function hwFacts(hw) {
   return [...(hw.gpu ? [["Graphics card", gpuName(hw)], ["Graphics memory", gbText(hw.vram_mb)]] : [["Graphics card", NO_GPU], ["Runs on", "The processor"]]),
-    ["Memory", hw.ram_gb > 0 ? `${hw.ram_gb} GB` : ""], ["Processor", hw.cores > 0 ? `${hw.cores} cores` : ""]].filter(([, v]) => v);
+    ["Memory", hw.ram_gb > 0 ? `${hw.ram_gb} GB` : ""], ["Processor", hw.cores > 0 ? `${hw.cores} cores${hw.threads > hw.cores ? ` (${hw.threads} threads)` : ""}` : ""]].filter(([, v]) => v);
 }
 const api = () => window.pywebview.api;
 
@@ -2154,7 +2167,8 @@ const SETTINGS_GROUPS = [["quality", "hardware", "language"], ["style", "speaker
 function viewSettings() {
   if (!S.info) return "";
   const page = S.page && SETTINGS_PAGES[S.page];
-  const from = SETTINGS_PAGES[S.pageTrail[S.pageTrail.length - 1]];  // a page reached from another one (About) goes back to it
+  // a page reached from another one (About) goes back to it; "@make": from Make subtitles
+  const last = S.pageTrail[S.pageTrail.length - 1], from = last === "@make" ? { title: "Make subtitles" } : SETTINGS_PAGES[last];
   if (page) return `
     <button class="back" data-act="settings-back">${BACK}<span>${from ? from.title : "Settings"}</span></button>
     <div class="topbar"><h1>${page.title}</h1>${page.lede ? `<p>${page.lede}</p>` : ""}</div>
@@ -2237,7 +2251,7 @@ function pageQuality() {
     : missing.length ? `${name} needs a download first: ${missing.map(i => i.size).join(" + ")}.`
     : `${name} is already on this PC, so it switches straight away.`)
     + (d.level === "potato" ? " It turns off speaker names and the resource meters." : "")
-    + (hwSummary(S.info.settings) !== "Balanced" && hwSummary(S.info.settings) !== "Full speed"
+    + (S.info.settings.cpu_percent < 100 || S.info.settings.memory_limit_gb
       ? ` Your <button class="linkbtn" data-act="settings-page" data-page="hardware">Hardware limits</button> apply to every level.` : "");
   return `
     <div class="q">
@@ -2329,25 +2343,45 @@ function pageDone() {
       </div></div>`;
 }
 
-/* Settings > Hardware: presets, then each limit on its own. Every one is enforced by app.py and
-   make_subtitles.py (see hardware.py); nothing here is a wish. */
+/* Settings > Hardware: a simple choice first (three presets side by side, and what the chosen one
+   does), the details after (each limit, folded away unless they're your own). Every limit is
+   enforced by app.py and make_subtitles.py (see hardware.py); nothing here is a wish. */
 const HW_PRESETS = [
-  ["balanced", "Balanced", "Leaves room for other apps: they get the processor first. About as fast, a little slower while other apps are busy."],
-  ["full", "Full speed", "Uses all it can and doesn't step aside for other apps, like earlier versions."],
-  ["light", "Light", "Barely noticeable: a quarter of the processor at most{gpu}. Videos take longer."],
+  ["share", "Share nicely", "Other apps go first"],
+  ["full", "Full speed", "All it can, as before"],
+  ["light", "Light", "A quarter of the processor"],
 ];
+/* "Use less graphics memory" changes something on this PC (an NVIDIA card with fast float16) */
+const hwLowMem = () => !!(S.info.hardware.gpu && S.info.hardware.gpu_low_memory);
+/* The preset the settings are, else "custom" (as hardware.preset_of; where "Use less graphics
+   memory" changes nothing, it's left out, so Light stays Light either way) */
 function hwPreset(st) {
   const presets = (S.info.hw || {}).presets || {};
-  return Object.keys(presets).find(k => Object.entries(presets[k]).every(([key, v]) => st[key] === v)) || "custom";
+  return Object.keys(presets).find(k => Object.entries(presets[k]).every(([key, v]) => (key === "gpu_low_memory" && !hwLowMem()) || st[key] === v)) || "custom";
 }
-/* The Settings row: the preset's name, else what's limited */
-function hwSummary(st) {
+function hwStatus(st) {
   const p = hwPreset(st);
-  if (p !== "custom") return HW_PRESETS.find(([k]) => k === p)[1];
-  const parts = [];
-  if (st.cpu_percent < 100) parts.push(`Up to ${st.cpu_percent}% processor`);
-  if (st.memory_limit_gb) parts.push(`${st.memory_limit_gb} GB memory`);
-  return parts.join(" · ") || "Custom";
+  return {
+    share: "Other apps get the processor first, so it's about as fast, and a little slower while they're busy. No limits.",
+    full: "Uses all the processor it can and doesn't step aside for other apps, the way earlier versions did.",
+    light: `Up to a quarter of the processor${hwLowMem() ? ", and less graphics memory" : ""}, so videos take longer.`
+      + (S.info.hardware.gpu ? " When the graphics card is used, it still works at full speed." : ""),
+    custom: "Your own limits, set below.",
+  }[p];
+}
+const DEVICE_NOTE = { cpu: "Processor only", cuda: "Graphics card only" };
+/* The Settings row: the preset's name, else what's limited; and the processor or graphics card if
+   it isn't Automatic */
+function hwSummary(st) {
+  const p = hwPreset(st), parts = [];
+  if (p !== "custom") parts.push(HW_PRESETS.find(([k]) => k === p)[1]);
+  else {
+    if (st.cpu_percent < 100) parts.push(`Up to ${st.cpu_percent}% processor`);
+    if (st.memory_limit_gb) parts.push(`${st.memory_limit_gb} GB memory`);
+    if (!parts.length) parts.push("Custom");
+  }
+  if (DEVICE_NOTE[st.device] && S.info.hardware.gpu) parts.push(DEVICE_NOTE[st.device]);
+  return parts.join(" · ");
 }
 /* Memory limits worth offering on this PC: a few below what it has */
 function memOptions() {
@@ -2357,7 +2391,7 @@ function memOptions() {
   return [[0, "No limit"], ...sizes.sort((a, b) => a - b).map(g => [g, `${g} GB`])];
 }
 /* Where a level runs, and about how much memory a video takes there (hardware.py works it out
-   the same way for the check before starting) */
+   the same way for the check before starting, with the same 5% to spare) */
 function runsOn(level, st = S.info.settings) {
   const hw = S.info.hardware;
   if (st.device === "cpu" || !hw.gpu) return "cpu";
@@ -2368,71 +2402,86 @@ function needMb(level, speakers) {
   const h = S.info.hw || {};
   return S.info.levels[level].ram_mb[runsOn(level)] + (speakers && level !== "potato" ? h.speakers_mb || 0 : 0) + (h.audio_mb || 0);
 }
+const MEMORY_TOLERANCE = 1.05;  // the same as hardware.MEMORY_TOLERANCE
+const overLimit = (level, speakers, st = S.info.settings) => st.memory_limit_gb && needMb(level, speakers) > st.memory_limit_gb * 1024 * MEMORY_TOLERANCE;
 const WARN_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/></svg>';
 /* Settings > Quality: a level that won't fit in the memory limit, or that the processor limit makes slow */
 function levelLimitNote(level) {
   const st = S.info.settings, notes = [];
-  if (st.memory_limit_gb && needMb(level, S.multi) > st.memory_limit_gb * 1024)
+  if (overLimit(level, S.multi))
     notes.push(`Needs about ${gb(needMb(level, S.multi))} GB, more than your ${st.memory_limit_gb} GB memory limit`);
   else if (st.cpu_percent < 100 && runsOn(level) === "cpu")
     notes.push(`Slower with your processor limit (up to ${st.cpu_percent}%)`);
   return notes.map(n => `<div class="lv-warn">${WARN_ICON}<span>${esc(n)}.</span></div>`).join("");
 }
 function pageHardware() {
-  const st = S.info.settings, hw = S.info.hardware, preset = hwPreset(st), threads = hw.threads || hw.cores || 0;
-  const lowMem = !!hw.gpu && hw.gpu_low_memory;  // "Use less graphics memory" changes something on this card
-  const cards = [...HW_PRESETS, ...(preset === "custom" ? [["custom", "Custom", "Your own limits, set below."]] : [])].map(([key, name, about]) => `
-    <div class="lv" role="radio" aria-checked="${preset === key}" data-act="hw-preset" data-v="${key}" ${key === "custom" ? 'data-arrow="move"' : ""}
+  const st = S.info.settings, hw = S.info.hardware, preset = hwPreset(st), lowMem = hwLowMem();
+  const cards = HW_PRESETS.map(([key, name, about]) => `
+    <div class="lv hw-preset" role="radio" aria-checked="${preset === key}" data-act="hw-preset" data-v="${key}"
         aria-labelledby="hp-${key}" aria-describedby="hp-${key}-about">
       <span class="radio"></span>
-      <div class="lv-main"><div class="lv-head"><span class="lv-name" id="hp-${key}">${name}</span>
-          ${key === "balanced" ? '<span class="pill accent">Recommended</span>' : ""}</div>
-        <div class="row-sub" id="hp-${key}-about">${about.replace("{gpu}", lowMem ? ", and less graphics memory" : "")}</div></div>
+      <div class="lv-main"><div class="lv-name" id="hp-${key}">${name}</div>
+        <div class="row-sub" id="hp-${key}-about">${about}</div></div>
     </div>`).join("");
-  // (as hardware.threads_for: a thread count only when that's fewer than the models use anyway)
-  const share = Math.max(1, Math.ceil(threads * st.cpu_percent / 100)), fewer = threads && share < (S.info.hw.default_threads || 4);
   const cpuSub = st.cpu_percent < 100
-    ? `Windows holds it to ${st.cpu_percent}% of the processor${fewer ? `, and it works on ${share} of its ${threads} threads` : ""}. Videos may take longer.`
-    : "No limit. It uses up to 4 threads at a time for the speech and 4 for speaker names.";
-  const level = S.info.levels[st.level], need = needMb(st.level, S.multi);
-  const memSub = st.memory_limit_gb
-    ? `If a video needs more, it stops and says so, and you can try it again. ${esc(level.name)} quality needs about ${gb(need)} GB${S.multi && st.level !== "potato" ? " with speaker names" : ""}.`
-    : `No limit. ${esc(level.name)} quality takes about ${gb(need)} GB${S.multi && st.level !== "potato" ? " with speaker names" : ""}.`;
+    ? `Windows holds Subtitle Maker to ${st.cpu_percent}% of the whole processor, so videos take longer.`
+    : "No limit. The speech uses up to 4 threads, and speaker names up to 4 more alongside it.";
+  const level = S.info.levels[st.level];
+  const memSub = `${esc(level.name)} quality needs about ${gb(needMb(st.level, false))} GB`
+    + (st.level !== "potato" ? `, or ${gb(needMb(st.level, true))} GB with speaker names` : "")
+    + (st.memory_limit_gb ? ". If a video needs more than the limit, it stops and says so, and you can try it again." : ".");
+  const open = preset === "custom" || S.hwMore;
   return `
-    <div class="block"><div class="card pc"><div class="pc-head"><span class="tile-icon t-accent">${ICON.chip}</span>
-        <div><div class="row-title">This PC</div><div class="row-sub">${threads ? `${threads} processor threads` : "Its processor, memory and graphics card"}</div></div></div>
-      <div class="pc-facts">${pcFacts()}</div></div></div>
+    <div class="block"><div class="q-pc"><div class="card pc"><div class="pc-head"><span class="tile-icon t-accent">${ICON.chip}</span>
+        <div><div class="row-title">This PC</div><div class="row-sub">What it has to work with</div></div></div>
+      <div class="pc-facts">${pcFacts()}</div></div></div></div>
     <div class="block"><h2>How much it may use</h2>
       <div class="hw-presets" role="radiogroup" aria-label="How much it may use">${cards}</div>
-      <p class="foot">${S.run ? "A video is being made now: changes apply from the next one." : "Changes apply from the next video."}</p></div>
+      <p class="hw-status"><b>${preset === "custom" ? "Custom" : HW_PRESETS.find(([k]) => k === preset)[1]}:</b> ${esc(hwStatus(st))}
+        <span class="dim">${S.run ? "A video is being made now: changes apply from the next one." : "Changes apply from the next video."}</span></p></div>
     ${S.run && S.run.kind === "make" ? `<div class="block"><h2>Now</h2><div class="card stack" id="hw-live">${hwLive()}</div></div>` : ""}
-    <div class="block"><h2>Processor</h2><div class="grp">
-        ${prefRow("Processor", cpuSub, segPref("cpu_percent"), "cpu_percent")}
-        ${prefRow("Let other apps go first", "Your other apps get the processor before it does, so it's a little slower while they're busy.", switchPref("low_priority"), "low_priority")}
-      </div></div>
-    <div class="block"><h2>Memory</h2><div class="grp">
-        ${prefRow("Memory limit", memSub, segPref("memory_limit_gb", memOptions()), "memory_limit_gb")}
-      </div>
-      <p class="foot">This PC has ${hw.ram_gb || "?"} GB. The limit covers everything Subtitle Maker runs to make a video.</p></div>
-    <div class="block"><h2>Graphics card</h2><div class="grp">
-        ${prefRow("Run on", hw.gpu ? "Automatic uses the graphics card when it has room, which is much faster." : "This PC has no NVIDIA graphics card, so it uses the processor.", segPref("device"), "device")}
-        ${hw.gpu ? prefRow("Use less graphics memory", lowMem ? "Stores the speech model in a smaller format, about half the graphics memory, for almost the same accuracy."
-          : "This graphics card already uses the smallest format, so there's nothing to save.", lowMem ? switchPref("gpu_low_memory") : `<button class="switch" role="switch" aria-checked="false" aria-labelledby="pt-gpu_low_memory" aria-describedby="ps-gpu_low_memory" disabled><span></span></button>`, "gpu_low_memory") : ""}
-      </div>
-      <p class="foot">${hw.gpu ? "A graphics card always works at full speed while it's used: Windows has no way to hold it back, so there's no limit for that here. To keep it free, choose Processor above." : "Speaker names always run on the processor."}</p></div>`;
+    <details class="block hw-more" data-act="hw-more" ${open ? "open" : ""}><summary>Set each limit: processor, memory and graphics card</summary>
+      <div class="hw-more-body">
+      <div class="block"><h2>Processor</h2><div class="grp">
+          ${prefRow("Processor", cpuSub, segPref("cpu_percent"), "cpu_percent")}
+          ${prefRow("Let other apps go first", "Your other apps get the processor before it does, so it's a little slower while they're busy. The graphics card isn't affected.", switchPref("low_priority"), "low_priority")}
+        </div></div>
+      <div class="block"><h2>Memory</h2><div class="grp">
+          ${prefRow("Memory limit", memSub, segPref("memory_limit_gb", memOptions()), "memory_limit_gb")}
+        </div>
+        <p class="foot">This PC has ${hw.ram_gb || "?"} GB. The limit covers everything Subtitle Maker runs to make a video.</p></div>
+      <div class="block"><h2>Graphics card</h2><div class="grp">
+          ${prefRow("Run on", hw.gpu ? "Automatic uses the graphics card when it has room, which is much faster." : "This PC has no NVIDIA graphics card, so it uses the processor.", segPref("device"), "device")}
+          ${hw.gpu ? prefRow("Use less graphics memory", lowMem ? "Stores the speech model in a smaller format: about half the graphics memory, for almost the same accuracy."
+            : "Needs a newer NVIDIA graphics card (one with fast float16, from the RTX 20 series). This one already uses its smallest format.", lowMem ? switchPref("gpu_low_memory") : `<button class="switch" role="switch" aria-checked="false" aria-labelledby="pt-gpu_low_memory" aria-describedby="ps-gpu_low_memory" disabled><span></span></button>`, "gpu_low_memory") : ""}
+        </div>
+        <p class="foot">${hw.gpu ? "While it's used, a graphics card always works at full speed: Windows can't hold it back, so there's no limit for that. To keep it free, choose Processor." : "Speaker names always run on the processor."}</p></div>
+      </div></details>`;
 }
-/* While a video is being made: what Subtitle Maker itself uses, against its limits */
+/* While a video is being made: what Subtitle Maker itself uses, against its limits (and the
+   graphics card's memory, for the whole card) */
 function hwLive() {
-  const res = (S.run && S.run.res) || {};
+  const res = (S.run && S.run.res) || {}, st = S.info.settings;
   if (res.app_cpu == null) return `<p class="hw-note">Measuring…</p>`;
   const cpuLim = res.cpu_limit, ramLim = res.ram_limit;
-  const meter = (label, value, of, frac) => `<div class="meter"><span>${label}</span><b>${value}${of ? ` <small>of ${of}</small>` : ""}</b>
-      <div class="bar thin" style="--p:${Math.min(1, frac || 0).toFixed(2)}"><i></i></div></div>`;
+  const meter = (key, label, value, of, frac) => `<div class="meter${frac > .9 ? " hot" : ""}"><span>${label}</span><b>${value}${of ? ` <small>of ${of}</small>` : ""}</b>
+      <div class="bar thin" data-bar="${key}" style="--p:${Math.min(1, frac || 0).toFixed(2)}"><i></i></div></div>`;
+  // The limits this video runs under are the ones it started with; changed since, say so
+  const changed = (cpuLim || null) !== (st.cpu_percent < 100 ? st.cpu_percent : null) || (ramLim || null) !== (st.memory_limit_gb * 1024 || null);
   return `<div class="hw-live">
-      ${meter("Processor", Math.round(res.app_cpu) + "%", cpuLim ? cpuLim + "%" : "", res.app_cpu / (cpuLim || 100))}
-      ${meter("Memory", gb(res.app_ram) + " GB", ramLim ? gb(ramLim) + " GB" : "", res.app_ram / (ramLim || res.ram_total))}
+      ${meter("hw-cpu", cpuLim ? "Processor" : "Processor (whole PC)", Math.round(res.app_cpu) + "%", cpuLim ? cpuLim + "%" : "100%", res.app_cpu / (cpuLim || 100))}
+      ${meter("hw-mem", "Memory", gb(res.app_ram) + " GB", gb(ramLim || res.ram_total) + " GB", res.app_ram / (ramLim || res.ram_total))}
+      ${res.vram_total ? meter("hw-vram", "Graphics memory (whole card)", gb(res.vram_used) + " GB", gb(res.vram_total) + " GB", res.vram_used / res.vram_total) : ""}
     </div>
-    <p class="hw-note">What Subtitle Maker is using for this video${cpuLim || ramLim ? ", against your limits" : ""}. These are the limits it started with.</p>`;
+    <p class="hw-note">What Subtitle Maker is using for this video${cpuLim || ramLim ? ", against your limits" : ""}.${changed ? " It runs with the limits it started with; your changes apply from the next video." : ""}</p>`;
+}
+/* A new reading: the bars ease on from where they were, not from empty */
+function updateHwLive() {
+  const live = S.view === "settings" && S.page === "hardware" && $("#hw-live");
+  if (!live) return;
+  const was = barsNow(live);
+  live.innerHTML = hwLive();
+  barsCarry(live, was);
 }
 
 function pageAppearance() {
@@ -3328,7 +3377,13 @@ const ACTIONS = {
   "reveal-dir": el => api().reveal(el.dataset.path),
   "goto-make": () => go("make"),
   again: el => app.addFiles([el.dataset.path]),
-  retry: el => { app.addFiles([el.dataset.path]); next(); },
+  retry: el => {
+    const item = S.queue.find(q => q.path === el.dataset.path && q.status === "failed");
+    if (!item) { app.addFiles([el.dataset.path]); return; }
+    Object.assign(item, { status: "waiting", error: null, log: null, memory: false });
+    S.memChecked = false;  // (the limits may have just changed: check again)
+    ACTIONS.start();
+  },
   "history-retry": () => { S.historyFailed = false; render(); },
   forget: async el => { S.history = await api().remove_history(el.dataset.id); render(); },
   "clear-history": () => confirmBox("Clear the whole history?", "Only the list is cleared. Your subtitle files stay where they are.",
@@ -3414,7 +3469,13 @@ const ACTIONS = {
   "open-program-folder": () => api().open_program_folder(),
   // a page opened from another page (Software update from About) goes back to it
   "settings-page": el => { S.pageTrail = pageTrailTo(el.dataset.page); S.page = el.dataset.page; render("in"); },
-  "settings-back": () => { S.pageTrail = S.pageTrail.slice(); S.page = S.pageTrail.pop() || null; render("back"); },
+  "settings-back": () => {
+    S.pageTrail = S.pageTrail.slice();
+    const to = S.pageTrail.pop() || null;
+    if (to && to[0] === "@") { S.page = null; S.pageTrail = []; go(to.slice(1), "back"); return; }  // another tab
+    S.page = to;
+    render("back");
+  },
   // Before the queue starts (once per queue): warn if a video may need more memory than allowed
   start: async () => {
     const st = S.info.settings, speakers = S.multi && st.level !== "potato";
@@ -3427,7 +3488,9 @@ const ACTIONS = {
     S.memChecked = true;
     next();
   },
-  "open-hardware": () => go("settings", "in", "hardware", []),
+  // From a video that ran out of memory: Back goes to Make subtitles, where Try again is
+  "open-hardware": () => go("settings", "in", "hardware", ["@make"]),
+  "hw-more": el => { S.hwMore = el.open; },
   "hw-preset": async el => {
     const key = el.dataset.v, presets = S.info.hw.presets;
     if (!presets[key] || hwPreset(S.info.settings) === key) return;
@@ -3564,12 +3627,7 @@ const app = {
         Object.assign(r, { done: ev.done, total: ev.total, stage: ev.stage, speakers: ev.speakers, expect: ev.expect,
           phase: ev.phase, overall: ev.overall });
         break;
-      case "resources": {
-        r.res = ev;
-        const live = S.view === "settings" && S.page === "hardware" && $("#hw-live");
-        if (live) live.innerHTML = hwLive();
-        break;
-      }
+      case "resources": r.res = ev; updateHwLive(); break;
       case "download":
         if (r.kind === "make") { r.stage = `${ev.item === "video" ? "Copying" : "Downloading"} ${ev.label}${ev.total ? ` · ${Math.round(ev.done)} of ${Math.round(ev.total)} MB` : ""}`; break; }
         r.downloads[ev.item] = { done: ev.done, total: ev.total, finished: ev.total && ev.done >= ev.total };
