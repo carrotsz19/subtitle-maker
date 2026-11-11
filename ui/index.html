@@ -1654,8 +1654,16 @@ function ownUsage(res) {
   return `Subtitle Maker: ${Math.round(res.app_cpu)}% of the processor${res.cpu_limit ? ` (up to ${res.cpu_limit}%)` : ""}, `
     + `${gb(res.app_ram)} GB of memory${res.ram_limit ? ` (up to ${gb(res.ram_limit)} GB)` : ""}`;
 }
+/* The running card's main bar: the whole video once it's being transcribed. Before that, a copy
+   from Google Drive (or a model being downloaded) that knows how big it is fills its own bar, by
+   its own name, so the video's bar starts afresh from empty; only a wait of unknown length slides. */
+function runBar(r) {
+  if (r.total) return { p: overallShown(r), name: "run", sliding: false };
+  if (r.fetch) return { p: Math.min(1, r.fetch.done / r.fetch.total), name: `fetch-${r.fetch.item}`, sliding: false };
+  return { p: 0, name: "run", sliding: true };
+}
 function viewRunning() {
-  const r = S.run, done = shownDone(r), pct = overallShown(r);
+  const r = S.run, done = shownDone(r), pct = overallShown(r), bar = runBar(r);
   const left = queueLeft();
   const res = r.res || {};
   const meter = (label, value, frac, hot) => `<div class="meter${hot ? " hot" : ""}"><span>${label}</span><b>${value}</b>
@@ -1672,7 +1680,7 @@ function viewRunning() {
     <div><div class="between" style="align-items:flex-end;margin-bottom:8px">
         <div><div class="big-pct mono" id="run-pct">${r.total ? pctText(pct) : "…"}</div></div>
         <div class="sm dim right mono" id="run-stage">${stageText(r, done)}</div></div>
-      <div class="bar ${r.total ? "" : "indeterminate"}" data-bar="run" style="--p:${pct}"><i></i></div></div>
+      <div class="bar${bar.sliding ? " indeterminate" : ""}" data-bar="${esc(bar.name)}" style="--p:${bar.p.toFixed(4)}"><i></i></div></div>
     ${r.speakers != null ? `<div><div class="between sm"><span class="dim">Working out who's talking</span><span class="mono dim" id="run-spk">${Math.round(r.speakers * 100)}%</span></div>
         <div class="bar thin ok" data-bar="speakers" style="margin-top:6px;--p:${r.speakers}"><i></i></div></div>` : ""}
     ${meters}
@@ -3625,19 +3633,23 @@ const app = {
         if (ev.done !== r.done) (r.points = r.points || []).push({ t: Date.now(), done: ev.done });
         if (r.points && r.points.length > 400) r.points.splice(0, 200);
         Object.assign(r, { done: ev.done, total: ev.total, stage: ev.stage, speakers: ev.speakers, expect: ev.expect,
-          phase: ev.phase, overall: ev.overall });
+          phase: ev.phase, overall: ev.overall, fetch: null });
         break;
       case "resources": r.res = ev; updateHwLive(); break;
       case "download":
-        if (r.kind === "make") { r.stage = `${ev.item === "video" ? "Copying" : "Downloading"} ${ev.label}${ev.total ? ` · ${Math.round(ev.done)} of ${Math.round(ev.total)} MB` : ""}`; break; }
+        if (r.kind === "make") {
+          r.stage = `${ev.item === "video" ? "Copying" : "Downloading"} ${ev.label}${ev.total ? ` · ${Math.round(ev.done)} of ${Math.round(ev.total)} MB` : ""}`;
+          r.fetch = ev.total ? { item: ev.item, done: ev.done, total: ev.total } : null;  // the bar fills when the size is known
+          break;
+        }
         r.downloads[ev.item] = { done: ev.done, total: ev.total, finished: ev.total && ev.done >= ev.total };
         { const box = $("#downloads"); if (box) box.innerHTML = downloadRows(r.level); }
         return;
       case "log":
         r.log.push(ev.text);
-        if (/^Reading the sound/.test(ev.text)) r.stage = "Reading the video";
-        if (/^Loading/.test(ev.text)) r.stage = "Loading the model";
-        if (/^Speaker detection on/.test(ev.text)) r.stage = "Starting speaker detection";
+        if (/^Reading the sound/.test(ev.text)) Object.assign(r, { stage: "Reading the video", fetch: null });
+        if (/^Loading/.test(ev.text)) Object.assign(r, { stage: "Loading the model", fetch: null });
+        if (/^Speaker detection on/.test(ev.text)) Object.assign(r, { stage: "Starting speaker detection", fetch: null });
         break;
       case "ask_speaker": showAsk(ev); return;
       case "review": {
@@ -3708,8 +3720,11 @@ function patchRunning() {
   const tmp = document.createElement("div");
   tmp.innerHTML = viewRunning();
   const fresh = tmp.firstElementChild;
-  // The main bar slides back and forth until the length is known; stop that once it is
-  card.querySelector(".bar").classList.toggle("indeterminate", !S.run.total);
+  // The main bar slides back and forth until a length is known; stop that once it is. A bar for
+  // something else (the copy before, the video after) comes in fresh instead of gliding over.
+  const bar = card.querySelector(".bar"), freshBar = fresh.querySelector(".bar");
+  if (bar.dataset.bar !== freshBar.dataset.bar) bar.replaceWith(freshBar.cloneNode(true));
+  else bar.classList.toggle("indeterminate", freshBar.classList.contains("indeterminate"));
   // Keep the log's open state and scroll, and move the bars on from where they are
   card.querySelectorAll(".bar").forEach((old, i) => {
     const nu = fresh.querySelectorAll(".bar")[i];

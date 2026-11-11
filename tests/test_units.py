@@ -783,8 +783,21 @@ video.write_bytes(b"x" * (3 * ms.COPY_PIECE + 5))
 real_place = ms.cloud_place
 assert ms.local_copy(video) == video  # a local file is read where it is
 ms.cloud_place = lambda path: "Google Drive"
-copy = ms.local_copy(video)
+import contextlib  # noqa: E402
+import io  # noqa: E402
+import json  # noqa: E402
+
+said = io.StringIO()
+ms.EVENTS = True
+with contextlib.redirect_stdout(said):
+    copy = ms.local_copy(video)
+ms.EVENTS = False
 assert copy.parent == ms.INCOMING and copy.read_bytes() == video.read_bytes()
+# Each piece says how far the copy has got and how big it is: the window's bar fills from that
+copying = [json.loads(line[len(ms.EVENT_PREFIX):]) for line in said.getvalue().splitlines() if line.startswith(ms.EVENT_PREFIX)]
+copying = [e for e in copying if e["type"] == "download"]
+assert len(copying) == 4 and all(e["item"] == "video" and e["total"] for e in copying), copying
+assert [e["done"] for e in copying] == sorted(e["done"] for e in copying) and copying[-1]["done"] == copying[-1]["total"]
 ms.clear_incoming()
 assert not ms.INCOMING.exists()
 ms.cloud_place = real_place

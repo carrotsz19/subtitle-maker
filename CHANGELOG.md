@@ -11,6 +11,7 @@ A release (see "Releasing a new version" in the README) needs its section here f
 - **Says when a limit gets in the way.** Quality shows a level a limit makes slow, or that won't fit. A queue that may need more memory than you allowed asks first, and a video that runs out says so and can be tried again.
 - "Use less graphics memory" fits the speech model in about half the graphics memory, on newer NVIDIA cards (RTX 20 series and up).
 - Easier to read: grey text, and switches that are off, stand out more.
+- Copying a video from Google Drive, or downloading a model, fills its bar as it goes instead of just sliding.
 
 ## 0.3.0 · 10 November 2026
 
