@@ -27,17 +27,19 @@ HISTORY_FILE = data_dir() / "history.json"
 HISTORY_LIMIT = 200
 
 # Quality levels offered in Setup. vram_mb = measured peak extra GPU memory (int8) on a GTX 1050,
-# rounded up for safety; large-v3 is an estimate.
+# rounded up for safety; large-v3 is an estimate. speed and accuracy are out of 5, for the small
+# meters in Settings > Quality: how the levels compare with each other, not a measurement
+# (High's model ran as fast as Fast's on a GTX 1050, hence the same speed).
 LEVELS = {
-    "potato":   {"model": "base", "name": "Potato", "download": "0.15 GB", "vram_mb": 400,
+    "potato":   {"model": "base", "name": "Potato", "download": "0.15 GB", "vram_mb": 400, "speed": 5, "accuracy": 1,
                  "about": "transcription only, lightest settings, for old or slow PCs"},
-    "fast":     {"model": "small", "name": "Fast", "download": "0.5 GB", "vram_mb": 700,
+    "fast":     {"model": "small", "name": "Fast", "download": "0.5 GB", "vram_mb": 700, "speed": 4, "accuracy": 2,
                  "about": "quick, decent accuracy"},
-    "balanced": {"model": "medium", "name": "Balanced", "download": "1.5 GB", "vram_mb": 1300,
+    "balanced": {"model": "medium", "name": "Balanced", "download": "1.5 GB", "vram_mb": 1300, "speed": 2, "accuracy": 3,
                  "about": "good accuracy, slower on CPU"},
-    "high":     {"model": "large-v3-turbo", "name": "High", "download": "1.6 GB", "vram_mb": 1400,
+    "high":     {"model": "large-v3-turbo", "name": "High", "download": "1.6 GB", "vram_mb": 1400, "speed": 4, "accuracy": 4,
                  "about": "best accuracy for its speed"},
-    "max":      {"model": "large-v3", "name": "Maximum", "download": "3.1 GB", "vram_mb": 2400,
+    "max":      {"model": "large-v3", "name": "Maximum", "download": "3.1 GB", "vram_mb": 2400, "speed": 1, "accuracy": 5,
                  "about": "most accurate, slowest, needs a 3 GB+ GPU or lots of patience"},
 }
 
@@ -64,6 +66,8 @@ DEFAULT_SETTINGS = {
     "remember_voices": True,
     # Things appear and go without moving (Windows' own "Show animations" setting counts too)
     "less_motion": False,
+    # Coming back to a tab puts you where you'd scrolled to (off: every tab opens at its top)
+    "remember_scroll": True,
     # Subtitles in English whatever language is spoken (Whisper translates as it goes)
     "translate": False,
 }
@@ -90,6 +94,7 @@ SETTING_CHOICES = {
     "done_sound": (True, False), "multi": (True, False), "people": (0, 2, 3, 4, 5, 6),
     "open_folder": (True, False), "theme": ("system", "light", "dark"), "auto_update": (True, False),
     "notify": (True, False), "remember_voices": (True, False), "less_motion": (True, False),
+    "remember_scroll": (True, False),
     "channel": ("main", "experimental"), "translate": (True, False),
 }
 

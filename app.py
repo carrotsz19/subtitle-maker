@@ -323,6 +323,7 @@ class Api:
             "platform": sys.platform,
             "version": update.installed(),
             "release": changelog.current(),  # "0.2.0", from CHANGELOG.md
+            "folder": str(HERE.resolve()),  # where the program is, for Settings > About
             # What's new since the version last opened: shown once, after an update
             "news": changelog.news(first_run=not SETTINGS_FILE.exists()),
             "models": self._probe["models"],
@@ -856,7 +857,7 @@ class Api:
     _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
                "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "review", "done_sound",
                "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify", "remember_voices", "less_motion",
-               "translate")
+               "translate", "remember_scroll")
 
     def save_prefs(self, changes):
         """Save some instant settings; anything not allowed falls back to its default."""
@@ -959,6 +960,10 @@ class Api:
 
     def reveal(self, path):
         open_in_file_manager(path, select=True)
+
+    def open_program_folder(self):
+        """Settings > About > Open folder: the folder the program is in."""
+        open_in_file_manager(HERE)
 
     def open_voices(self):
         VOICES_DIR.mkdir(exist_ok=True)

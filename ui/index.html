@@ -21,6 +21,8 @@
   --positive:#3f6b4a; --positive-soft:#e0ece2;
   --negative:#b3492b; --negative-soft:#f4ddd4;
   --on-tint:#fff;
+  --seg-thumb:#fff; --seg-thumb-shadow:0 1px 2px rgba(27,26,24,.12), 0 3px 8px rgba(27,26,24,.07);
+  --tint-wash:rgba(179,73,43,.06);
   --elev-1:0 1px 2px rgba(27,26,24,.04), 0 4px 12px rgba(27,26,24,.05);
   --elev-2:0 2px 8px rgba(27,26,24,.05), 0 12px 28px rgba(27,26,24,.09);
   --elev-3:0 0 0 1px rgba(27,26,24,.04), 0 8px 16px rgba(27,26,24,.07), 0 24px 64px rgba(27,26,24,.16);
@@ -42,6 +44,8 @@
        default response .35 s, damping .85 (0.6%): the sidebar highlight, small moves
        spatial response .42 s, damping .86 (0.5%): dialogs, screens, rows changing place
        bouncy  response .42 s, damping .68 (5.4%): only where it delights (a tick, the drop target lifting)
+       pop     response .32 s, damping .55 (12.6%): only a radio's dot, which is so small that a gentler
+               spring's overshoot is a fraction of a pixel and can't be seen
      Fades are never on a spring (a spring's S-curve and overshoot are wrong for opacity): they run
      beside it as their own short ease-out. */
   --ease-in:cubic-bezier(.7,0,.84,0);
@@ -53,6 +57,8 @@
   --spring-spatial:linear(0, 0.005 1.3%, 0.022 2.8%, 0.054 4.5%, 0.095 6.3%, 0.19 9.5%, 0.408 16.3%, 0.508 19.5%, 0.605 23%, 0.684 26.3%, 0.752 29.5%, 0.809 32.8%, 0.858 36.3%, 0.898 39.8%, 0.934 44%, 0.962 48.5%, 0.981 53.5%, 0.994 59%, 1.002 65.3%, 1.005 73%, 1);
   --spring-bouncy-ms:680ms;
   --spring-bouncy:linear(0, 0.008 1.3%, 0.029 2.5%, 0.061 3.8%, 0.111 5.3%, 0.16 6.5%, 0.225 8%, 0.493 13.8%, 0.604 16.3%, 0.713 19%, 0.798 21.5%, 0.869 24%, 0.932 26.8%, 0.979 29.5%, 1.013 32.3%, 1.032 34.5%, 1.045 37%, 1.052 39.5%, 1.054 42.5%, 1.047 47.8%, 1.013 62.3%, 1.003 70%, 0.997 81.8%, 1);
+  --spring-pop-ms:640ms;
+  --spring-pop:linear(0, 0.012 1.3%, 0.052 2.8%, 0.128 4.5%, 0.255 6.8%, 0.654 13%, 0.807 15.8%, 0.92 18.3%, 1.007 20.8%, 1.068 23.3%, 1.108 26%, 1.126 29.3%, 1.117 33.3%, 1.014 47.5%, 0.988 54.8%, 0.987 65.3%, 1.002 88.3%, 1);
   color-scheme:light;
 }
 /* Dark: when Windows is dark (unless Settings says Light), or when Settings says Dark */
@@ -65,6 +71,8 @@
     --positive:#7fae87; --positive-soft:#22302a;
     --negative:#d9633e; --negative-soft:#382720;
     --on-tint:#161310;
+    --seg-thumb:#4a453b; --seg-thumb-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 1px 3px rgba(0,0,0,.4);
+    --tint-wash:rgba(217,99,62,.09);
     --elev-1:inset 0 1px 0 rgba(255,255,255,.045), 0 1px 2px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.30);
     --elev-2:inset 0 1px 0 rgba(255,255,255,.055), 0 2px 8px rgba(0,0,0,.30), 0 12px 28px rgba(0,0,0,.40);
     --elev-3:inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px rgba(0,0,0,.40), 0 8px 16px rgba(0,0,0,.35), 0 24px 64px rgba(0,0,0,.55);
@@ -80,6 +88,8 @@
     --positive:#7fae87; --positive-soft:#22302a;
     --negative:#d9633e; --negative-soft:#382720;
     --on-tint:#161310;
+    --seg-thumb:#4a453b; --seg-thumb-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 1px 3px rgba(0,0,0,.4);
+    --tint-wash:rgba(217,99,62,.09);
     --elev-1:inset 0 1px 0 rgba(255,255,255,.045), 0 1px 2px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.30);
     --elev-2:inset 0 1px 0 rgba(255,255,255,.055), 0 2px 8px rgba(0,0,0,.30), 0 12px 28px rgba(0,0,0,.40);
     --elev-3:inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px rgba(0,0,0,.40), 0 8px 16px rgba(0,0,0,.35), 0 24px 64px rgba(0,0,0,.55);
@@ -131,8 +141,18 @@ aside.side{ background:var(--panel); border-right:1px solid var(--line); display
 .sidecard{ border-radius:var(--r-card); padding:12px; background:var(--panel-2); font-size:12.5px; cursor:pointer; text-align:left; border:0; color:var(--ink); font-family:inherit; width:100%; }
 .sidecard:hover{ background:var(--fill-tertiary); box-shadow:inset 0 0 0 1px var(--line); }
 .sidecard b{ display:block; font-size:13px; margin-bottom:2px; }
+/* the installed version, on every screen; it opens About */
+.verbtn{ all:unset; box-sizing:border-box; display:block; width:100%; margin-top:6px; padding:5px 8px; border-radius:8px; text-align:center;
+  font-size:11.5px; color:var(--faint); cursor:pointer; font-variant-numeric:tabular-nums;
+  transition:color 130ms var(--ease-standard), background-color 130ms var(--ease-standard); }
+.verbtn:hover{ color:var(--dim); background:var(--fill-tertiary); }
+.verbtn:active{ color:var(--ink); background:var(--fill-secondary); }
+.verbtn:empty{ display:none; }
+.verbtn:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
 main.main{ overflow-y:auto; scrollbar-gutter:stable; padding:26px 30px 48px; }
 .inner{ max-width:760px; margin:0 auto; }
+/* Quality and the Resolve guide use a big window's width, in columns, instead of one narrow strip */
+.inner:has(> .guide), .inner:has(> .settings-page.wide){ max-width:1120px; }
 .topbar{ margin-bottom:20px; }
 .topbar p{ color:var(--dim); margin-top:3px; }
 
@@ -150,6 +170,7 @@ main.main{ overflow-y:auto; scrollbar-gutter:stable; padding:26px 30px 48px; }
 .grp-row.danger{ color:var(--bad); font-weight:600; justify-content:center; }
 /* Settings, iPhone style */
 .settings-page{ max-width:720px; }
+.settings-page.wide{ max-width:none; }
 .set-row{ min-height:46px; padding-top:7px; padding-bottom:7px; }
 .set-row .row-title{ font-weight:500; }
 .set-row .ico{ width:29px; height:29px; border-radius:7px; display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; }
@@ -205,11 +226,25 @@ input[type=text]:focus{ outline:none; border-color:var(--accent); box-shadow:0 0
 :where(button, [tabindex], input):focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 .seg{ display:inline-flex; gap:3px; background:var(--panel-2); padding:3px; border-radius:var(--r-control); }
 .seg button{ border:0; background:transparent; color:var(--dim); font-weight:600; padding:6px 14px; min-height:32px; border-radius:7px; font-size:13px; }
-.seg button[aria-selected="true"]{ background:var(--bg-elevated); color:var(--ink); box-shadow:var(--elev-1); }
-@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .seg button[aria-selected="true"]{ background:var(--separator); } }
-:root[data-theme="dark"] .seg button[aria-selected="true"]{ background:var(--separator); }
-.radio{ width:20px; height:20px; border-radius:99px; box-shadow:inset 0 0 0 2px var(--line); flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:box-shadow .16s var(--ease-standard); }
-[aria-checked="true"] .radio{ box-shadow:inset 0 0 0 6px var(--accent); }
+.seg button[aria-selected="true"]{ background:var(--seg-thumb); color:var(--ink); box-shadow:var(--seg-thumb-shadow); }
+.seg button:not([aria-selected="true"]):not(:disabled):hover{ color:var(--ink); }
+.seg button:disabled{ opacity:.5; cursor:default; }
+/* A radio: a ring that fills with the accent, and a dot that pops in with a bounce you can see
+   (the dot is 8 px, so it's on the liveliest spring: it swells to 9 px and settles).
+   Unpicking is quick and plain; only the one being picked springs. */
+.radio{ position:relative; width:20px; height:20px; border-radius:99px; box-shadow:inset 0 0 0 2px var(--line); flex-shrink:0;
+  transition:box-shadow 160ms var(--ease-standard), transform var(--spring-snappy-ms) var(--spring-snappy); }
+.radio::before, .radio::after{ content:""; position:absolute; border-radius:inherit; opacity:0; }
+.radio::before{ inset:0; background:var(--accent); transform:scale(.5); transition:opacity 140ms var(--ease-standard), transform 140ms var(--ease-standard); }
+.radio::after{ inset:6px; background:var(--on-tint); transform:scale(0); transition:opacity 100ms var(--ease-standard), transform 140ms var(--ease-standard); }
+[aria-checked="true"] > .radio{ box-shadow:inset 0 0 0 2px var(--accent); }
+[aria-checked="true"] > .radio::before{ opacity:1; transform:none;
+  transition:opacity 120ms var(--ease-out), transform var(--spring-pop-ms) var(--spring-pop); }
+[aria-checked="true"] > .radio::after{ opacity:1; transform:none;
+  transition:opacity 120ms var(--ease-out), transform var(--spring-pop-ms) var(--spring-pop); }
+[role="radio"]:active > .radio{ transform:scale(.9); transition:transform 110ms var(--ease-out); }
+/* the chosen row of a list of radios is washed with the accent */
+.grp-row[role="radio"][aria-checked="true"], .grp-row.tap[role="radio"][aria-checked="true"]:hover{ background:var(--tint-wash); }
 
 
 /* ---------- drop zone ---------- */
@@ -300,7 +335,6 @@ details[open] summary::before{ transform:rotate(90deg); }
 .toast{ background:var(--ink); color:var(--bg); font-size:13px; font-weight:600; max-width:360px; }
 .toast.bad{ background:var(--bad); color:#fff; }
 
-.steps{ margin:0; padding-left:20px; } .steps li + li{ margin-top:6px; }
 kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px; padding:1px 6px; font-size:12.5px; }
 
 @media (max-width:860px){ .meters{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
@@ -407,6 +441,101 @@ body.wizard aside.side{ display:none; }
 .step .grow > b{ font-weight:600; }
 .step:not(.active):not(.done) .grow > b{ color:var(--dim); font-weight:500; }
 
+/* ---------- Settings > Quality: a card per level, what this PC has, and Save ---------- */
+.q{ display:grid; grid-template-columns:minmax(0,1fr); gap:18px; }
+.q-side{ display:contents; }   /* one column: This PC goes above the levels and Save below them */
+.q-pc{ order:-1; }
+.q-levels{ container-type:inline-size; display:flex; flex-direction:column; gap:10px; }
+.q-save .block{ margin-top:10px; }
+.q-hint{ font-size:12.5px; color:var(--dim); margin:0 4px; }
+.q-hint b{ color:var(--ink); font-weight:600; }
+/* the downloads, in the narrow side column: the amount stays on one line beside the name */
+.q-save #downloads .between{ gap:10px; align-items:baseline; }
+.q-save #downloads .between > .mono{ white-space:nowrap; flex-shrink:0; }
+@media (min-width:1240px){
+  .q{ grid-template-columns:minmax(0,1fr) 340px; gap:24px; align-items:start; }
+  .q-side{ display:flex; flex-direction:column; gap:16px; position:sticky; top:0; }
+  .q-pc{ order:0; }
+}
+.lv{ position:relative; display:grid; grid-template-columns:20px minmax(0,1fr); grid-template-areas:"radio main" ". extra"; gap:10px 14px; align-items:center;
+  padding:14px 18px 14px 16px; border-radius:var(--r-card); background:var(--panel); box-shadow:var(--elev-1); cursor:pointer;
+  transition:background-color 180ms var(--ease-standard), box-shadow 180ms var(--ease-standard), transform var(--spring-snappy-ms) var(--spring-snappy); }
+.lv > .radio{ grid-area:radio; }
+.lv-main{ grid-area:main; min-width:0; }
+.lv-extra{ grid-area:extra; display:flex; flex-wrap:wrap; align-items:center; gap:8px 24px; }
+@container (min-width:600px){
+  .lv{ grid-template-columns:20px minmax(0,1fr) auto; grid-template-areas:"radio main extra"; }
+  .lv-extra{ flex-wrap:nowrap; }
+}
+/* the chosen level: a ring in the accent (it fades in over the card) and a wash of it */
+.lv::after{ content:""; position:absolute; inset:0; border-radius:inherit; box-shadow:inset 0 0 0 2px var(--accent); opacity:0; pointer-events:none;
+  transition:opacity 180ms var(--ease-standard); }
+.lv:hover{ box-shadow:var(--elev-2); }
+.lv:active{ transform:scale(.992); transition:background-color 180ms var(--ease-standard), box-shadow 180ms var(--ease-standard), transform 110ms var(--ease-out); }
+.lv[aria-checked="true"]{ background:color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.lv[aria-checked="true"]::after{ opacity:1; }
+.lv-head{ display:flex; align-items:center; flex-wrap:wrap; gap:5px 8px; }
+.lv-name{ font-size:15px; font-weight:700; letter-spacing:-.01em; }
+.lv-head .pill{ display:inline-flex; align-items:center; gap:4px; }
+.lv-head .pill svg{ width:10px; height:10px; }
+/* how fast and how accurate, as five small bars each */
+.lv-meters{ display:grid; grid-template-columns:auto auto; align-items:center; gap:6px 10px; font-size:11.5px; font-weight:600; color:var(--dim); }
+.dots{ display:flex; gap:3px; }
+.dots i{ width:13px; height:5px; border-radius:3px; background:var(--line); transition:background-color 180ms var(--ease-standard); }
+.dots i.on{ background:var(--dim); }
+.lv[aria-checked="true"] .dots i.on{ background:var(--accent); }
+.lv-stats{ display:grid; grid-template-columns:auto auto; gap:4px 12px; min-width:146px; font-size:11.5px; color:var(--dim); }
+.lv-stats b{ font-weight:600; color:var(--ink); text-align:right; font-variant-numeric:tabular-nums; }
+/* This PC: what it has, in a few labelled facts */
+.pc{ display:flex; flex-wrap:wrap; align-items:center; gap:14px 28px; padding:14px 16px; }
+.pc-head{ display:flex; align-items:center; gap:12px; }
+.pc-facts{ flex:1; min-width:260px; display:grid; grid-template-columns:repeat(auto-fit, minmax(104px, 1fr)); gap:12px 18px; }
+.pc-fact span{ display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); }
+.pc-fact b{ display:block; font-size:13.5px; font-weight:600; margin-top:1px; }
+@media (min-width:1240px), (max-width:900px){ .pc-facts{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+
+/* ---------- Settings > About ---------- */
+.about-hero{ display:flex; align-items:center; gap:22px; padding:22px 24px; }
+.about-hero img{ border-radius:21px; box-shadow:0 0 0 1px var(--hairline), var(--elev-2); flex-shrink:0; }
+.about-name{ font-size:17px; font-weight:700; letter-spacing:-.01em; }
+.about-ver{ display:flex; align-items:baseline; gap:8px; }
+.about-ver span{ font-size:13px; font-weight:600; color:var(--dim); }
+.about-ver b{ font-size:38px; font-weight:800; letter-spacing:-.03em; line-height:1.15; font-variant-numeric:tabular-nums; }
+.about-meta{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-top:6px; font-size:12.5px; color:var(--dim); }
+.about-path{ font-size:13px; color:var(--dim); overflow-wrap:anywhere; }
+@media (max-width:820px){ .about-hero{ gap:16px; padding:18px; } .about-hero img{ width:72px; height:72px; border-radius:17px; } .about-ver b{ font-size:32px; } }
+
+/* ---------- Using it in Resolve: numbered steps, menu paths as chips, a callout and tips ---------- */
+.guide .block + .block{ margin-top:26px; }
+.g-steps{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
+.g-step{ display:grid; grid-template-columns:30px minmax(0,1fr); gap:14px; align-items:start; align-content:start; padding:16px 18px 16px 16px; }
+.g-num{ width:30px; height:30px; border-radius:99px; background:var(--accent); color:var(--on-tint); font-size:14px; font-weight:800;
+  display:flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums; }
+.g-step h3{ font-size:15px; line-height:30px; }
+.g-step p{ font-size:13px; line-height:1.55; color:var(--dim); margin-top:2px; }
+.g-step p + p{ margin-top:8px; }
+.path{ display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px 0; vertical-align:middle; }
+.path .hop{ display:inline-flex; align-items:center; white-space:nowrap; }  /* an arrow stays with the name after it */
+.path kbd, kbd.key{ background:var(--panel-2); color:var(--ink); border-radius:6px; padding:2px 8px; font-size:12.5px; font-weight:600; line-height:1.5;
+  box-shadow:inset 0 0 0 1px var(--hairline); white-space:nowrap; }
+.path .hop svg{ color:var(--faint); margin:0 5px; flex-shrink:0; }
+.g-two{ display:grid; grid-template-columns:minmax(0,1fr); gap:26px 24px; margin-top:26px; align-items:start; }
+.g-two > .block{ margin-top:0 !important; }
+.g-callout{ background:var(--accent-soft); border-radius:var(--r-card); padding:18px; }
+.g-callout-head{ display:flex; align-items:flex-start; gap:12px; }
+.g-callout-head .tile-icon{ background:var(--accent); color:var(--on-tint); }
+.g-callout-head b{ display:block; font-size:15px; letter-spacing:-.01em; }
+.g-callout-head p{ font-size:13px; line-height:1.5; margin-top:1px; }
+.g-mini{ list-style:none; margin:14px 0 0; padding:0; counter-reset:mini; display:flex; flex-direction:column; gap:8px; }
+.g-mini li{ counter-increment:mini; display:grid; grid-template-columns:22px minmax(0,1fr); gap:10px; font-size:13.5px; line-height:1.55;
+  background:var(--panel); border-radius:var(--r-control); padding:9px 12px 9px 10px; }
+.g-mini li::before{ content:counter(mini); width:22px; height:22px; border-radius:99px; background:var(--accent-soft); color:var(--accent);
+  font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+.g-note{ display:flex; align-items:flex-start; gap:8px; font-size:12.5px; line-height:1.5; margin-top:12px; }
+.g-note svg{ flex-shrink:0; margin-top:1px; color:var(--accent); }
+@media (min-width:900px){ .g-steps{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (min-width:1240px){ .g-two{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+
 /* =================================================================
    MOTION. Things that move are on springs (the tokens at the top), and a
    change of mind halfway is followed from where the thing is, not from
@@ -454,6 +583,8 @@ body.wizard aside.side{ display:none; }
 .btn.sm:active:not([disabled]){ transform:scale(.96); }
 .btn.big:active:not([disabled]){ transform:scale(.988); }
 .btn.sec:active:not([disabled]), .btn.ghost:active:not([disabled]){ filter:none; background:var(--line); }
+.seg button{ transition:background-color 130ms var(--ease-standard), filter 130ms var(--ease-standard), color 200ms var(--ease-standard),
+             box-shadow 130ms var(--ease-standard), opacity 130ms var(--ease-standard), transform var(--spring-snappy-ms) var(--spring-snappy); }
 .seg button:active{ filter:brightness(.95); }
 .seg button:not([aria-selected="true"]):active{ transform:scale(.96); }
 .chip:active{ filter:brightness(.95); transform:scale(.97); }
@@ -522,17 +653,22 @@ body.wizard aside.side{ display:none; }
 @keyframes toastIn{ from{ transform:translateY(14px) scale(.96) } }
 
 /* --- segmented controls: the selection is a pill that slides to the new choice on a spring (only
-   when the choice changes), and dips a little while it's pressed. It moves with a transform and
+   when the choice changes), and dips a little while it's pressed. Its place is `translate` and
    its width changes with it (never stretched, which would squash its corners): it's out of the
-   flow, so its width lays out nothing else. syncSegs() sets --x and the width. --- */
+   flow, so its width lays out nothing else. syncSegs() sets --x and the width, and runs the slide
+   itself (an animation the pill keeps when a redraw moves it to the new control, so a redraw
+   part-way doesn't stop it). The press is `scale`, a transition of its own beside the slide. --- */
 .seg.has-pill{ position:relative; }
 .seg.has-pill button{ position:relative; z-index:1; }
 .seg.has-pill button[aria-selected="true"]{ background:transparent; box-shadow:none; }
 .seg-pill{ position:absolute; top:3px; left:0; height:calc(100% - 6px); width:0; z-index:0; pointer-events:none;
-  border-radius:7px; background:var(--bg-elevated); box-shadow:0 1px 2px rgba(0,0,0,.1), 0 3px 8px rgba(0,0,0,.06);
-  transform:translateX(var(--x, 0px)) scale(var(--press, 1));
-  transition:transform var(--spring-snappy-ms) var(--spring-snappy), width var(--spring-snappy-ms) var(--spring-snappy); }
+  border-radius:7px; background:var(--seg-thumb); box-shadow:var(--seg-thumb-shadow);
+  translate:var(--x, 0px) 0; scale:var(--press, 1);
+  transition:scale var(--spring-snappy-ms) var(--spring-snappy); }
 .seg.has-pill:has(button[aria-selected="true"]:active) .seg-pill{ --press:.95; }
+/* Carried across a redraw (carryMotion): for one layout the new element is put how the old one
+   was, with nothing easing, and then let go, so its own transitions take it from there. */
+.carry, .carry *, .carry::before, .carry::after, .carry *::before, .carry *::after{ transition:none !important; }
 
 /* --- checking the lines: a row taken out to be faded away (see rvMoved()) --- */
 .rv-ghost{ position:absolute; left:0; right:0; margin:0; pointer-events:none; }
@@ -543,7 +679,7 @@ body.wizard aside.side{ display:none; }
    fade; and the script's own animations (rows, toasts, screens, the shake) are skipped by
    prefersReducedMotion(). Both lists below must say the same. --- */
 @media (prefers-reduced-motion:reduce){
-  :root{ --spring-snappy-ms:0ms; --spring-default-ms:0ms; --spring-spatial-ms:0ms; --spring-bouncy-ms:0ms; }
+  :root{ --spring-snappy-ms:0ms; --spring-default-ms:0ms; --spring-spatial-ms:0ms; --spring-bouncy-ms:0ms; --spring-pop-ms:0ms; }
   .screen-visible > *, .toast{ animation:fadeIn .12s linear backwards !important; }
   .scrim, .loader{ transition:opacity .12s linear !important; }
   .dialog{ transform:none !important; transition:none !important; }
@@ -551,12 +687,14 @@ body.wizard aside.side{ display:none; }
   body.dragging .drop .big-icon{ transform:none !important; }
   .bar.indeterminate > i{ width:100% !important; transform:none !important; animation:pulse 1.6s ease-in-out infinite alternate !important; }
   .screen-visible .bar > i, .success, .success svg path, .step.done .dot{ animation:none !important; }
-  :is(.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .playbtn, .grp-row.tap, .rv-time, .dlg-x, .toast-dismiss):active{ transform:none !important; }
+  :is(.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .playbtn, .grp-row.tap, .rv-time, .dlg-x, .toast-dismiss, .lv):active{ transform:none !important; }
+  [role="radio"]:active > .radio{ transform:none !important; }
+  .radio::before, .radio::after{ transform:none !important; transition:opacity .12s linear !important; }
   .switch:active span{ width:18px !important; }
   .switch[aria-checked="true"]:active span{ transform:translateX(18px) !important; }
   .seg-pill{ --press:1 !important; }
 }
-html.reduce-motion{ --spring-snappy-ms:0ms; --spring-default-ms:0ms; --spring-spatial-ms:0ms; --spring-bouncy-ms:0ms; }
+html.reduce-motion{ --spring-snappy-ms:0ms; --spring-default-ms:0ms; --spring-spatial-ms:0ms; --spring-bouncy-ms:0ms; --spring-pop-ms:0ms; }
 html.reduce-motion .screen-visible > *, html.reduce-motion .toast{ animation:fadeIn .12s linear backwards !important; }
 html.reduce-motion .scrim, html.reduce-motion .loader{ transition:opacity .12s linear !important; }
 html.reduce-motion .dialog{ transform:none !important; transition:none !important; }
@@ -565,7 +703,9 @@ html.reduce-motion body.dragging .drop .big-icon{ transform:none !important; }
 html.reduce-motion .bar.indeterminate > i{ width:100% !important; transform:none !important; animation:pulse 1.6s ease-in-out infinite alternate !important; }
 @keyframes pulse{ from{ opacity:.35 } to{ opacity:.8 } }
 html.reduce-motion .screen-visible .bar > i, html.reduce-motion .success, html.reduce-motion .success svg path, html.reduce-motion .step.done .dot{ animation:none !important; }
-html.reduce-motion :is(.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .playbtn, .grp-row.tap, .rv-time, .dlg-x, .toast-dismiss):active{ transform:none !important; }
+html.reduce-motion :is(.btn, .iconbtn, .seg button, .navbtn, .sidecard, .drop, .chip, .playbtn, .grp-row.tap, .rv-time, .dlg-x, .toast-dismiss, .lv):active{ transform:none !important; }
+html.reduce-motion [role="radio"]:active > .radio{ transform:none !important; }
+html.reduce-motion .radio::before, html.reduce-motion .radio::after{ transform:none !important; transition:opacity .12s linear !important; }
 html.reduce-motion .switch:active span{ width:18px !important; }
 html.reduce-motion .switch[aria-checked="true"]:active span{ transform:translateX(18px) !important; }
 html.reduce-motion .seg-pill{ --press:1 !important; }
@@ -610,6 +750,7 @@ html.reduce-motion .seg-pill{ --press:1 !important; }
       <b id="pc-level">…</b>
       <span class="dim" id="pc-detail">Checking this PC…</span>
     </button>
+    <button class="verbtn" id="ver" type="button" title="About Subtitle Maker"></button>
   </aside>
 
   <main class="main" id="main"><div class="inner" id="view"></div></main>
@@ -677,6 +818,10 @@ const ICON = {
   down: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></svg>',
   tick: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
   folder: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.6l2 2h7.4A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z"/></svg>',
+  chip: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/><path d="M10 3v3.5M14 3v3.5M10 17.5V21M14 17.5V21M3 10h3.5M3 14h3.5M17.5 10H21M17.5 14H21"/></svg>',
+  bolt: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 5.5 13.5H11L10 21l7.5-10.5H12z"/></svg>',
+  mute: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 17V6.5l9-2V15"/><circle cx="7" cy="17" r="2.5"/><circle cx="16" cy="15" r="2.5"/><path d="M4 3.5l16.5 17"/></svg>',
+  info: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5v.1"/></svg>',
 };
 
 /* The clipboard API needs focus and a secure page; the old way works everywhere */
@@ -835,47 +980,68 @@ function arrive(el, dir, ghost) {
 }
 
 /* A redraw replaces every element, so anything caught part-way through a move would jump to its
-   end. holdMotion() notes, just before a redraw, where such things are on screen; carryMotion()
-   starts their replacements from there. That covers the button being let go of (so its spring
-   back isn't cut off), segmented pills (syncSegs reads segNow), progress bars and the lines being
-   checked. `pressed` is the button the mouse last went down on; it's forgotten once its spring
-   back is over (a redraw can come a moment after the click, when Python answers), or at once if
-   the press is called off. */
+   end, and anything that just changed (the radio that was picked) would simply be there, with no
+   change to see. holdMotion() notes, just before a redraw, how such things stand; carryMotion()
+   starts their replacements from there. That covers the button or row being let go of (so its
+   spring back isn't cut off), which radio was picked (so the new one's dot springs in and the old
+   one's goes), segmented pills and the colour of their words (syncSegs reads segNow), progress
+   bars and the lines being checked. `pressed` is the button or row the mouse last went down on;
+   it's forgotten once its spring back is over (a redraw can come a moment after the click, when
+   Python answers), or at once if the press is called off. */
 let pressed = null, letGo = 0, segNow = {};
-document.addEventListener("pointerdown", e => { clearTimeout(letGo); pressed = e.target.closest ? e.target.closest("button") : null; }, true);
+document.addEventListener("pointerdown", e => { clearTimeout(letGo); pressed = e.target.closest ? e.target.closest('button, [role="radio"], [role="button"]') : null; }, true);
 document.addEventListener("pointerup", () => { clearTimeout(letGo); letGo = setTimeout(() => { pressed = null; }, 450); }, true);
 document.addEventListener("pointercancel", () => { clearTimeout(letGo); pressed = null; }, true);
 function pressKey(b) {
   if (b.id) return "#" + CSS.escape(b.id);
   if (!b.dataset.act) return null;
-  return ["act", "k", "v", "i", "d"].filter(k => b.dataset[k] != null).map(k => `[data-${k}="${CSS.escape(b.dataset[k])}"]`).join("");
+  return ["act", "k", "v", "i", "d", "page"].filter(k => b.dataset[k] != null).map(k => `[data-${k}="${CSS.escape(b.dataset[k])}"]`).join("");
 }
 const segKey = (seg, i) => { const first = seg.querySelector("button[data-act]"); return first ? `${first.dataset.act}:${first.dataset.k || ""}` : `seg${i}`; };
 function holdMotion(el) {
   segNow = {};
-  if (prefersReducedMotion()) return null;
-  const held = { rows: rvPlaces(el), bars: barsNow(el) };
-  if (pressed && el.contains(pressed)) {
-    const scale = new DOMMatrix(getComputedStyle(pressed).transform).a, key = pressKey(pressed);
-    if (key && scale < .995) held.press = { key, scale };
-  }
+  // (with less motion the pill doesn't travel, but the words still fade from the colour they had)
   el.querySelectorAll(".seg.has-pill").forEach((seg, i) => {
     const pill = seg.querySelector(".seg-pill");
     if (!pill || pill.style.opacity === "0") return;
     const a = seg.getBoundingClientRect(), b = pill.getBoundingClientRect();
-    segNow[segKey(seg, i)] = { x: b.left - a.left - seg.clientLeft, w: b.width };
+    segNow[segKey(seg, i)] = { x: b.left - a.left - seg.clientLeft, w: b.width, pill,
+      inks: [...seg.querySelectorAll("button")].map(n => getComputedStyle(n).color) };
   });
+  // (and which radio was picked: its dot and ring still fade in, though nothing springs)
+  const calm = prefersReducedMotion(), held = { calm, radios: {} };
+  el.querySelectorAll('[role="radio"]').forEach(r => { const key = pressKey(r); if (key) held.radios[key] = r.getAttribute("aria-checked"); });
+  if (calm) return held;
+  held.rows = rvPlaces(el); held.bars = barsNow(el);
+  if (pressed && el.contains(pressed)) {
+    const look = getComputedStyle(pressed), scale = new DOMMatrix(look.transform).a, key = pressKey(pressed);
+    if (key && scale < .995) held.press = { key, scale, fill: look.backgroundColor };
+  }
   return held;
 }
 function carryMotion(el, held) {
   segNow = {};
   if (!held) return;
+  const jobs = [];  // each: the element, how to put it as the old one was, how to let it go
   if (held.press) {
-    // put at the size the old one had, then let go: its own transition springs it back, so a
-    // press that lands meanwhile turns it round from wherever it is, like any other press
+    // put at the size (and shade) the old one had, then let go: its own transition springs it
+    // back, so a press that lands meanwhile turns it round from wherever it is, like any other
     const again = el.querySelector(held.press.key);
-    if (again) flip(again, () => { again.style.transform = `scale(${held.press.scale})`; }, () => { again.style.transform = ""; });
+    if (again) pressed = again;  // (so a second redraw before it's back up carries it on again)
+    if (again) jobs.push([again, () => { again.style.transform = `scale(${held.press.scale})`; again.style.backgroundColor = held.press.fill; },
+      () => { again.style.transform = ""; again.style.backgroundColor = ""; }]);
   }
+  // a radio that changed is shown as it was for one layout, then as it is: the dot springs in
+  // on the one just picked and goes from the one it left
+  el.querySelectorAll('[role="radio"]').forEach(r => {
+    const was = held.radios[pressKey(r)], now = r.getAttribute("aria-checked");
+    if (was != null && was !== now) jobs.push([r, () => r.setAttribute("aria-checked", was), () => r.setAttribute("aria-checked", now)]);
+  });
+  // all of them in one go (an element may be in two jobs: the row that was pressed is the radio that changed)
+  jobs.forEach(([node, from]) => { node.classList.add("carry"); from(); });
+  if (jobs.length) void el.offsetWidth;
+  jobs.forEach(([node, , to]) => { node.classList.remove("carry"); to(); });
+  if (held.calm) return;
   barsCarry(el, held.bars);
   rvMoved(el, held.rows);
 }
@@ -1007,26 +1173,45 @@ new MutationObserver(() => {
 /* Segmented controls get a pill that slides to the selection, and only when it changes:
    a redraw with the same selection leaves it where it is. It starts from where the old pill was
    on screen (segNow, noted just before a redraw: it may have been part-way to somewhere else, or
-   still pressed in), else from the last place it was sent: --x moves it and its width goes
-   from the old choice's to the new one's (it's out of the flow, so that lays out nothing else). */
+   still pressed in), else from the last place it was sent: --x places it and its width goes
+   from the old choice's to the new one's (it's out of the flow, so that lays out nothing else).
+   The slide is an animation on the pill itself, and a redraw hands the same pill on to the new
+   control (an animation started by the script keeps its time while its element is out of the
+   page), so a redraw part-way through a slide, with the same choice, doesn't stop it and set it
+   off again: it is simply still sliding. The words change colour with it: each fades from the
+   colour the old one had (the redraw would otherwise switch them in one frame while the pill is
+   still on its way). */
 const segLast = {};
 function syncSegs(root) {
+  const calm = prefersReducedMotion();
+  const same = (a, b) => Math.abs(a.x - b.x) <= .5 && Math.abs(a.w - b.w) <= .5;
   root.querySelectorAll(".seg").forEach((seg, i) => {
-    const key = segKey(seg, i);
+    const key = segKey(seg, i), was = segNow[key];
     const on = seg.querySelector('button[aria-selected="true"]');
     let pill = seg.querySelector(".seg-pill");
-    const fresh = !pill;
-    if (fresh) { pill = document.createElement("span"); pill.className = "seg-pill"; pill.setAttribute("aria-hidden", "true"); seg.prepend(pill); }
+    if (!pill) {
+      pill = was && was.pill && !was.pill.isConnected ? was.pill : null;  // the old control's pill, slide and all
+      if (!pill) { pill = document.createElement("span"); pill.className = "seg-pill"; pill.setAttribute("aria-hidden", "true"); }
+      seg.prepend(pill);
+    }
     seg.classList.add("has-pill");
-    if (!on) { pill.style.opacity = "0"; return; }
-    const to = { x: on.offsetLeft, w: on.offsetWidth }, from = segNow[key] || segLast[key];
-    const moves = !!from && (Math.abs(from.x - to.x) > .5 || Math.abs(from.w - to.w) > .5) && !prefersReducedMotion();
-    const place = at => { pill.style.setProperty("--x", `${at.x}px`); pill.style.width = `${at.w}px`; };
-    pill.style.opacity = "1";
-    if (fresh || moves) flip(pill, () => place(moves ? from : to), () => place(to));
-    else place(to);
-    segLast[key] = to;
+    if (was && was.inks) seg.querySelectorAll("button").forEach((b, j) => {
+      const ink = getComputedStyle(b).color;
+      if (was.inks[j] && was.inks[j] !== ink) b.animate([{ color: was.inks[j] }, { color: ink }], { duration: 200, easing: EASE });
+    });
     delete segNow[key];
+    if (!on) { pill.style.opacity = "0"; if (pill.glide) pill.glide.cancel(); return; }
+    const to = { x: on.offsetLeft, w: on.offsetWidth }, last = segLast[key];
+    pill.style.opacity = "1";
+    pill.style.setProperty("--x", `${to.x}px`);
+    pill.style.width = `${to.w}px`;
+    segLast[key] = to;
+    if (calm) { if (pill.glide) pill.glide.cancel(); return; }
+    if (last && same(last, to)) return;  // the same choice: if it's on its way there, it carries on
+    const from = was || last;
+    if (pill.glide) pill.glide.cancel();
+    if (from && !same(from, to))
+      pill.glide = pill.animate({ translate: [`${from.x}px 0`, `${to.x}px 0`], width: [`${from.w}px`, `${to.w}px`] }, spring("snappy"));
   });
 }
 
@@ -1034,9 +1219,17 @@ function syncSegs(root) {
    A screen arrives with its data, as IronLog's do: drawing it and then redrawing it a moment
    later (when its list came in) restarted the arrival halfway through. */
 let goSeq = 0;
-async function go(view, dir = "tab", page = null) {
+async function go(view, dir = "tab", page) {
+  const again = view === S.view && !S.setup;  // the tab you're already on
   if (S.view === "settings" && view !== "settings") S.draft = null;
-  if (view === "settings") S.page = page;
+  if (view === "settings") {
+    // Asked for by name, a page opens. From the sidebar, Settings comes back on the page it was
+    // left on (when places are remembered); clicked while already in Settings, it goes up to the list.
+    const to = page !== undefined ? page : again || !REMEMBERS() ? null : S.page || null;
+    if (again && S.page && !to && dir === "tab") dir = "back";
+    if (to !== S.page) S.pageBack = null;
+    S.page = to;
+  }
   document.querySelectorAll(".navbtn").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
   const btn = $(`.navbtn[data-view="${view}"]`);
   const pill = $("#nav-pill"), put = () => { pill.style.transform = `translateY(${btn.offsetTop}px)`; };
@@ -1052,21 +1245,54 @@ async function go(view, dir = "tab", page = null) {
   } catch (e) { /* drawn without it; it loads in afterwards */ }
   if (seq !== goSeq) return;  // another page was picked meanwhile
   S.view = view;
-  render(dir);
+  // a page asked for by name starts at its top, and so does the tab you're already looking at
+  render(dir, page != null || (again && !!shown && shown.key === placeKey()));
 }
 document.querySelectorAll(".navbtn").forEach(b => b.onclick = () => go(b.dataset.view));
 $("#pc-card").onclick = () => go("settings", "tab", "quality");
+$("#ver").onclick = () => ACTIONS.about();
 
-function render(animate) {
-  const el = $("#view");
+/* Where each screen was scrolled to, so coming back to a tab (or back out of a Settings page)
+   puts you where you were. Going into a page starts at its top. Settings > Appearance >
+   "Remember where you scrolled" turns it off: then every screen opens at its top, and the
+   Settings tab on its list. A place is a tab, or a page of Settings; the lines being checked are
+   their own place, and only for the same lines (`of`). */
+const scrolled = {};   // place: { top, of }
+let shown = null;      // the place on screen now: { key, of }
+const REMEMBERS = () => !S.info || S.info.settings.remember_scroll !== false;
+function placeKey() {
+  if (S.setup) return "setup";
+  if (S.view === "settings") return S.page && SETTINGS_PAGES[S.page] ? `settings/${S.page}` : "settings";
+  return S.view === "make" && S.review ? "make/check" : S.view;
+}
+const placeOf = () => (S.view === "make" && !S.setup && S.review) || null;
+
+function render(animate, top) {
+  const el = $("#view"), main = $("main.main");
   // arriving somewhere: the old screen fades out over the new. A redraw: what was moving carries on.
   const ghost = animate ? viewGhost(el) : null, held = animate ? null : holdMotion(el);
-  if (animate) $("main.main").scrollTop = 0;  // a new screen starts at its top (after the copy of the old one is taken where it stood)
+  const here = placeKey(), of = placeOf();
+  // how far down the screen being left was, for when it's come back to (its copy above was taken there)
+  if (animate && shown) scrolled[shown.key] = { top: main.scrollTop, of: shown.of };
+  // a redraw keeps the keyboard where it was (the button or row that had the focus is a new element now)
+  const active = document.activeElement, focused = !animate && active && el.contains(active) ? pressKey(active) : null;
   document.body.classList.toggle("wizard", !!S.setup);
   el.innerHTML = S.setup ? viewSetup() : { make: viewMake, history: viewHistory, settings: viewSettings, help: viewHelp }[S.view]();
   bind(el);
-  if (animate) arrive(el, animate === true ? "in" : animate, ghost);
-  else { el.classList.remove("screen-visible", "nav-back", "nav-tab"); carryMotion(el, held); }
+  if (animate) {
+    // Put where it was left, or at its top, once the new screen is in (it decides how far there is
+    // to scroll) and before its arrival plays: the old screen's copy is fixed in the window, so
+    // nothing is seen to jump. Back to where it was: between tabs, and back out of a Settings page.
+    const was = scrolled[here];
+    const back = !top && !S.setup && REMEMBERS() && was && was.of === of && (animate === "tab" || (animate === "back" && S.view === "settings"));
+    main.scrollTop = back ? was.top : 0;
+    arrive(el, animate === true ? "in" : animate, ghost);
+  } else {
+    el.classList.remove("screen-visible", "nav-back", "nav-tab");
+    carryMotion(el, held);
+    if (focused && !el.contains(document.activeElement)) { const again = el.querySelector(focused); if (again) again.focus({ preventScroll: true }); }
+  }
+  shown = { key: here, of };
   renderSide();
 }
 
@@ -1086,6 +1312,7 @@ function renderSide() {
   c.textContent = waiting; c.classList.toggle("hide", !waiting);
   if (!S.info) return;
   const { settings, levels, hardware: hw } = S.info;
+  $("#ver").textContent = S.info.release ? `Version ${S.info.release}` : "About";
   const lang = langName(settings.language);
   $("#pc-level").textContent = `${levels[settings.level].name} quality · ${lang}${settings.translate && settings.language !== "en" ? " → English" : ""}`;
   $("#pc-detail").textContent = hw.gpu ? `${hw.gpu} · ${gb(hw.vram_mb)} GB` : `No NVIDIA GPU · runs on the CPU`;
@@ -1763,13 +1990,15 @@ const SET_SVG = {
   appearance: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>',
   storage: '<ellipse cx="12" cy="6.2" rx="7.5" ry="2.7"/><path d="M4.5 6.2v11.6c0 1.5 3.4 2.7 7.5 2.7s7.5-1.2 7.5-2.7V6.2"/><path d="M4.5 12c0 1.5 3.4 2.7 7.5 2.7s7.5-1.2 7.5-2.7"/>',
   updates: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/>',
+  news: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/>',
 };
 const setIcon = k => `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SET_SVG[k]}</svg>`;
 const CHEVRON = '<svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 1.5l5 5-5 5"/></svg>';
 const BACK = '<svg width="10" height="17" viewBox="0 0 10 17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8.2 1.8L1.8 8.5l6.4 6.7"/></svg>';
 
 const SETTINGS_PAGES = {
-  quality: { title: "Quality", icon: "quality", tone: "i-red", body: pageQuality,
+  quality: { title: "Quality", icon: "quality", tone: "i-red", body: pageQuality, wide: true,
+    lede: "Higher quality is more accurate, but slower.",
     value: () => S.info.levels[S.info.settings.level].name },
   language: { title: "Language", icon: "language", tone: "i-blue", body: pageLanguage,
     value: () => langName(S.info.settings.language) + (S.info.settings.translate && S.info.settings.language !== "en" ? " → English" : "") },
@@ -1787,16 +2016,19 @@ const SETTINGS_PAGES = {
     value: () => !S.models ? "" : S.models.length ? `${S.models.reduce((a, m) => a + m.gb, 0).toFixed(1)} GB` : "None" },
   updates: { title: "Software update", icon: "updates", tone: "i-blue", body: pageUpdates,
     value: () => S.info.release || "", badge: () => S.update.state === "available" },
+  // not in the list: the card at the top of Settings and the version in the sidebar open it
+  about: { title: "About", body: pageAbout },
 };
 const SETTINGS_GROUPS = [["quality", "language"], ["style", "speakers", "accuracy", "done"], ["appearance", "storage", "updates"]];
 
 function viewSettings() {
   if (!S.info) return "";
   const page = S.page && SETTINGS_PAGES[S.page];
+  const from = S.pageBack && SETTINGS_PAGES[S.pageBack];  // a page reached from another one (About) goes back to it
   if (page) return `
-    <button class="back" data-act="settings-back">${BACK}<span>Settings</span></button>
-    <div class="topbar"><h1>${page.title}</h1></div>
-    <div class="settings-page">${page.body()}</div>`;
+    <button class="back" data-act="settings-back">${BACK}<span>${from ? from.title : "Settings"}</span></button>
+    <div class="topbar"><h1>${page.title}</h1>${page.lede ? `<p>${page.lede}</p>` : ""}</div>
+    <div class="settings-page${page.wide ? " wide" : ""}">${page.body()}</div>`;
   const { hardware: hw } = S.info;
   const row = key => {
     const p = SETTINGS_PAGES[key], value = p.value() || "";
@@ -1807,7 +2039,7 @@ function viewSettings() {
   return `
     <div class="topbar"><h1>Settings</h1></div>
     <div class="settings-page">
-      <div class="block"><div class="grp"><div class="grp-row tap set-card" role="button" tabindex="0" data-act="settings-page" data-page="updates">
+      <div class="block"><div class="grp"><div class="grp-row tap set-card" role="button" tabindex="0" data-act="settings-page" data-page="about" title="About Subtitle Maker">
         <img class="app-tile" src="icon.svg" width="58" height="58" alt="">
         <div class="grow"><div class="set-name">Subtitle Maker</div>
           <div class="row-sub">${esc(S.info.release ? "Version " + S.info.release : "Version unknown")} · ${hw.gpu ? esc(hw.gpu) : "runs on the processor"}</div></div>
@@ -1838,25 +2070,53 @@ function saveBlock() {
     </div>`;
 }
 
+/* How fast or how accurate a level is, out of five, as small bars */
+function meter(label, n) {
+  return `<span>${label}</span><span class="dots" role="img" aria-label="${n} out of 5">${[1, 2, 3, 4, 5].map(i => `<i${i <= n ? ' class="on"' : ""}></i>`).join("")}</span>`;
+}
+/* What this PC has: the graphics card and its memory, the memory and the processor */
+function pcFacts() {
+  const hw = S.info.hardware, fact = (k, v) => `<div class="pc-fact"><span>${k}</span><b>${v}</b></div>`;
+  return (hw.gpu ? fact("Graphics card", esc(hw.gpu.replace(/^NVIDIA /, ""))) + fact("Graphics memory", `${gb(hw.vram_mb)} GB`)
+      : fact("Graphics card", "No NVIDIA card") + fact("Runs on", "The processor"))
+    + fact("Memory", `${hw.ram_gb} GB`) + fact("Processor", `${hw.cores} cores`);
+}
+
+/* A card per level: what it's like, how fast and how accurate, and what it takes. Beside them
+   (above them in a narrow window): what this PC has, and Save with what saving will do. */
 function pageQuality() {
   const { levels, recommended, hardware: hw } = S.info;
   const { d } = settingsDraft();
-  const rows = Object.entries(levels).map(([key, lv]) => `
-    <div class="grp-row tap" role="radio" tabindex="0" aria-checked="${d.level === key}" data-act="level" data-v="${key}">
+  const cards = Object.entries(levels).map(([key, lv]) => `
+    <div class="lv" role="radio" tabindex="0" aria-checked="${d.level === key}" data-act="level" data-v="${key}">
       <span class="radio"></span>
-      <div class="grow"><div class="row"><span class="row-title">${esc(lv.name)}</span>
+      <div class="lv-main"><div class="lv-head"><span class="lv-name">${esc(lv.name)}</span>
           ${key === recommended ? '<span class="pill accent">Recommended</span>' : ""}
           ${key === S.info.settings.level && S.info.configured ? '<span class="pill">Current</span>' : ""}
-          ${S.info.models.whisper[key] ? '<span class="pill ok">Downloaded</span>' : ""}</div>
+          ${S.info.models.whisper[key] ? `<span class="pill ok">${ICON.tick}Downloaded</span>` : ""}</div>
         <div class="row-sub">${esc(lv.about[0].toUpperCase() + lv.about.slice(1))}</div></div>
-      <div class="right sm dim mono">${lv.download}<div class="xs faint">${hw.gpu ? `~${gb(lv.vram_mb)} GB GPU` : "download"}</div></div>
+      <div class="lv-extra">
+        ${lv.speed && lv.accuracy ? `<div class="lv-meters">${meter("Speed", lv.speed)}${meter("Accuracy", lv.accuracy)}</div>` : ""}
+        <div class="lv-stats"><span>Download</span><b>${lv.download}</b>${hw.gpu ? `<span>GPU memory</span><b>~${gb(lv.vram_mb)} GB</b>` : ""}</div>
+      </div>
     </div>`).join("");
+  // what Save will do with the level that's picked
+  const name = `<b>${esc(levels[d.level].name)}</b>`, missing = neededFor(d.level).filter(i => !i.have);
+  const hint = S.run ? "" : (d.level === S.info.settings.level && S.info.configured && !missing.length ? `${name} is what you use now.`
+    : missing.length ? `${name} needs a download first: ${missing.map(i => i.size).join(" + ")}.`
+    : `${name} is already on this PC, so it switches straight away.`)
+    + (d.level === "potato" ? " It turns off speaker names and the resource meters." : "");
   return `
-    <div class="block"><div class="grp" role="radiogroup">${rows}</div>
-      <p class="foot">Higher quality is more accurate but slower. Switching to one marked Downloaded needs no download.
-        This PC: ${hw.gpu ? `${esc(hw.gpu)} (${gb(hw.vram_mb)} GB)` : "no NVIDIA GPU, so it runs on the CPU"} · ${hw.ram_gb} GB RAM · ${hw.cores} CPU cores.
-        ${d.level === "potato" ? " Potato turns off speaker names and the resource meters." : ""}</p></div>
-    ${saveBlock()}`;
+    <div class="q">
+      <div class="q-main"><div class="q-levels" role="radiogroup" aria-label="Quality">${cards}</div>
+        <p class="foot">Switching to one marked Downloaded needs no download.</p></div>
+      <div class="q-side">
+        <div class="card pc q-pc"><div class="pc-head"><span class="tile-icon t-accent">${ICON.chip}</span>
+            <div><div class="row-title">This PC</div><div class="row-sub">Best with ${esc(levels[recommended] ? levels[recommended].name : "High")} quality</div></div></div>
+          <div class="pc-facts">${pcFacts()}</div></div>
+        <div class="q-save">${hint ? `<p class="q-hint">${hint}</p>` : ""}${saveBlock()}</div>
+      </div>
+    </div>`;
 }
 
 function pageLanguage() {
@@ -1939,7 +2199,42 @@ function pageAppearance() {
     <div class="block"><div class="grp">
         ${prefRow("Colours", "", segPref("theme"))}
         ${prefRow("Less animations", "Things appear and go without moving. Also follows Windows' own setting.", switchPref("less_motion"))}
+        ${prefRow("Remember where you scrolled", "Coming back to a tab puts you where you were. Off: every tab opens at the top.", switchPref("remember_scroll"))}
       </div></div>`;
+}
+
+/* About: the version, big, and the version it follows; where to update and what's new; this PC;
+   and where it's installed */
+function pageAbout() {
+  const { hardware: hw, version: v } = S.info;
+  const experimental = S.info.settings.channel === "experimental";
+  const built = v && v.sha ? `Build ${esc(v.sha.slice(0, 7))}${v.date ? " · " + new Date(v.date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : ""}` : "";
+  const folder = S.info.folder || (v && v.folder) || "";
+  const state = { available: "Update ready", ok: "Up to date", checking: "Checking…", installing: "Updating…", installed: "Restart to finish" }[S.update.state] || "";
+  const fact = (k, val) => `<div class="grp-row set-row"><span class="grow row-title">${k}</span><span class="val selectable">${val}</span></div>`;
+  const link = (act, icon, tone, title, val, badge) => `<div class="grp-row tap has-icon set-row" role="button" tabindex="0" ${act}>
+      <span class="ico ${tone}">${setIcon(icon)}</span><span class="grow row-title">${title}</span>
+      ${badge ? '<span class="badge">1</span>' : ""}<span class="val">${val}</span>${CHEVRON}</div>`;
+  return `
+    <div class="block"><div class="card about-hero">
+        <img src="icon.svg" width="92" height="92" alt="">
+        <div class="grow"><div class="about-name">Subtitle Maker</div>
+          <div class="about-ver"><span>Version</span><b class="selectable">${esc(S.info.release || "unknown")}</b></div>
+          <div class="about-meta"><span class="pill ${experimental ? "accent" : "ok"}" title="The version this PC follows. Change it in Software update.">${experimental ? "Experimental" : "Stable"}</span>
+            ${built ? `<span class="mono selectable">${built}</span>` : ""}</div></div></div></div>
+    <div class="block"><div class="grp">
+        ${link('data-act="settings-page" data-page="updates"', "updates", "i-blue", "Software update", state, S.update.state === "available")}
+        ${link('data-act="news"', "news", "i-gold", "What's new", "", false)}
+      </div></div>
+    <div class="block"><h2>This PC</h2><div class="grp">
+        ${hw.gpu ? fact("Graphics card", esc(hw.gpu)) + fact("Graphics memory", `${gb(hw.vram_mb)} GB`)
+          : fact("Graphics card", "No NVIDIA card") + fact("Runs on", "The processor")}
+        ${fact("Memory", `${hw.ram_gb} GB`)}
+        ${fact("Processor", `${hw.cores} cores`)}
+      </div></div>
+    ${folder ? `<div class="block"><h2>Installed in</h2><div class="grp"><div class="grp-row">
+          <div class="grow about-path selectable">${esc(folder)}</div>
+          <button class="btn sec sm" data-act="open-program-folder">${ICON.folder} Open folder</button></div></div></div>` : ""}`;
 }
 
 function pageStorage() {
@@ -2449,24 +2744,45 @@ const UPDATE_ACTIONS = {
 /* ---------------------------------------------------------------------
    Help
 --------------------------------------------------------------------- */
+/* A guide to read at a glance: the four steps as numbered cards, menu paths as chips
+   (File › Import › Subtitle), the two-people trick as a callout with its own short steps, and tips. */
+const HOP = '<svg width="6" height="10" viewBox="0 0 6 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l4 4-4 4"/></svg>';
+const menuPath = (...names) => `<span class="path">${names.map((n, i) => `<span class="hop">${i ? HOP : ""}<kbd>${n}</kbd></span>`).join("")}</span>`;
 function viewHelp() {
+  const step = (n, title, body) => `<li class="card g-step"><span class="g-num" aria-hidden="true">${n}</span><div><h3>${title}</h3>${body}</div></li>`;
+  const tip = (icon, title, sub) => `<div class="grp-row has-icon"><div class="tile-icon t-accent">${icon}</div>
+      <div class="grow"><div class="row-title">${title}</div><div class="row-sub">${sub}</div></div></div>`;
   return `
     <div class="topbar"><h1>Using it in Resolve</h1><p>DaVinci Resolve 21 (free) imports .srt files directly.</p></div>
-    <div class="block"><h2>Import</h2><div class="card"><ol class="steps">
-      <li><kbd>File</kbd> › <kbd>Import</kbd> › <kbd>Subtitle</kbd>, then pick the .srt.</li>
-      <li>Drag it from the Media Pool onto the timeline. It makes a subtitle track.</li>
-      <li>Line it up with the start of the timeline, if you used your exported video.</li>
-      <li>To style them, click any subtitle › Inspector › Track. Per line: Inspector › Caption › Customize Caption.</li>
-    </ol></div></div>
-    <div class="block"><h2>Two people on screen at once</h2><div class="card"><p>Resolve shows one subtitle track at a time, so use regions.
-      Put one person's .srt on the track (region R1), right-click <b>inside</b> the subtitle track (not its header) › Add Subtitle Region,
-      and drag the other person's .srt into R2. This works on the Edit page, not the Cut page.</p></div></div>
-    <div class="block"><h2>Better results</h2><div class="card"><ul class="steps">
-      <li>Use your exported video, so the timings match the whole timeline.</li>
-      <li>Speech under loud music gets missed. Export a version with the music muted.</li>
-      <li>Close Resolve and games while it runs, so it can use the graphics card.</li>
-      <li>Check speaker names on short lines like “yeah” or “okay”.</li>
-    </ul></div></div>`;
+    <div class="guide">
+      <div class="block"><h2>Import your subtitles</h2><ol class="g-steps">
+        ${step(1, "Import the .srt", `<p>${menuPath("File", "Import", "Subtitle")}</p><p>Then pick the .srt.</p>`)}
+        ${step(2, "Drag it to the timeline", `<p>From the Media Pool onto the timeline. It makes a subtitle track.</p>`)}
+        ${step(3, "Line it up", `<p>With the start of the timeline, if you used your exported video.</p>`)}
+        ${step(4, "Style it", `<p>Click any subtitle, then ${menuPath("Inspector", "Track")}</p>
+          <p>For one line: ${menuPath("Inspector", "Caption", "Customize Caption")}</p>`)}
+      </ol></div>
+      <div class="g-two">
+        <div class="block"><h2>Two people on screen at once</h2><div class="g-callout">
+          <div class="g-callout-head"><span class="tile-icon">${setIcon("speakers")}</span>
+            <div><b>Use subtitle regions</b><p>Resolve shows one subtitle track at a time, so each person gets a region on it.</p></div></div>
+          <ol class="g-mini">
+            <li><span>Put one person's .srt on the track. That's region <kbd class="key">R1</kbd>.</span></li>
+            <li><span>Right-click <b>inside</b> the subtitle track (not its header), then ${menuPath("Add Subtitle Region")}</span></li>
+            <li><span>Drag the other person's .srt into <kbd class="key">R2</kbd>.</span></li>
+          </ol>
+          <p class="g-note">${ICON.info}<span>This works on the Edit page, not the Cut page.</span></p>
+          <p class="g-note">${ICON.info}<span>With Several people, a .srt for each person is saved too.
+            <button class="linkbtn" data-act="goto-speakers">Settings › Speakers</button> turns that on or off.</span></p>
+        </div></div>
+        <div class="block"><h2>Better results</h2><div class="grp">
+          ${tip(ICON.file, "Use your exported video", "So the timings match the whole timeline.")}
+          ${tip(ICON.mute, "Mute loud music", "Speech under loud music gets missed. Export a version with the music muted.")}
+          ${tip(ICON.bolt, "Close Resolve and games while it runs", "So it can use the graphics card.")}
+          ${tip(ICON.person, "Check names on short lines", "Lines like “yeah” or “okay” are the ones to look at.")}
+        </div></div>
+      </div>
+    </div>`;
 }
 
 /* ---------------------------------------------------------------------
@@ -2564,8 +2880,20 @@ function bind(root) {
     if (!handler) return;
     if (el.tagName === "DETAILS") { el.addEventListener("toggle", () => handler(el)); return; }
     el.onclick = e => { e.stopPropagation(); handler(el); };
-    if (el.getAttribute("role") === "button" || el.getAttribute("role") === "radio")
-      el.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handler(el); } };
+    const role = el.getAttribute("role");
+    if (role === "button" || role === "radio") el.onkeydown = e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handler(el); return; }
+      // The arrow keys walk a list of radios, picking as they go, as radio buttons do (one that
+      // opens something, like "In one folder", is only moved to)
+      const step = role === "radio" && !e.ctrlKey && !e.altKey && !e.metaKey && { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!step) return;
+      const all = [...(el.closest('[role="radiogroup"]') || root).querySelectorAll('[role="radio"]')];
+      const to = all[(all.indexOf(el) + step + all.length) % all.length];
+      if (!to || to === el) return;
+      e.preventDefault();
+      to.focus();
+      if (to.dataset.v != null && ACTIONS[to.dataset.act]) ACTIONS[to.dataset.act](to);
+    };
   });
   syncSegs(root);
   if (S.review) bindReview(root);
@@ -2708,14 +3036,31 @@ const ACTIONS = {
         new Promise(done => setTimeout(done, prefersReducedMotion() ? 0 : 260))]);
       if (turn !== el.turn) return;
       S.info.settings = saved;
-    } else S.info.settings = await api().save_prefs({ [key]: JSON.parse(el.dataset.v) });
+    } else {
+      const value = JSON.parse(el.dataset.v);
+      if (S.info.settings[key] === value) return;  // already the choice
+      // Shown at once: the highlight sets off on the click, not when Python has answered. What
+      // Python saved follows, and is only drawn if it isn't what's already showing.
+      S.info.settings = { ...S.info.settings, [key]: value };
+      if (key === "theme") applyTheme();
+      render();
+      const turn = S.prefTurn = (S.prefTurn || 0) + 1;
+      const saved = await api().save_prefs({ [key]: value });
+      if (turn !== S.prefTurn || JSON.stringify(saved) === JSON.stringify(S.info.settings)) return;
+      S.info.settings = saved;
+    }
     if (key === "theme") applyTheme();
     if (key === "less_motion") applyLessMotion();
     render();
   },
   "reset-prefs": () => confirmBox("Reset these settings?", "Subtitle style, speakers, accuracy, when it's done and appearance go back to how they started. Quality, language and where subtitles go stay as they are.",
     "Reset", async () => { S.info.settings = await api().reset_prefs(); applyTheme(); applyLessMotion(); render(); toast("Settings reset."); }),
-  "out-here": async () => { S.info.settings = await api().set_output_dir(null); render(); },
+  "out-here": async () => {
+    if (!S.info.settings.output_dir) return;
+    S.info.settings = { ...S.info.settings, output_dir: null };  // shown at once; Python's answer follows
+    render();
+    S.info.settings = await api().set_output_dir(null);
+  },
   "out-folder": async () => {
     const dir = await api().choose_folder();
     if (dir) { S.info.settings = await api().set_output_dir(dir); render(); toast("New subtitles will be saved there."); }
@@ -2732,6 +3077,8 @@ const ACTIONS = {
   news: () => showNews(null, false),
   channel: async el => {
     if (el.dataset.v === (S.info.settings.channel || "main")) return;
+    S.info.settings = { ...S.info.settings, channel: el.dataset.v };  // shown at once; Python's answer follows
+    render();
     S.info.settings = await api().set_channel(el.dataset.v);
     S.update.sheet = true;  // straight to what switching means, with a button to do it
     checkUpdate(false);
@@ -2792,19 +3139,23 @@ const ACTIONS = {
     }),
   remove: el => { S.queue = S.queue.filter(q => !(q.path === el.dataset.path && q.status === "waiting")); render(); },
   // Remembered for next time: most people make the same kind of video again
-  multi: el => { S.multi = el.dataset.v === "1"; render(); api().save_prefs({ multi: S.multi }); },
-  people: el => { S.people = +el.dataset.v; render(); api().save_prefs({ people: S.people }); },
+  multi: el => { if (S.multi === (el.dataset.v === "1")) return; S.multi = el.dataset.v === "1"; render(); api().save_prefs({ multi: S.multi }); },
+  people: el => { if (S.people === +el.dataset.v) return; S.people = +el.dataset.v; render(); api().save_prefs({ people: S.people }); },
   voices: async () => { S.info.voices = await api().open_voices(); },
   "goto-settings": () => go("settings", "tab", "quality"),
-  "settings-page": el => { S.page = el.dataset.page; render("in"); },
-  "settings-back": () => { S.page = null; render("back"); },
+  "goto-speakers": () => go("settings", "tab", "speakers"),
+  about: () => { if (!S.info || S.setup || (S.view === "settings" && S.page === "about")) return; go("settings", S.view === "settings" ? "in" : "tab", "about"); },
+  "open-program-folder": () => api().open_program_folder(),
+  // a page opened from another page (Software update from About) goes back to it
+  "settings-page": el => { S.pageBack = S.page || null; S.page = el.dataset.page; render("in"); },
+  "settings-back": () => { S.page = S.pageBack || null; S.pageBack = null; render("back"); },
   start: () => next(),
   cancel: () => { S.cancelAll = true; api().cancel(); },
   reveal: el => api().reveal(el.dataset.path),
   "error-log": () => api().open_error_log(),
   clear: () => { S.queue = S.queue.filter(q => q.status === "waiting" || q.status === "check"); render(); },
   log: el => { if (S.run) S.run.logOpen = el.open; },
-  level: el => { S.draft.level = el.dataset.v; render(); },
+  level: el => { if (S.draft.level === el.dataset.v) return; S.draft.level = el.dataset.v; render(); },
   lang: el => { const v = el.dataset.v; S.draft.language = v === "null" ? null : v === "other" && langKeyOf(S.draft.language) === "other" ? S.draft.language : v; render(); if (v === "other") $("#lang-code").focus(); },
   save: async () => {
     if (S.draft.language === "other") return toast("Pick a language from the list, or Auto-detect.", true);

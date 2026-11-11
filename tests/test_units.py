@@ -340,6 +340,20 @@ assert paths.TRANSLATE_WITH["large-v3-turbo"] in {lv["model"] for lv in paths.LE
 assert "translate" in app.Api._INSTANT
 paths.save_settings(paths.DEFAULT_SETTINGS)
 
+# Remember where you scrolled: on by default, only true/false, saved from the window like the
+# other switches, and Reset settings turns it back on
+assert paths.DEFAULT_SETTINGS["remember_scroll"] is True
+assert "remember_scroll" in app.Api._INSTANT
+assert saver.save_prefs({"remember_scroll": False})["remember_scroll"] is False
+assert paths.load_settings()["remember_scroll"] is False, "it's kept on disk"
+assert saver.save_prefs({"remember_scroll": "sometimes"})["remember_scroll"] is True, "anything but true/false goes back to on"
+saver.save_prefs({"remember_scroll": False})
+assert saver.reset_prefs()["remember_scroll"] is True
+paths.save_settings(paths.DEFAULT_SETTINGS)
+
+# The meters in Settings > Quality: every level says how fast and how accurate it is, out of 5
+assert all(1 <= lv[k] <= 5 for lv in paths.LEVELS.values() for k in ("speed", "accuracy"))
+
 # A speaker model download that isn't the expected file is thrown away, never kept
 import tempfile as _tf  # noqa: E402
 import urllib.request as _ur  # noqa: E402
