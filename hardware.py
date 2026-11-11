@@ -153,8 +153,9 @@ def memory_check(settings, hw, speakers=False, minutes=ASSUMED_MINUTES):
 
 # Windows' "out of memory" process exit codes: STATUS_NO_MEMORY, STATUS_COMMITMENT_LIMIT
 MEMORY_EXIT_CODES = {0xC0000017, 0xC000012D}
-MEMORY_WORDS = ("memoryerror", "bad_alloc", "unable to allocate", "cannot allocate memory", "not enough memory",
-                "paging file is too small", "out of memory", "failed to allocate", "insufficient memory")
+MEMORY_WORDS = ("memoryerror", "bad_alloc", "bad allocation", "unable to allocate", "cannot allocate memory",
+                "not enough memory", "paging file is too small", "out of memory", "failed to allocate",
+                "insufficient memory")
 
 
 def is_memory_error(error=None, code=None):

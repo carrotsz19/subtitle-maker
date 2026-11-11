@@ -438,6 +438,8 @@ assert hardware.memory_check({**paths.DEFAULT_SETTINGS, "memory_limit_gb": 8}, g
 # Running out of memory is said plainly: over the limit in Settings, or the whole PC
 assert hardware.is_memory_error(MemoryError())
 assert hardware.is_memory_error("RuntimeError: std::bad_alloc")
+assert hardware.is_memory_error("RuntimeException: [ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Non-zero status code "
+                                "returned while running Pad node. Status Message: bad allocation"), "the speech detector's"
 assert hardware.is_memory_error("numpy._core._exceptions._ArrayMemoryError: Unable to allocate 1.2 GiB")
 assert hardware.is_memory_error("Speaker detection stopped (code 1): MemoryError")
 assert hardware.is_memory_error(None, code=0xC0000017) and hardware.is_memory_error(None, code=-1073741801)
