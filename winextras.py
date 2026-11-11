@@ -291,7 +291,7 @@ def set_placement(hwnd, saved, min_size=(200, 150), grip=(40, 40, 30)):
 WM_SIZE, WM_ACTIVATE, WM_NCDESTROY, WM_NCCALCSIZE = 0x5, 0x6, 0x82, 0x83
 WM_NCLBUTTONDOWN, WM_SYSCOMMAND = 0xA1, 0x112
 SIZE_MINIMIZED, SIZE_MAXIMIZED = 1, 2
-SC_MINIMIZE, SC_MAXIMIZE, SC_CLOSE, SC_RESTORE = 0xF020, 0xF030, 0xF060, 0xF120
+SC_MINIMIZE, SC_MAXIMIZE, SC_CLOSE, SC_KEYMENU, SC_RESTORE = 0xF020, 0xF030, 0xF060, 0xF100, 0xF120
 WS_CAPTION, WS_THICKFRAME, GWL_STYLE = 0x00C00000, 0x00040000, -16
 # where a drag starting at the page's top edge resizes from (the hit-test codes Windows uses)
 EDGES = {"n": 12, "nw": 13, "ne": 14}  # HTTOP, HTTOPLEFT, HTTOPRIGHT
@@ -368,6 +368,11 @@ class CustomFrame:
             except Exception:
                 pass
             return result
+        if msg == WM_SYSCOMMAND and wparam & 0xFFF0 == SC_KEYMENU and lparam == 0:
+            # Alt pressed and let go on its own. Windows would go into the window menu's keyboard
+            # mode, shown only by the caption that's no longer there, and the next click or close
+            # would vanish into it. Alt+Space (lparam ' ') still opens the window menu.
+            return 0
         if msg == WM_NCDESTROY:
             try:
                 self._comctl32.RemoveWindowSubclass(hwnd, self._proc, _SUBCLASS_ID)

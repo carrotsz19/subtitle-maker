@@ -9,6 +9,7 @@ A release (see "Releasing a new version" in the README) needs its section here f
 - **You decide how much of your PC it uses.** Settings > Hardware has three presets: Share nicely (other apps get the processor first; a little slower while they're busy), Full speed, and Light (a quarter of the processor at most, so it's slower). Or set your own processor share and memory limit, and choose the graphics card or the processor. Windows holds the processor and memory to them, speaker names included. A change applies from the next video.
 - **See what it's using.** While a video is being made, it shows how much of the processor and memory Subtitle Maker is using, next to your limits.
 - **Says when a limit gets in the way.** Quality shows a level a limit makes slow, or that won't fit. A queue that may need more memory than you allowed asks first, and a video that runs out says so and can be tried again.
+- **A cleaner window.** The title bar is gone: the app runs edge to edge, with its own minimise, maximise and close buttons, and still snaps, resizes and remembers where it was.
 - "Use less graphics memory" fits the speech model in about half the graphics memory, on newer NVIDIA cards (RTX 20 series and up).
 - Easier to read: grey text, and switches that are off, stand out more.
 - Copying a video from Google Drive, or downloading a model, fills its bar as it goes instead of just sliding.

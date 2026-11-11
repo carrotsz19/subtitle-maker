@@ -858,6 +858,56 @@ def walk(obj, base=""):
 walk(api)
 nested = [e for e in exposed if "." in e]
 assert exposed and not nested, nested
+# --- The page's own title bar (winextras.custom_frame), on a hidden window of this thread ---
+if winextras.WINDOWS:
+    import ctypes  # noqa: E402
+    from ctypes import wintypes  # noqa: E402
+
+    user32 = ctypes.WinDLL("user32")
+    user32.CreateWindowExW.restype = wintypes.HWND
+    user32.CreateWindowExW.argtypes = (wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_int,
+                                       ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND, wintypes.HMENU,
+                                       wintypes.HINSTANCE, wintypes.LPVOID)
+    user32.SendMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+    user32.SendMessageW.restype = ctypes.c_ssize_t
+    for name in ("GetClientRect", "GetWindowRect"):
+        getattr(user32, name).argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.RECT))
+    user32.DestroyWindow.argtypes = (wintypes.HWND,)
+
+    def made(style):
+        hwnd = user32.CreateWindowExW(0, "STATIC", "test", style, 100, 100, 640, 480, None, None, None, None)
+        assert hwnd, "couldn't make a test window"
+        return hwnd
+
+    def client_height(hwnd):
+        r = wintypes.RECT()
+        user32.GetClientRect(hwnd, ctypes.byref(r))
+        return r.bottom
+
+    hwnd = made(0x00CF0000)  # WS_OVERLAPPEDWINDOW, hidden
+    framed = client_height(hwnd)
+    assert winextras.custom_frame(hwnd) is None
+    # the caption's height goes to the page; the sides and bottom keep Windows' (invisible) sizing border
+    outer = wintypes.RECT()
+    user32.GetWindowRect(hwnd, ctypes.byref(outer))
+    assert framed < client_height(hwnd) < outer.bottom - outer.top, (framed, client_height(hwnd))
+    # a bare Alt doesn't send the window into a menu mode nobody can see; Alt+Space still opens the menu
+    assert user32.SendMessageW(hwnd, winextras.WM_SYSCOMMAND, winextras.SC_KEYMENU, 0) == 0
+    user32.DestroyWindow(hwnd)  # takes the subclass off as it goes (WM_NCDESTROY)
+    popup = made(0x80000000)  # WS_POPUP: no frame to keep, so it's left alone
+    assert winextras.custom_frame(popup), "a window without a frame and caption is left as it is"
+    user32.DestroyWindow(popup)
+
+    # Placement only comes back if the strip the window is dragged by is on a screen: the page's
+    # strip is narrower (its buttons are at the right), so a window almost off the left edge whose
+    # native title bar would still show a little is put somewhere sensible instead
+    probe = made(0x00CF0000)
+    nearly_off = {"rect": [-1000, 100, 60, 700], "maximized": False}
+    assert winextras.set_placement(probe, nearly_off)
+    assert not winextras.set_placement(probe, nearly_off, grip=(48, 186, 32))
+    assert not winextras.set_placement(probe, {"rect": [-30000, -30000, -29000, -29300], "maximized": False})
+    user32.DestroyWindow(probe)
+
 # --- The installer scripts are plain ASCII ---
 # Windows PowerShell 5.1 reads a .ps1 without a byte-order mark as ANSI, so one "…" or "█" in
 # install.ps1 breaks Subtitle-Maker-Setup.exe, which runs it from a file (a paste is fine).

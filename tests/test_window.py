@@ -31,4 +31,5 @@ if sys.platform == "win32":
         "taskbar progress failed (see startup.log above)"
     assert "window handle and flashing: ok" in text, "reading the window handle or flashing failed (see startup.log above)"
     assert "notification: ok" in text, "the notification failed (see startup.log above)"
+    assert "title bar: the page's own" in text, "Windows' title bar couldn't be taken off (see startup.log above)"
 print(f"Window test passed: ready after {ready.group(1)} s")
