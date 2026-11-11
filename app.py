@@ -294,6 +294,11 @@ class Api:
                 self._progress(state=winextras.INDETERMINATE)
             elif event["type"] == "error":
                 self._progress(state=winextras.ERROR)
+            elif event["type"] == "download":
+                # copying a video from Google Drive, or downloading a model: on the taskbar too
+                total = event.get("total")
+                self._progress(min(event.get("done", 0) / total, 1.0) if total else None,
+                               None if total else winextras.INDETERMINATE)
 
     def _progress(self, fraction=None, state=None):
         if self._window and winextras.WINDOWS:

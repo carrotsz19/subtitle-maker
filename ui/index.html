@@ -1748,9 +1748,10 @@ function ownUsage(res) {
 /* The running card's main bar: the whole video once it's being transcribed. Before that, a copy
    from Google Drive (or a model being downloaded) that knows how big it is fills its own bar, by
    its own name, so the video's bar starts afresh from empty; only a wait of unknown length slides. */
+const fraction = x => Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 0;
 function runBar(r) {
-  if (r.total) return { p: overallShown(r), name: "run", sliding: false };
-  if (r.fetch) return { p: Math.min(1, r.fetch.done / r.fetch.total), name: `fetch-${r.fetch.item}`, sliding: false };
+  if (r.total) return { p: fraction(overallShown(r)), name: "run", sliding: false };
+  if (r.fetch) return { p: fraction(r.fetch.done / r.fetch.total), name: `fetch-${r.fetch.item}`, sliding: false };
   return { p: 0, name: "run", sliding: true };
 }
 function viewRunning() {
@@ -1769,7 +1770,7 @@ function viewRunning() {
         <h3 class="trunc">${esc(r.item.name)}</h3></div>
       <button class="btn ghost sm" data-act="cancel">Cancel</button></div>
     <div><div class="between" style="align-items:flex-end;margin-bottom:8px">
-        <div><div class="big-pct mono" id="run-pct">${r.total ? pctText(pct) : "…"}</div></div>
+        <div><div class="big-pct mono" id="run-pct">${r.total ? pctText(pct) : bar.sliding ? "…" : pctText(bar.p)}</div></div>
         <div class="sm dim right mono" id="run-stage">${stageText(r, done)}</div></div>
       <div class="bar${bar.sliding ? " indeterminate" : ""}" data-bar="${esc(bar.name)}" style="--p:${bar.p.toFixed(4)}"><i></i></div></div>
     ${r.speakers != null ? `<div><div class="between sm"><span class="dim">Working out who's talking</span><span class="mono dim" id="run-spk">${Math.round(r.speakers * 100)}%</span></div>
@@ -3731,7 +3732,8 @@ const app = {
       case "download":
         if (r.kind === "make") {
           r.stage = `${ev.item === "video" ? "Copying" : "Downloading"} ${ev.label}${ev.total ? ` · ${Math.round(ev.done)} of ${Math.round(ev.total)} MB` : ""}`;
-          r.fetch = ev.total ? { item: ev.item, done: ev.done, total: ev.total } : null;  // the bar fills when the size is known
+          // the bar fills when the size is known, and goes once it's all there
+          r.fetch = ev.total > 0 && ev.done < ev.total ? { item: ev.item, done: ev.done, total: ev.total } : null;
           break;
         }
         r.downloads[ev.item] = { done: ev.done, total: ev.total, finished: ev.total && ev.done >= ev.total };
@@ -3814,9 +3816,14 @@ function patchRunning() {
   const fresh = tmp.firstElementChild;
   // The main bar slides back and forth until a length is known; stop that once it is. A bar for
   // something else (the copy before, the video after) comes in fresh instead of gliding over.
+  // (it comes in empty and fills to where it is, rather than appearing part full)
   const bar = card.querySelector(".bar"), freshBar = fresh.querySelector(".bar");
-  if (bar.dataset.bar !== freshBar.dataset.bar) bar.replaceWith(freshBar.cloneNode(true));
-  else bar.classList.toggle("indeterminate", freshBar.classList.contains("indeterminate"));
+  if (bar.dataset.bar !== freshBar.dataset.bar) {
+    const nu = freshBar.cloneNode(true);
+    nu.style.setProperty("--p", 0);
+    bar.replaceWith(nu);
+    void nu.offsetWidth;
+  } else bar.classList.toggle("indeterminate", freshBar.classList.contains("indeterminate"));
   // Keep the log's open state and scroll, and move the bars on from where they are
   card.querySelectorAll(".bar").forEach((old, i) => {
     const nu = fresh.querySelectorAll(".bar")[i];
