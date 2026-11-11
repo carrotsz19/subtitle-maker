@@ -355,7 +355,7 @@ paths.save_settings(paths.DEFAULT_SETTINGS)
 import hardware  # noqa: E402
 import winextras  # noqa: E402
 
-# The default is Balanced: no caps (as fast as 0.3.0 with nothing else running), other apps first
+# The default is Balanced: no caps, other apps first
 assert hardware.preset_of(paths.DEFAULT_SETTINGS) == "balanced"
 assert hardware.PRESETS["full"] == {"cpu_percent": 100, "low_priority": False, "memory_limit_gb": 0, "gpu_low_memory": False}
 assert all(set(p) == set(hardware.KEYS) for p in hardware.PRESETS.values())
@@ -772,13 +772,12 @@ if len(listed) > 2:
     assert [v["version"] for v in changelog.news()] == [listed[0]["version"], listed[1]["version"]]
 changelog.mark_seen()
 assert changelog.news() == []
-# 0.x to 1.0.0: compared as numbers, so someone on 0.2.5 (Stable) sees 1.0.0 and 0.3.0, someone
-# on 0.3.0 (Experimental) only 1.0.0, and 0.10 comes after 0.9
-assert changelog.current() == "1.0.0" and listed[1]["version"] == "0.3.0"
-changelog.mark_seen("0.2.5")
-assert [v["version"] for v in changelog.news()] == ["1.0.0", "0.3.0"]
-changelog.mark_seen("0.3.0")
-assert [v["version"] for v in changelog.news()] == ["1.0.0"]
+# Versions are compared as numbers (0.x to 1.0.0 was a jump): someone two versions behind sees
+# both, one behind only the newest, and 0.10 comes after 0.9
+changelog.mark_seen(listed[2]["version"])
+assert [v["version"] for v in changelog.news()] == [listed[0]["version"], listed[1]["version"]]
+changelog.mark_seen(listed[1]["version"])
+assert [v["version"] for v in changelog.news()] == [listed[0]["version"]]
 assert changelog._key("0.10.0") > changelog._key("0.9.9") and changelog._key("1.0.0") > changelog._key("0.99.0")
 changelog.mark_seen()
 # The update notice comes from commit prefixes: a release's Feature: commits say "New features"

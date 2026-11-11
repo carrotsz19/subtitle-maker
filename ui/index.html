@@ -2332,7 +2332,7 @@ function pageDone() {
 /* Settings > Hardware: presets, then each limit on its own. Every one is enforced by app.py and
    make_subtitles.py (see hardware.py); nothing here is a wish. */
 const HW_PRESETS = [
-  ["balanced", "Balanced", "Leaves room for other apps: they get the processor first. Just as fast when nothing else is running."],
+  ["balanced", "Balanced", "Leaves room for other apps: they get the processor first. About as fast, a little slower while other apps are busy."],
   ["full", "Full speed", "Uses all it can and doesn't step aside for other apps, like earlier versions."],
   ["light", "Light", "Barely noticeable: a quarter of the processor at most{gpu}. Videos take longer."],
 ];
@@ -2408,7 +2408,7 @@ function pageHardware() {
     ${S.run && S.run.kind === "make" ? `<div class="block"><h2>Now</h2><div class="card stack" id="hw-live">${hwLive()}</div></div>` : ""}
     <div class="block"><h2>Processor</h2><div class="grp">
         ${prefRow("Processor", cpuSub, segPref("cpu_percent"), "cpu_percent")}
-        ${prefRow("Let other apps go first", "Your other apps get the processor before it does. When nothing else needs it, this is just as fast.", switchPref("low_priority"), "low_priority")}
+        ${prefRow("Let other apps go first", "Your other apps get the processor before it does, so it's a little slower while they're busy.", switchPref("low_priority"), "low_priority")}
       </div></div>
     <div class="block"><h2>Memory</h2><div class="grp">
         ${prefRow("Memory limit", memSub, segPref("memory_limit_gb", memOptions()), "memory_limit_gb")}

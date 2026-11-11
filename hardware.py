@@ -31,7 +31,7 @@ KEYS = ("cpu_percent", "low_priority", "memory_limit_gb", "gpu_low_memory")
 PRESETS = {
     # 0.3.0 exactly: normal priority, the libraries' own thread counts, no limits
     "full": {"cpu_percent": 100, "low_priority": False, "memory_limit_gb": 0, "gpu_low_memory": False},
-    # The default: just as fast while nothing else is running; other apps go first when they want to
+    # The default: no caps, other apps go first (about as fast; a little slower while they're busy)
     "balanced": {"cpu_percent": 100, "low_priority": True, "memory_limit_gb": 0, "gpu_low_memory": False},
     # A quarter of the processor at most, and the smaller format on the graphics card
     "light": {"cpu_percent": 25, "low_priority": True, "memory_limit_gb": 0, "gpu_low_memory": True},

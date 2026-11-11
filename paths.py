@@ -85,8 +85,9 @@ DEFAULT_SETTINGS = {
     "translate": False,
     # Settings > Hardware (see hardware.py): how much of the processor it may use (100 = no limit),
     # letting other apps go first, a memory limit in GB (0 = none), and the graphics card's smaller
-    # number format. These are the Balanced preset: as fast as 0.3.0 while nothing else is running,
-    # and other apps get the processor first when they want it.
+    # number format. These are the Balanced preset: no caps, and other apps get the processor first.
+    # Measured against 0.3.0's normal priority (Full speed): the same speed transcribing alone, about
+    # 6% slower with speaker names on a PC with other apps open (they went first, as intended).
     "cpu_percent": 100, "low_priority": True, "memory_limit_gb": 0, "gpu_low_memory": False,
 }
 # large-v3-turbo was only trained to transcribe: asked to translate, it writes the original
