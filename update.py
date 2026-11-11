@@ -32,7 +32,7 @@ from paths import data_dir, load_settings, save_settings
 HERE = Path(__file__).parent
 REPO = os.environ.get("SUBTITLE_MAKER_REPO", "carrotsz19/subtitle-maker")
 # Which version to follow: the stable one everybody gets, or the experimental one (newer, less
-# tested). Each is a branch of the repo; Settings > Updates switches between them.
+# tested). Each is a branch of the repo; Settings > Software update switches between them.
 CHANNELS = {"main": "Stable", "experimental": "Experimental"}
 API = os.environ.get("SUBTITLE_MAKER_API", "https://api.github.com") + "/repos/" + REPO  # override for testing
 # GitHub's API allows 60 requests an hour per internet address without signing in, and a school or
@@ -366,15 +366,11 @@ def finish(wait_pid, reopen=True):
     except OSError:
         pending = []
     if pending:
-        print("Finishing the update: installing new Python packages (a minute or two)...")
-        try:
-            for name in pending:
-                pip(name, quiet=False)
-            PENDING_FILE.unlink(missing_ok=True)
-        except (OSError, subprocess.CalledProcessError) as e:
-            print(f"That didn't work ({e}). Run Setup.bat to fix it.")
-            input("Press Enter to close.")
-            return
+        import finishing  # a small window saying what's happening, instead of a console
+
+        if not finishing.install(pending):
+            return  # the window said what went wrong and how to fix it
+        PENDING_FILE.unlink(missing_ok=True)
     if reopen:
         pythonw = Path(sys.executable).with_name("pythonw.exe")
         subprocess.Popen([str(pythonw if pythonw.exists() else sys.executable), str(HERE / "app.py")], cwd=str(HERE),

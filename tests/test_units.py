@@ -340,6 +340,184 @@ assert paths.TRANSLATE_WITH["large-v3-turbo"] in {lv["model"] for lv in paths.LE
 assert "translate" in app.Api._INSTANT
 paths.save_settings(paths.DEFAULT_SETTINGS)
 
+# Remember where you scrolled: on by default, only true/false, saved from the window like the
+# other switches, and Reset settings turns it back on
+assert paths.DEFAULT_SETTINGS["remember_scroll"] is True
+assert "remember_scroll" in app.Api._INSTANT
+assert saver.save_prefs({"remember_scroll": False})["remember_scroll"] is False
+assert paths.load_settings()["remember_scroll"] is False, "it's kept on disk"
+assert saver.save_prefs({"remember_scroll": "sometimes"})["remember_scroll"] is True, "anything but true/false goes back to on"
+saver.save_prefs({"remember_scroll": False})
+assert saver.reset_prefs()["remember_scroll"] is True
+paths.save_settings(paths.DEFAULT_SETTINGS)
+
+# --- Settings > Hardware ---
+import hardware  # noqa: E402
+import winextras  # noqa: E402
+
+# The default is Balanced: no caps, other apps first
+assert hardware.preset_of(paths.DEFAULT_SETTINGS) == "share"
+assert hardware.PRESETS["full"] == {"cpu_percent": 100, "low_priority": False, "memory_limit_gb": 0, "gpu_low_memory": False}
+assert all(set(p) == set(hardware.KEYS) for p in hardware.PRESETS.values())
+assert all(k in app.Api._INSTANT for k in hardware.KEYS)
+# Only the offered values are kept; anything else goes back to the default
+for key, bad in (("cpu_percent", 33), ("cpu_percent", "50"), ("low_priority", "yes"), ("memory_limit_gb", 5),
+                 ("memory_limit_gb", -1), ("gpu_low_memory", 1.5)):
+    assert saver.save_prefs({key: bad})[key] == paths.DEFAULT_SETTINGS[key], (key, bad)
+assert saver.save_prefs({"cpu_percent": 50})["cpu_percent"] == 50
+assert paths.load_settings()["cpu_percent"] == 50, "it's kept on disk"
+assert hardware.preset_of(paths.load_settings()) == "custom"
+# Picking a preset sets all it covers; a setting sent with it wins
+light = saver.save_prefs({"hw_preset": "light"})
+assert hardware.preset_of(light) == "light" and light["cpu_percent"] == 25 and light["gpu_low_memory"] is True
+assert saver.save_prefs({"hw_preset": "nonsense"})["cpu_percent"] == 25, "an unknown preset changes nothing"
+assert saver.save_prefs({"hw_preset": "full", "memory_limit_gb": 8})["memory_limit_gb"] == 8
+assert saver.reset_prefs()["cpu_percent"] == 100 and hardware.preset_of(paths.load_settings()) == "share"
+paths.save_settings(paths.DEFAULT_SETTINGS)
+
+# Threads: a share of the processor's threads, at least 1, set only when that's fewer than the 4
+# the models use anyway (the cap holds the rest); none under no limit, as in 0.3.0
+assert hardware.threads_for(100, 12) is None
+assert hardware.threads_for(25, 12) == 3 and hardware.threads_for(25, 2) == 1
+assert hardware.threads_for(50, 12) is None and hardware.threads_for(75, 12) is None, "the cap alone"
+assert hardware.threads_for(25, 4) == 1 and hardware.threads_for(75, 4) == 3
+
+# The worker's environment: thread variables only under a processor limit, and nothing left over
+# from the app's own environment
+base = {"PATH": "x", "OMP_NUM_THREADS": "9", hardware.ENV_MEMORY: "1"}
+env = hardware.worker_env(paths.DEFAULT_SETTINGS, base, cores=12)
+assert env == {"PATH": "x", "OMP_NUM_THREADS": "9"}, env
+capped = {**paths.DEFAULT_SETTINGS, "cpu_percent": 25, "memory_limit_gb": 4, "gpu_low_memory": True}
+env = hardware.worker_env(capped, {"PATH": "x"}, cores=12)
+assert all(env[v] == "3" for v in hardware.THREAD_VARS), env
+assert env[hardware.ENV_THREADS] == "3" and env[hardware.ENV_CPU] == "25" and env[hardware.ENV_MEMORY] == "4096"
+assert env[hardware.ENV_GPU_LOW] == "1" and base["PATH"] == "x"
+assert hardware.env_int(hardware.ENV_THREADS, env) == 3 and hardware.env_int(hardware.ENV_THREADS, {}) is None
+assert hardware.env_int(hardware.ENV_CPU, {hardware.ENV_CPU: "lots"}) is None
+assert hardware.limits(capped, cores=12) == {"threads": 3, "cpu_percent": 25, "memory_mb": 4096,
+                                             "low_priority": True, "gpu_low_memory": True, "device": "auto"}
+assert hardware.limits({**paths.DEFAULT_SETTINGS, "device": "cpu"}, 12) != hardware.limits(paths.DEFAULT_SETTINGS, 12), \
+    "switching to the processor starts a fresh worker (which lets go of the graphics memory)"
+# Light on a card where "Use less graphics memory" changes nothing is still Light, either way
+light_off = {**paths.DEFAULT_SETTINGS, **hardware.PRESETS["light"], "gpu_low_memory": False}
+assert hardware.preset_of(light_off) == "custom" and hardware.preset_of(light_off, gpu_low_memory=False) == "light"
+assert hardware.limits(paths.DEFAULT_SETTINGS, 12) != hardware.limits(capped, 12), "a change starts a fresh worker"
+half = hardware.worker_env({**paths.DEFAULT_SETTINGS, "cpu_percent": 50}, {"PATH": "x"}, cores=12)
+assert half == {"PATH": "x", hardware.ENV_CPU: "50"}, "50% of 12 threads: the cap, threads left alone"
+# The worker and the speaker step read the limit; WhisperModel gets it, and nothing without one
+_saved_env = dict(app.os.environ)
+app.os.environ.update({hardware.ENV_THREADS: "3"})
+assert ms.cpu_limits() == {"cpu_threads": 3, "num_workers": 1}
+app.os.environ.pop(hardware.ENV_THREADS)
+assert ms.cpu_limits() == {}
+app.os.environ.clear()
+app.os.environ.update(_saved_env)
+# Remembered speeds are kept apart under a processor limit
+assert hardware.speed_suffix({hardware.ENV_CPU: "25"}) == "|cpu25" and hardware.speed_suffix({}) == ""
+
+# The graphics card's format: the fastest, or the smallest that's still fast; the same on a card
+# without float16 (GTX 10-series), where "Use less graphics memory" isn't offered
+assert hardware.compute_type({"float16", "int8_float16", "int8", "float32"}) == "float16"
+assert hardware.compute_type({"float16", "int8_float16", "int8", "float32"}, low_memory=True) == "int8_float16"
+assert hardware.compute_type({"int8", "int8_float32", "float32"}, True) == hardware.compute_type({"int8", "int8_float32", "float32"}) == "int8"
+assert hardware.saves_gpu_memory({"float16", "int8_float16", "int8"}) and not hardware.saves_gpu_memory({"int8", "float32"})
+
+# The memory pre-flight: the level (on the processor or the graphics card), speakers, the sound
+gtx = {"gpu": "GTX 1050", "vram_mb": 3072}
+assert all(set(lv["ram_mb"]) == {"cpu", "cuda"} and lv["ram_mb"]["cpu"] >= lv["ram_mb"]["cuda"] for lv in paths.LEVELS.values())
+assert hardware.device_for(paths.DEFAULT_SETTINGS, gtx, "high") == "cuda"
+assert hardware.device_for(paths.DEFAULT_SETTINGS, {"gpu": "x", "vram_mb": 2048}, "max") == "cpu", "Automatic: too big"
+assert hardware.device_for(paths.DEFAULT_SETTINGS, {"gpu": None}, "fast") == "cpu"
+assert hardware.device_for({**paths.DEFAULT_SETTINGS, "device": "cpu"}, gtx, "fast") == "cpu"
+need = hardware.memory_needed_mb("high", "cpu", speakers=True, minutes=10)
+assert need == paths.LEVELS["high"]["ram_mb"]["cpu"] + paths.SPEAKERS_RAM_MB + 10 * paths.AUDIO_RAM_MB_PER_MINUTE
+assert hardware.memory_needed_mb("potato", "cpu", speakers=True, minutes=0) == paths.LEVELS["potato"]["ram_mb"]["cpu"], \
+    "Potato never detects speakers"
+assert hardware.memory_check(paths.DEFAULT_SETTINGS, gtx)["fits"], "no limit: always fits"
+tight = {**paths.DEFAULT_SETTINGS, "memory_limit_gb": 2}
+check = hardware.memory_check(tight, gtx, speakers=True)
+assert not check["fits"] and check["limit_mb"] == 2048 and check["need_mb"] > 2048
+assert hardware.memory_check({**tight, "level": "potato"}, gtx, minutes=10)["fits"]
+assert hardware.memory_check({**paths.DEFAULT_SETTINGS, "memory_limit_gb": 8}, gtx, speakers=True)["fits"]
+# A little over by the (rounded-up) estimate isn't warned about: High with speaker names on the
+# graphics card is estimated at 4.1 GB, and a 4 GB limit lets it through
+four = hardware.memory_check({**paths.DEFAULT_SETTINGS, "memory_limit_gb": 4}, gtx, speakers=True)
+assert four["need_mb"] > 4096 and four["fits"]
+assert not hardware.memory_check({**paths.DEFAULT_SETTINGS, "memory_limit_gb": 3}, gtx, speakers=True)["fits"]
+
+# Running out of memory is said plainly: over the limit in Settings, or the whole PC
+assert hardware.is_memory_error(MemoryError())
+assert hardware.is_memory_error("RuntimeError: std::bad_alloc")
+assert hardware.is_memory_error("RuntimeException: [ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Non-zero status code "
+                                "returned while running Pad node. Status Message: bad allocation"), "the speech detector's"
+assert hardware.is_memory_error("numpy._core._exceptions._ArrayMemoryError: Unable to allocate 1.2 GiB")
+assert hardware.is_memory_error("Speaker detection stopped (code 1): MemoryError")
+assert hardware.is_memory_error(None, code=0xC0000017) and hardware.is_memory_error(None, code=-1073741801)
+assert not hardware.is_memory_error("RuntimeError: CUDA failed with error out of memory"), "the graphics card's isn't"
+assert not hardware.is_memory_error("FileNotFoundError: x.mp4") and not hardware.is_memory_error(None, code=1)
+assert hardware.memory_message("MemoryError", limit_mb=2048) == hardware.MEMORY_MESSAGE
+assert hardware.memory_message("It stopped unexpectedly (code 3221225477).", 2048, hit=True) == hardware.MEMORY_MESSAGE
+assert "Settings > Hardware" in hardware.MEMORY_MESSAGE
+assert hardware.memory_message("MemoryError") == hardware.OUT_OF_MEMORY, "no limit set: the PC itself ran out"
+assert hardware.memory_message("Couldn't read the sound", 2048) == "Couldn't read the sound"
+assert hardware.memory_message("Couldn't read the sound", 2048, code=1) == "Couldn't read the sound"
+
+# The app's side: a worker's error over its limit becomes the plain message, flagged as memory
+class _FakeJob:
+    handle, hits = 1, [True]
+    def new_hits(self):  # noqa: E301
+        return self.hits.pop(0) if self.hits else False
+class _FakeWorker:  # noqa: E302
+    limits, job = hardware.limits(tight), _FakeJob()
+worker = _FakeWorker()
+assert saver._plain_error(worker, "It stopped unexpectedly (code 1).") == (hardware.MEMORY_MESSAGE, True)
+assert worker.restart, "the next video starts a fresh worker"
+# Going over in an earlier video doesn't count for the next one (each video starts afresh)
+worker = _FakeWorker()
+worker.job.hits = [True]
+saver._memory_hit(worker, fresh=True)
+assert saver._plain_error(worker, "Something went wrong: ValueError: x") == ("Something went wrong: ValueError: x", False)
+assert not getattr(worker, "restart", False), "a video that went fine doesn't restart the worker"
+_FakeWorker.job = None
+assert saver._plain_error(_FakeWorker(), "Couldn't read the sound") == ("Couldn't read the sound", False)
+
+# The Job Object itself (Windows): the cap and the limit read back as set, and going over the
+# limit is noticed
+if winextras.WINDOWS:
+    import subprocess as _sp  # noqa: E402
+
+    child = _sp.Popen([sys.executable, "-c", "import time; time.sleep(0.3); x = bytearray(600 * 2**20)"],
+                      stderr=_sp.PIPE)
+    job, problem = winextras.limit_job(child, cpu_percent=25, memory_mb=200)
+    assert job and not problem, problem
+    assert job.cpu_rate() == 25 and job.memory_limit_mb() == 200
+    child.wait()
+    assert child.returncode != 0 and b"MemoryError" in child.stderr.read()
+    assert job.new_hits(), "Windows said it went over"
+    assert not job.new_hits(), "and only once"
+    job.close()
+    assert winextras.limit_job(child) == (None, None), "nothing to limit: no job"
+    # nvidia-smi (here: another Python) started with CREATE_BREAKAWAY_FROM_JOB leaves the job, so
+    # its memory isn't counted; and closing the job ends what's still in it
+    # (the plain interpreter, not the venv's launcher, which starts a second process; started
+    # suspended until it's in the job, as app.py does)
+    base_python = getattr(sys, "_base_executable", sys.executable)
+    child = _sp.Popen([base_python, "-c", "import subprocess, sys, time; subprocess.run([sys.executable, '-c', "
+                       "'pass'], creationflags=0x01000000); print('ran', flush=True); time.sleep(60)"],
+                      stdout=_sp.PIPE, text=True, creationflags=0x4)
+    job, problem = winextras.limit_job(child, memory_mb=4000)
+    import psutil as _ps  # noqa: E402
+
+    _ps.Process(child.pid).resume()
+    assert child.stdout.readline().strip() == "ran"
+    assert job.processes() == 1, f"the breakaway child stayed out of the job ({job.processes()} in it)"
+    job.close()
+    child.wait(timeout=10)
+    assert child.returncode is not None, "closing the job ended the process in it"
+
+# The meters in Settings > Quality: every level says how fast and how accurate it is, out of 5
+assert all(1 <= lv[k] <= 5 for lv in paths.LEVELS.values() for k in ("speed", "accuracy"))
+
 # A speaker model download that isn't the expected file is thrown away, never kept
 import tempfile as _tf  # noqa: E402
 import urllib.request as _ur  # noqa: E402
@@ -605,8 +783,21 @@ video.write_bytes(b"x" * (3 * ms.COPY_PIECE + 5))
 real_place = ms.cloud_place
 assert ms.local_copy(video) == video  # a local file is read where it is
 ms.cloud_place = lambda path: "Google Drive"
-copy = ms.local_copy(video)
+import contextlib  # noqa: E402
+import io  # noqa: E402
+import json  # noqa: E402
+
+said = io.StringIO()
+ms.EVENTS = True
+with contextlib.redirect_stdout(said):
+    copy = ms.local_copy(video)
+ms.EVENTS = False
 assert copy.parent == ms.INCOMING and copy.read_bytes() == video.read_bytes()
+# Each piece says how far the copy has got and how big it is: the window's bar fills from that
+copying = [json.loads(line[len(ms.EVENT_PREFIX):]) for line in said.getvalue().splitlines() if line.startswith(ms.EVENT_PREFIX)]
+copying = [e for e in copying if e["type"] == "download"]
+assert len(copying) == 4 and all(e["item"] == "video" and e["total"] for e in copying), copying
+assert [e["done"] for e in copying] == sorted(e["done"] for e in copying) and copying[-1]["done"] == copying[-1]["total"]
 ms.clear_incoming()
 assert not ms.INCOMING.exists()
 ms.cloud_place = real_place
@@ -630,6 +821,17 @@ if len(listed) > 2:
     assert [v["version"] for v in changelog.news()] == [listed[0]["version"], listed[1]["version"]]
 changelog.mark_seen()
 assert changelog.news() == []
+# Versions are compared as numbers (0.x to 1.0.0 was a jump): someone two versions behind sees
+# both, one behind only the newest, and 0.10 comes after 0.9
+changelog.mark_seen(listed[2]["version"])
+assert [v["version"] for v in changelog.news()] == [listed[0]["version"], listed[1]["version"]]
+changelog.mark_seen(listed[1]["version"])
+assert [v["version"] for v in changelog.news()] == [listed[0]["version"]]
+assert changelog._key("0.10.0") > changelog._key("0.9.9") and changelog._key("1.0.0") > changelog._key("0.99.0")
+changelog.mark_seen()
+# The update notice comes from commit prefixes: a release's Feature: commits say "New features"
+assert update.change("Feature: Hardware limits")["kind"] == "feature"
+assert update.change("Improvement: Clearer grey text")["kind"] == "improvement"
 
 # The page's API must be our own functions only: pywebview walks every public attribute (and
 # theirs) on the window's main thread, and walking into the window froze it for a minute
@@ -656,6 +858,72 @@ def walk(obj, base=""):
 walk(api)
 nested = [e for e in exposed if "." in e]
 assert exposed and not nested, nested
+# --- The page's own title bar (winextras.custom_frame), on a hidden window of this thread ---
+if winextras.WINDOWS:
+    import ctypes  # noqa: E402
+    from ctypes import wintypes  # noqa: E402
+
+    user32 = ctypes.WinDLL("user32")
+    user32.CreateWindowExW.restype = wintypes.HWND
+    user32.CreateWindowExW.argtypes = (wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_int,
+                                       ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND, wintypes.HMENU,
+                                       wintypes.HINSTANCE, wintypes.LPVOID)
+    user32.SendMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+    user32.SendMessageW.restype = ctypes.c_ssize_t
+    for name in ("GetClientRect", "GetWindowRect"):
+        getattr(user32, name).argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.RECT))
+    user32.DestroyWindow.argtypes = (wintypes.HWND,)
+
+    def made(style):
+        hwnd = user32.CreateWindowExW(0, "STATIC", "test", style, 100, 100, 640, 480, None, None, None, None)
+        assert hwnd, "couldn't make a test window"
+        return hwnd
+
+    def client_height(hwnd):
+        r = wintypes.RECT()
+        user32.GetClientRect(hwnd, ctypes.byref(r))
+        return r.bottom
+
+    hwnd = made(0x00CF0000)  # WS_OVERLAPPEDWINDOW, hidden
+    framed = client_height(hwnd)
+    assert winextras.custom_frame(hwnd) is None
+    # the caption's height goes to the page; the sides and bottom keep Windows' (invisible) sizing border
+    outer = wintypes.RECT()
+    user32.GetWindowRect(hwnd, ctypes.byref(outer))
+    assert framed < client_height(hwnd) < outer.bottom - outer.top, (framed, client_height(hwnd))
+    # a bare Alt doesn't send the window into a menu mode nobody can see; Alt+Space still opens the menu
+    assert user32.SendMessageW(hwnd, winextras.WM_SYSCOMMAND, winextras.SC_KEYMENU, 0) == 0
+    winextras.native_frame(hwnd)  # (if the drag strip can't be had) Windows' title bar comes back
+    assert client_height(hwnd) == framed, (framed, client_height(hwnd))
+    assert winextras.custom_frame(hwnd) is None and client_height(hwnd) > framed  # and can go again
+    frame = winextras._frames[hwnd]
+    # Alt and a letter, or F10, don't either; Alt+Space is left to Windows
+    assert user32.SendMessageW(hwnd, winextras.WM_SYSCOMMAND, winextras.SC_KEYMENU, ord("f")) == 0
+    user32.DestroyWindow(hwnd)  # takes the subclass off as it goes (WM_NCDESTROY), and lets go of it
+    assert hwnd not in winextras._frames and frame.on_state is None and frame in winextras._retired
+    popup = made(0x80000000)  # WS_POPUP: no frame to keep, so it's left alone
+    assert winextras.custom_frame(popup), "a window without a frame and caption is left as it is"
+    user32.DestroyWindow(popup)
+
+    # Placement comes back where it was if the strip the window is dragged by is on a screen. The
+    # page's strip is narrower (its buttons are at the right), so a window almost off the left
+    # edge whose native title bar would still show a little is moved onto the screen instead; so
+    # is one whose screen has gone (it keeps its size, and opens maximized if it was)
+    probe = made(0x00CF0000)
+    # (small enough for any screen: Windows won't keep a window much wider than its screen, and
+    # the test machines' screens are 1024 x 768)
+    nearly_off = {"rect": [-500, 100, 100, 500], "maximized": False}
+    assert winextras.set_placement(probe, nearly_off)
+    assert winextras.get_placement(probe)["rect"] == [-500, 100, 100, 500], winextras.get_placement(probe)
+    assert winextras.set_placement(probe, nearly_off, grip=(48, 186, 32))
+    moved = winextras.get_placement(probe)["rect"]
+    assert moved[0] >= -8 and moved[2] - moved[0] == 600 and moved[3] - moved[1] == 400, moved
+    assert winextras.set_placement(probe, {"rect": [-30000, -30000, -29400, -29600], "maximized": False})
+    gone = winextras.get_placement(probe)["rect"]
+    assert gone[0] > -1000 and gone[1] > -1000 and gone[2] - gone[0] == 600 and gone[3] - gone[1] == 400, gone
+    assert not winextras.set_placement(probe, {"rect": [0, 0, 50, 50], "maximized": False})  # too small to be real
+    user32.DestroyWindow(probe)
+
 # --- The installer scripts are plain ASCII ---
 # Windows PowerShell 5.1 reads a .ps1 without a byte-order mark as ANSI, so one "…" or "█" in
 # install.ps1 breaks Subtitle-Maker-Setup.exe, which runs it from a file (a paste is fine).

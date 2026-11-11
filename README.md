@@ -56,13 +56,14 @@ Push to `experimental` first and let the Windows tests pass (Actions tab) before
 
 ### Releasing a new version
 
-1. Add a section to the top of [CHANGELOG.md](CHANGELOG.md): `## 0.3.0 · 5 November 2026`, then a
+1. Add a section to the top of [CHANGELOG.md](CHANGELOG.md): `## 1.0.0 · 11 November 2026`, then a
    `- ` line per change, written for the people using it. The app shows this version number in
    Settings > Software update, and after updating it opens a What's new sheet with this list (once).
 2. Bring `main` up to date with it (as above).
-3. Actions tab > Release > Run workflow on `main`, with the version (`v0.3.0`). It tags `main`
+3. Actions tab > Release > Run workflow on `main`, with the version (`v1.0.0`). It tags `main`
    and makes the GitHub release, with the CHANGELOG section at the top of its notes and the
-   installer attached. It stops if the CHANGELOG has no section for that version.
+   installer attached. It stops if the CHANGELOG has no section for that version. From v1.0.0 a
+   release is a full one; v0.x versions, and ones with a dash (`v1.1.0-beta.1`), are pre-releases.
 
 The installer is `Subtitle-Maker-Setup.exe`, built by the Release workflow with
 [Inno Setup](https://jrsoftware.org/isinfo.php) from [installer/SubtitleMaker.iss](installer/SubtitleMaker.iss).

@@ -4,6 +4,28 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 1.0.0 · 11 November 2026
+
+- **You decide how much of your PC it uses.** Settings > Hardware has three presets: Share nicely (other apps get the processor first; a little slower while they're busy), Full speed, and Light (a quarter of the processor at most, so it's slower). Or set your own processor share and memory limit, and choose the graphics card or the processor. Windows holds the processor and memory to them, speaker names included. A change applies from the next video.
+- **See what it's using.** While a video is being made, it shows how much of the processor and memory Subtitle Maker is using, next to your limits.
+- **Says when a limit gets in the way.** Quality shows a level a limit makes slow, or that won't fit. A queue that may need more memory than you allowed asks first, and a video that runs out says so and can be tried again.
+- **A cleaner window.** The title bar is gone: the app runs edge to edge, with its own minimise, maximise and close buttons, and still snaps, resizes and remembers where it was.
+- "Use less graphics memory" fits the speech model in about half the graphics memory, on newer NVIDIA cards (RTX 20 series and up).
+- Easier to read: grey text, and switches that are off, stand out more.
+- Copying a video from Google Drive, or downloading a model, fills its bar as it goes instead of just sliding.
+
+## 0.3.0 · 10 November 2026
+
+- **Feels like a desktop app.** Pop-ups open in the middle of the window, with Cancel and the action together at the bottom right, a close button in the corner, Esc to close and Enter for the main button. A click outside no longer closes them, so nothing you typed is lost. Messages show at the bottom right.
+- **Smooth, natural motion.** Everything moves on soft springs that pick up from wherever they are if you click again mid-way: dialogs grow in over a blurred backdrop, notifications stack and slide, the highlights in the sidebar and in switches glide to your choice, and buttons give a little when pressed. Screens slide in the direction you're going. In the check, lines slide into place when you split, join, delete or undo. Switches, buttons, fields and rows are sized for a mouse, and Less animations keeps everything still.
+- **Choices answer at once.** Pick an option and its highlight sets off straight away, with the words fading as it goes, instead of waiting a moment and jumping. In lists like Quality, the dot springs in and the row lights up. Each group of choices is one stop for Tab, the arrow keys pick within it, and the keyboard stays on what you picked.
+- **Tabs remember where you were.** Go to another tab and come back, and you're where you'd scrolled to, on the Settings page you were on. Going back from a Settings page puts the list where it was. Settings > Appearance > Remember where you scrolled turns it off.
+- **About, and the version on every screen.** The version is at the bottom of the sidebar. Click it, or the card at the top of Settings, for About: your version, Stable or Experimental, what this PC has and where it's installed, with Software update and What's new one click away.
+- **Clearer Quality and Resolve pages.** Quality shows how fast and how accurate each level is, what this PC has, and what saving will do. Using it in Resolve is a step-by-step guide with the menus to click. Both use the room in a big window.
+- **Opens where you left it.** After a restart or an update, the window opens on the same screen, at the same size and place, and maximized if it was.
+- **No more terminal while updating.** When an update needs new parts, a small window says what it's installing instead of a console full of text.
+- In the check, "Too long" shows under the line instead of squeezing the box you're typing in, Split and Join are always visible, and the time buttons keep their place when pressed.
+
 ## 0.2.5 · 10 November 2026
 
 - **Named once, named everywhere.** Name someone in the first video's check, and the next videos in the queue name them by themselves.
@@ -11,7 +33,6 @@ A release (see "Releasing a new version" in the README) needs its section here f
 - **Change who's talking.** In the check, pick "+ Someone else…" on a line for a person detection missed, use "+ Add person", or move all of one person's lines to another when it split someone in two. Giving two people the same name puts them together.
 - People added in the check are remembered for later videos too, from the lines as you checked them.
 - **Ready to check.** When the whole queue is transcribed, it plays the done sound, and shows a notification if you're in another window.
-- **Feels like a desktop app.** Pop-ups open in the middle of the window, with Cancel and the action at the bottom right, a ✕ in the corner and Esc to close. A click outside no longer closes them, so nothing you typed is lost. Messages show at the bottom right.
 - Fixed: cancelling a check, or closing the window during one, lost that video's lines. Now it stays To check.
 - Fixed: uninstalling left behind videos that were waiting to be checked.
 - Fixed in the check: renaming a speaker no longer swallows your next click, Ctrl+Z works right after changing a line's speaker, Enter skips deleted lines, and replacing a word with nothing in every future video asks first.

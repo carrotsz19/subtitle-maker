@@ -24,6 +24,7 @@ from webview.dom import DOMEventHandler  # noqa: E402
 
 import changelog  # noqa: E402
 import configure  # noqa: E402
+import hardware  # noqa: E402
 import known_voices  # noqa: E402
 import models  # noqa: E402
 import srtfile  # noqa: E402
@@ -31,6 +32,7 @@ import uninstall  # noqa: E402
 import update  # noqa: E402
 import winapp  # noqa: E402
 import winextras  # noqa: E402
+from paths import dark_mode  # noqa: E402
 from paths import (DEFAULT_SETTINGS, ERROR_LOG, LANGUAGES, LEVELS, SETTINGS_FILE, data_dir, load_history,  # noqa: E402
                    load_settings, save_history, save_settings)
 
@@ -52,6 +54,8 @@ def media_in(paths):
             found.append(str(p))
     return found
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+BELOW_NORMAL = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
+CREATE_SUSPENDED = 0x4
 STARTUP_LOG = data_dir() / "startup.log"
 QUEUE_FILE = data_dir() / "queue.json"  # what's still waiting, to offer to carry on next time
 
@@ -122,23 +126,6 @@ def watchdog():
             "Subtitle Maker", 0x5 | 0x30 | 0x40000)  # Retry/Cancel, warning icon, on top
         if answer == 2:  # Cancel
             os._exit(1)
-
-
-def dark_mode():
-    """Will the window be dark? Then it starts dark too, instead of flashing white."""
-    theme = load_settings()["theme"]
-    if theme != "system":
-        return theme == "dark"
-    if sys.platform != "win32":
-        return False
-    try:
-        import winreg
-
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
-            return winreg.QueryValueEx(key, "AppsUseLightTheme")[0] == 0
-    except OSError:
-        return False
 
 
 def console_python():
@@ -259,6 +246,7 @@ class Api:
         self._closing_ok = False  # the app is closing itself (restart, update, uninstall): don't ask
         self._updating = False  # an update is being copied in: closing now would stop it partway
         self._outbox = PageMail(self)  # everything for the page goes through here (see PageMail)
+        self._limit_note = None  # a Hardware limit Windows refused, said once a video starts
         # Look at the PC (nvidia-smi can take a second or two) while the window is still opening,
         # so the page never waits for it
         self._probe = {}
@@ -272,7 +260,9 @@ class Api:
         self._probe.update(
             recommended=configure.recommend(gpu, ram_gb, cores),
             hardware={"gpu": gpu[0] if gpu else None, "vram_mb": gpu[1] if gpu else None,
-                      "ram_gb": round(ram_gb), "cores": cores},
+                      "ram_gb": round(ram_gb), "cores": cores, "threads": os.cpu_count() or cores,
+                      # Settings > Hardware offers "Use less graphics memory" only where it changes something
+                      "gpu_low_memory": configure.gpu_saves_memory() if gpu else False},
             models=self.models_status(),
         )
         TIMINGS.mark("looked at this PC (graphics card, memory, models)")
@@ -304,6 +294,11 @@ class Api:
                 self._progress(state=winextras.INDETERMINATE)
             elif event["type"] == "error":
                 self._progress(state=winextras.ERROR)
+            elif event["type"] == "download":
+                # copying a video from Google Drive, or downloading a model: on the taskbar too
+                total = event.get("total")
+                self._progress(min(event.get("done", 0) / total, 1.0) if total else None,
+                               None if total else winextras.INDETERMINATE)
 
     def _progress(self, fraction=None, state=None):
         if self._window and winextras.WINDOWS:
@@ -337,8 +332,11 @@ class Api:
             "hardware": self._probe["hardware"],
             "voices": self.voices(),
             "platform": sys.platform,
+            # The page draws the title bar, or Windows does; and whether the window is maximized and in front
+            "frame": {"custom": FRAME["custom"], **(winextras.window_state(WINDOW_HANDLE[0]) if FRAME["custom"] else {})},
             "version": update.installed(),
-            "release": changelog.current(),  # "0.2.0", from CHANGELOG.md
+            "release": changelog.current(),  # "1.0.0", from CHANGELOG.md
+            "folder": str(HERE.resolve()),  # where the program is, for Settings > About
             # What's new since the version last opened: shown once, after an update
             "news": changelog.news(first_run=not SETTINGS_FILE.exists()),
             "models": self._probe["models"],
@@ -347,12 +345,21 @@ class Api:
             "mode": next((m for m in ("setup", "update", "uninstall") if f"--{m}" in sys.argv), None),
             "unfinished": self._unfinished(),
             "required": update.required(),  # an important security update must go in first
+            # Settings > Hardware: its presets, and what the memory estimates add up from
+            "hw": {"presets": hardware.PRESETS, "speakers_mb": hardware.SPEAKERS_RAM_MB,
+                   "audio_mb": hardware.AUDIO_RAM_MB_PER_MINUTE * hardware.ASSUMED_MINUTES,
+                   "minutes": hardware.ASSUMED_MINUTES, "default_threads": hardware.DEFAULT_THREADS},
         }
+
+    def memory_check(self, speakers=False):
+        """Before a queue starts: will a video at this quality fit in the memory limit?"""
+        self._probe_thread.join()
+        return hardware.memory_check(load_settings(), self._probe["hardware"], bool(speakers))
 
     # ---- what's new ------------------------------------------------------------------------
 
     def all_news(self):
-        """Every version's changes, newest first (Settings > Updates > What's new)."""
+        """Every version's changes, newest first (Settings > Software update > What's new)."""
         return changelog.versions()
 
     def news_seen(self):
@@ -559,6 +566,28 @@ class Api:
                          creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
         self._window.destroy()
 
+    # ---- the page's title bar ---------------------------------------------------------------
+
+    def window_button(self, name):
+        """Minimise, maximise (or restore) and close, as Windows' own buttons do them: closing
+        asks first while a video is running, and saves where the window was (_on_closing)."""
+        if FRAME["custom"] and name in ("minimise", "maximise", "close"):
+            winextras.window_command(WINDOW_HANDLE[0], name)
+
+    def window_resize(self, edge, x=None, y=None, double=False):
+        """The pointer went down on the page's top edge, at (x, y) on the screen in pixels: resize
+        from it, as from Windows' own border (see winextras.begin_resize)."""
+        if not (FRAME["custom"] and edge in winextras.EDGES):
+            return
+        hwnd, form = WINDOW_HANDLE[0], self._window.native
+        at = (x, y) if isinstance(x, (int, float)) and isinstance(y, (int, float)) else None
+
+        def resize():
+            least = form.MinimumSize  # read on the window's thread
+            winextras.begin_resize(hwnd, edge, at, bool(double), (least.Width, least.Height))
+
+        winextras.ui_thread(self._window, resize)
+
     def open_startup_log(self):
         TIMINGS.save()
         open_in_file_manager(STARTUP_LOG)
@@ -659,17 +688,35 @@ class Api:
         with self._lock:
             if self._busy():
                 return False
+            self._limits_changed()  # before the job is set, so stopping the old worker can't touch it
+            if self._worker and self._worker.poll() is None:
+                self._memory_hit(self._worker, fresh=True)  # only this video's going over counts
             self._job = {"cancelled": False, "reported": False, "checking": checking}
             if not self._tell_worker({"type": "job", "argv": argv}):
                 self._job = None
                 return False
+            if self._limit_note:  # from a worker started before this video (warming up): say it now
+                self.send({"type": "log", "text": self._limit_note})
+                self._limit_note = None
         return True
 
     def warm(self):
         """Start loading the speech model now (files were just added), so the first video starts sooner."""
         with self._lock:
             if not self._busy() and SETTINGS_FILE.exists():
+                self._limits_changed()
                 self._tell_worker({"type": "warm"})
+
+    def _limits_changed(self):
+        """Settings > Hardware changed since the worker started (or it went over its memory limit):
+        stop it, so the next video starts a fresh one with the new limits. Call with _lock held,
+        between videos."""
+        worker = self._worker
+        if worker and worker.poll() is None and (
+                worker.limits != hardware.limits(load_settings()) or getattr(worker, "restart", False)):
+            self.stop_worker()
+            # Forgotten straight away: its thread, seeing it end, then knows the next job isn't its own
+            self._worker = None
 
     def _busy(self):
         return bool(self._job) or bool(self._process and self._process.poll() is None)
@@ -687,14 +734,69 @@ class Api:
             return False
 
     def _spawn(self, args):
-        env = {**os.environ, "PYTHONUNBUFFERED": "1", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
+        """Start make_subtitles.py under the limits in Settings > Hardware (see hardware.py): its
+        threads by environment, then its priority and a Job Object, which what it starts (speaker
+        detection) inherits."""
+        settings = load_settings()
+        limits = hardware.limits(settings)
+        env = {**hardware.worker_env(settings), "PYTHONUNBUFFERED": "1", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
                "PYTHONIOENCODING": "utf-8"}
-        return subprocess.Popen(
+        # The venv's python.exe is a launcher that starts the real Python as its child straight away,
+        # so the priority is given at the start (children inherit it), and with a Job Object the
+        # launcher starts suspended until it's in the job, so the real Python can't start outside it
+        flags = NO_WINDOW
+        jobbed = winextras.WINDOWS and bool(limits["cpu_percent"] or limits["memory_mb"])
+        if jobbed:
+            env[hardware.ENV_IN_JOB] = "1"
+        if winextras.WINDOWS and limits["low_priority"]:
+            flags |= BELOW_NORMAL
+        if jobbed:
+            flags |= CREATE_SUSPENDED
+        process = subprocess.Popen(
             [console_python(), str(HERE / "make_subtitles.py"), *args, "--events"],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace", bufsize=1,
-            cwd=str(HERE), env=env, creationflags=NO_WINDOW,
+            cwd=str(HERE), env=env, creationflags=flags,
         )
+        process.limits, process.job = limits, None
+        try:
+            # (a limit Windows refuses is left out and said below: the video still runs)
+            process.job, problem = winextras.limit_job(process, limits["cpu_percent"], limits["memory_mb"])
+            if jobbed:
+                psutil.Process(process.pid).resume()  # in the job (or not, if Windows refused): off it goes
+        except Exception:
+            # Never leave a suspended process behind
+            kill_tree(process)
+            if process.job:
+                process.job.close()
+            raise
+        if not winextras.WINDOWS:
+            problem = winextras.lower_priority(process, limits["low_priority"]) or problem
+        if problem:  # it still runs, only without that limit: say so in Details and startup.log
+            TIMINGS.mark(f"hardware limits: {problem}")
+            note = f"Couldn't apply every limit in Settings > Hardware ({problem})."
+            if self._job:
+                self.send({"type": "log", "text": note})
+            else:
+                self._limit_note = note  # the window only shows Details while a video runs
+        return process
+
+    def _memory_hit(self, process, fresh=False):
+        """Did Windows refuse this process's job memory for going over the limit, during the
+        current video? fresh: a video is starting, so forget earlier ones."""
+        job = getattr(process, "job", None)
+        new = bool(job and job.handle and job.new_hits())
+        process.mem_hit = False if fresh else getattr(process, "mem_hit", False) or new  # (fresh: earlier hits drop)
+        return process.mem_hit
+
+    def _plain_error(self, process, message, code=None):
+        """The error to show, and whether it was memory running out (see hardware.memory_message)."""
+        hit = self._memory_hit(process)
+        plain = hardware.memory_message(message, process.limits["memory_mb"], hit=hit, code=code)
+        memory = plain != message or hit
+        if memory:
+            process.restart = True  # the next video starts a fresh worker
+        return plain, memory
 
     def _follow_worker(self, worker):
         """Pass the worker's events to the page; each job ends with an "exit" event, as a one-off run does."""
@@ -709,22 +811,40 @@ class Api:
             event = json.loads(line[len(EVENT_PREFIX):])
             kind = event["type"]
             if kind == "finished":
+                if worker is not self._worker:
+                    continue
                 self._job = None
                 self._finish_title()
                 self.send({"type": "exit", "code": event["code"], "cancelled": False})
             elif kind in ("warmed", "idle_exit", "model_loaded"):
                 continue
-            elif self._job:
+            elif self._job and worker is self._worker:
                 self._job["reported"] |= kind in ("done", "error")
                 self._beep_if_done(event)
+                if kind == "error" and event.get("memory"):
+                    worker.restart = True
+                elif kind == "error" and not event.get("friendly"):  # (a message meant for the user stays)
+                    event["message"], memory = self._plain_error(worker, event["message"])
+                    if memory:
+                        event.update(memory=True, log=None)
                 self.send(event)
         code = worker.wait()
+        try:
+            self._worker_ended(worker, code, errors)
+        finally:
+            if worker.job:
+                worker.job.close()
+
+    def _worker_ended(self, worker, code, errors):
+        if worker is not self._worker:
+            return  # an older worker, stopped between videos: the job running now isn't its
         job, self._job = self._job, None
         if job:  # the worker ended mid-job: cancelled, or it crashed
             if not job["cancelled"] and not job["reported"]:
                 tail = "".join(errors).strip().splitlines()
-                self.send({"type": "error", "message": tail[-1] if tail else f"It stopped unexpectedly (code {code}).",
-                           "log": None})
+                message, memory = self._plain_error(
+                    worker, tail[-1] if tail else f"It stopped unexpectedly (code {code}).", code)
+                self.send({"type": "error", "message": message, "log": None, **({"memory": True} if memory else {})})
             self._finish_title()
             self.send({"type": "exit", "code": code or 1, "cancelled": job["cancelled"]})
 
@@ -778,8 +898,10 @@ class Api:
         stderr_thread.join(timeout=2)
         if code and not reported and not getattr(process, "cancelled", False):
             tail = "".join(errors).strip().splitlines()
-            self.send({"type": "error", "message": tail[-1] if tail else f"It stopped unexpectedly (code {code}).",
-                       "log": None})
+            message, _ = self._plain_error(process, tail[-1] if tail else f"It stopped unexpectedly (code {code}).", code)
+            self.send({"type": "error", "message": message, "log": None})
+        if process.job:
+            process.job.close()
         self._finish_title()
         self.send({"type": "exit", "code": code, "cancelled": getattr(process, "cancelled", False)})
 
@@ -843,9 +965,14 @@ class Api:
         """The window is closing: stop everything still running, and remember where the window was."""
         self.cancel()
         self.stop_worker()
-        if GEOMETRY:
+        # Windows' record of the window (size, place, maximized, which screen); elsewhere, its size and place
+        placement = winextras.get_placement(WINDOW_HANDLE[0]) if WINDOW_HANDLE else None
+        if placement or GEOMETRY:
             settings = load_settings()
-            settings["window"] = dict(GEOMETRY)
+            if placement:
+                settings["placement"] = placement
+            if GEOMETRY:
+                settings["window"] = dict(GEOMETRY)
             save_settings(settings)
 
     # ---- settings and folders ---------------------------------------------------------------
@@ -867,13 +994,23 @@ class Api:
     _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
                "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "review", "done_sound",
                "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify", "remember_voices", "less_motion",
-               "translate")
+               "translate", "remember_scroll", *hardware.KEYS)
 
     def save_prefs(self, changes):
-        """Save some instant settings; anything not allowed falls back to its default."""
+        """Save some instant settings; anything not allowed falls back to its default.
+        {"hw_preset": "light"} sets everything that preset does (Settings > Hardware)."""
         settings = load_settings()
+        settings.update(hardware.PRESETS.get(changes.get("hw_preset"), {}))
         settings.update({k: v for k, v in changes.items() if k in self._INSTANT})
         save_settings(settings)
+        # A worker waiting between videos with other limits (or still holding the graphics card
+        # after switching to the processor) is stopped now; the next video starts a fresh one
+        if getattr(self, "_window", None) and self._lock.acquire(blocking=False):
+            try:
+                if not self._busy():
+                    self._limits_changed()
+            finally:
+                self._lock.release()
         return load_settings()  # the cleaned-up version
 
     def reset_prefs(self):
@@ -945,12 +1082,12 @@ class Api:
 
     def restart(self):
         """Close this window and open the new version (after installing any new packages)."""
-        # A visible console only when there are packages to install, so the wait isn't a mystery
-        flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if getattr(self, "_pending_packages", None) else NO_WINDOW
+        # No console: new packages install behind a small window of their own (finishing.py)
         self._closing_ok = True
         self.stop_worker()
-        subprocess.Popen([console_python(), str(HERE / "update.py"), "--finish", str(os.getpid())],
-                         cwd=str(HERE), creationflags=flags)
+        pythonw = Path(sys.executable).with_name("pythonw.exe")
+        subprocess.Popen([str(pythonw if pythonw.exists() else console_python()), str(HERE / "update.py"), "--finish", str(os.getpid())],
+                         cwd=str(HERE), creationflags=NO_WINDOW)
         self._window.destroy()
 
     # ---- uninstalling ------------------------------------------------------------------------
@@ -971,6 +1108,10 @@ class Api:
     def reveal(self, path):
         open_in_file_manager(path, select=True)
 
+    def open_program_folder(self):
+        """Settings > About > Open folder: the folder the program is in."""
+        open_in_file_manager(HERE)
+
     def open_voices(self):
         VOICES_DIR.mkdir(exist_ok=True)
         open_in_file_manager(VOICES_DIR)
@@ -980,10 +1121,17 @@ class Api:
         """What to paste when asking for help with a failed video: the error, this PC and the log."""
         settings, version = load_settings(), update.installed()
         hw = self._probe["hardware"]
-        lines = [f"Subtitle Maker {version['sha'][:7] if version else '(version unknown)'} on {platform.platform()}",
+        limits = hardware.limits(settings)
+        lines = [f"Subtitle Maker {changelog.current() or '(version unknown)'}"
+                 f" ({version['sha'][:7] if version else 'build unknown'}) on {platform.platform()}",
                  f"Video: {Path(path).name}", f"Error: {message}",
                  f"Quality: {settings['level']}, run on: {settings['device']}, language: {settings['language'] or 'auto'}",
-                 f"PC: {hw.get('gpu') or 'no NVIDIA GPU'}, {hw.get('ram_gb')} GB RAM, {hw.get('cores')} cores"]
+                 f"Hardware limits: processor {limits['cpu_percent'] or 'no limit'}{'%' if limits['cpu_percent'] else ''}, "
+                 f"memory {str(limits['memory_mb']) + ' MB' if limits['memory_mb'] else 'no limit'}, "
+                 f"{'below normal' if limits['low_priority'] else 'normal'} priority, "
+                 f"less graphics memory {'on' if limits['gpu_low_memory'] else 'off'}",
+                 f"PC: {hw.get('gpu') or 'no NVIDIA GPU'}, {hw.get('ram_gb')} GB RAM, {hw.get('cores')} cores"
+                 f" ({hw.get('threads') or '?'} threads)"]
         try:
             log = ERROR_LOG.read_text(encoding="utf-8", errors="replace")
             lines += ["", "Last error log:", log[-4000:]]
@@ -997,6 +1145,99 @@ class Api:
 
 
 GEOMETRY = {}  # the window's size and place as it's moved and resized, saved when it closes
+WINDOW_HANDLE = []  # the window's handle on Windows, once it exists
+FRAME = {"custom": False}  # True once the page draws the title bar (see winextras.custom_frame)
+TITLE_BAR = 40  # the page's drag strip, in its pixels (the same as --titlebar in ui/index.html)
+CAPTION_BUTTONS = 3 * 46  # minimise, maximise and close, at its right
+
+
+def own_title_bar(window, api):
+    """Before the window first shows (on its own thread): take Windows' title bar off, so the
+    page's own is the one there. If that fails (or SUBTITLE_MAKER_NATIVE_FRAME is set) the window
+    keeps Windows' title bar, and the page leaves its own buttons out."""
+    if not winextras.WINDOWS:
+        return
+    hwnd = WINDOW_HANDLE[0]
+    if os.environ.get("SUBTITLE_MAKER_NATIVE_FRAME"):
+        TIMINGS.mark("title bar: Windows' own (SUBTITLE_MAKER_NATIVE_FRAME)")
+        return
+    why = winextras.custom_frame(hwnd, on_state=lambda state: api.send({"type": "window", **state}))
+    if why:
+        TIMINGS.mark(f"title bar: Windows' own, since the page's couldn't be used ({why})")
+        return
+    FRAME["custom"] = True
+    TIMINGS.mark("title bar: the page's own")
+
+    def without_strip(e):
+        # No strip to move the window by: Windows' title bar comes back. This normally happens
+        # before the page asks api().init() whose title bar it is; if the page is up already, it's
+        # told, and takes its own away.
+        FRAME["custom"] = False
+        winextras.native_frame(hwnd)
+        api.send({"type": "window", "custom": False})
+        TIMINGS.mark(f"title bar: Windows' own, since the drag strip couldn't be turned on ({e.__class__.__name__}: {e})")
+
+    def turn_on(core):
+        try:
+            drag_strip(core)
+            TIMINGS.mark("title bar: drag strip on")
+        except Exception as e:
+            without_strip(e)
+
+    def regions(sender, args):
+        turn_on(sender.CoreWebView2 if args.IsSuccess else None)
+
+    try:
+        web_view = window.native.browser.webview
+        web_view.CoreWebView2InitializationCompleted += regions
+        # (it can't have started yet: that's finished by this same thread, after this; but if it
+        # ever had, the event above would never come)
+        if web_view.CoreWebView2 is not None:
+            web_view.CoreWebView2InitializationCompleted -= regions
+            turn_on(web_view.CoreWebView2)
+    except Exception as e:
+        without_strip(e)
+
+
+def drag_strip(web_view):
+    """The strip is dragged the way a title bar is (Snap, double-click to maximize, right-click for
+    the window menu): the web view hands what's marked app-region: drag to Windows (WebView2 1.0.2420
+    and later; older ones raise, and Windows' title bar stays)."""
+    if web_view is None:
+        raise RuntimeError("the web view didn't start")
+    web_view.Settings.IsNonClientRegionSupportEnabled = True
+
+
+def place_window(window, api=None):
+    """Before the window first shows (on its own thread): put it back exactly where it was last
+    time, maximized if it was, on the same screen. Windows only; elsewhere saved_geometry() does it."""
+    if not winextras.WINDOWS:
+        return
+    try:
+        form = window.native
+        hwnd = int(form.Handle.ToInt64())
+        WINDOW_HANDLE[:] = [hwnd]
+        try:
+            own_title_bar(window, api)
+        except Exception as e:  # Windows' own title bar is fine too
+            TIMINGS.mark(f"title bar: Windows' own ({e.__class__.__name__}: {e})")
+        saved = load_settings().get("placement")
+        grip = (40, 40, 30)  # the middle of Windows' title bar
+        if FRAME["custom"]:
+            # the page's drag strip: right across, but for the buttons at its right (and Windows'
+            # sizing border, invisible just outside each side)
+            # (stricter than Windows' title bar, so if the strip later can't be had, it's still fine)
+            scale = winextras.dpi_scale(hwnd)
+            grip = (int(48 * scale), int((CAPTION_BUTTONS + 48) * scale), int((TITLE_BAR - 8) * scale))
+        if not winextras.set_placement(hwnd, saved, grip=grip):
+            return
+        from System.Windows.Forms import FormStartPosition, FormWindowState
+
+        form.StartPosition = FormStartPosition.Manual  # not centred over the place just set
+        if saved.get("maximized"):
+            form.WindowState = FormWindowState.Maximized  # maximized on the screen it was on
+    except Exception as e:  # opening somewhere else is no reason not to open
+        TIMINGS.mark(f"window placement not restored: {e}")
 
 
 def saved_geometry():
@@ -1025,9 +1266,11 @@ def main():
     api = Api()
     window = webview.create_window(
         "Subtitle Maker", str(HERE / "ui" / "index.html"), js_api=api,
-        **{"width": 1040, "height": 720, **saved_geometry()},
+        # On Windows the exact place comes from place_window(); this is the size before that
+        **{"width": 1040, "height": 720, **(saved_geometry() if not (winextras.WINDOWS and load_settings().get("placement")) else {})},
         min_size=(760, 560), background_color="#15140f" if dark_mode() else "#f3f1ec",
     )
+    window.events.before_show += lambda: place_window(window, api)
     window.events.resized += lambda width, height: GEOMETRY.update(width=width, height=height)
     window.events.moved += lambda x, y: GEOMETRY.update(x=x, y=y)
     api._window = window

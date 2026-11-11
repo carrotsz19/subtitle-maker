@@ -110,6 +110,8 @@ TIPS FOR BETTER RESULTS
 - Use your exported video, so the timings match your whole timeline.
 - Speech under loud music gets missed. Export a version with the music muted first.
 - Close DaVinci Resolve and games while it runs, so it can use the graphics card.
+- Want to keep working while it runs? Settings > Hardware sets how much of the processor
+  and memory it may use (Light is barely noticeable, but slower).
 - Fix any wrong words in Resolve (click a subtitle > Inspector > Caption).
 - Speaker names are usually right, but check short lines like "yeah" or "okay".
 - Speaker names need the Fast level or higher (Potato turns them off).
@@ -164,6 +166,8 @@ IF SOMETHING GOES WRONG
                                              Close Resolve/games, or just wait (it's slower).
 "The GPU ran out of memory"               -> same, but it happened partway. It carries on
                                              with the CPU by itself.
+"It needed more memory than you allowed" -> raise the memory limit in Settings > Hardware,
+                                             or pick a lower quality, then Try again.
 "No speech found"                         -> the file has no clear talking in it.
 "Couldn't read the sound in ..."          -> it isn't a video or audio file, or it's damaged.
                                              Export it again as .mp4 or .wav.

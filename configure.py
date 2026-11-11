@@ -24,6 +24,21 @@ def nvidia_gpu():
         return None
 
 
+def gpu_saves_memory():
+    """Does the graphics card have fast float16, so "Use less graphics memory" (int8 weights)
+    changes anything? CTranslate2 offers float16 from compute capability 7.0 (RTX 20-series, GTX 16):
+    older cards already run int8, the smallest. Unknown (an old driver): offered, as it does no harm."""
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout.splitlines()[0]
+        return float(out) >= 7.0
+    except Exception:
+        return True
+
+
 def recommend(gpu, ram_gb, cores):
     if gpu:
         # Leave ~0.5 GB for Windows and other apps

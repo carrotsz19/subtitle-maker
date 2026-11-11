@@ -27,19 +27,34 @@ HISTORY_FILE = data_dir() / "history.json"
 HISTORY_LIMIT = 200
 
 # Quality levels offered in Setup. vram_mb = measured peak extra GPU memory (int8) on a GTX 1050,
-# rounded up for safety; large-v3 is an estimate.
+# rounded up for safety; large-v3 is an estimate. speed and accuracy are out of 5, for the small
+# meters in Settings > Quality: how the levels compare with each other, not a measurement
+# (High's model ran as fast as Fast's on a GTX 1050, hence the same speed).
+# ram_mb = the memory the worker commits (what a memory limit in Settings > Hardware counts), on
+# the processor and on the graphics card. Measured for tiny (1340 MB processor, 1300 MB graphics
+# card) and High's large-v3-turbo (4160 / 2490) on a 3-minute clip on a GTX 1050; the others are
+# worked out from their size between those two. All are rounded up.
 LEVELS = {
-    "potato":   {"model": "base", "name": "Potato", "download": "0.15 GB", "vram_mb": 400,
+    "potato":   {"model": "base", "name": "Potato", "download": "0.15 GB", "vram_mb": 400, "speed": 5, "accuracy": 1,
+                 "ram_mb": {"cpu": 1600, "cuda": 1500},
                  "about": "transcription only, lightest settings, for old or slow PCs"},
-    "fast":     {"model": "small", "name": "Fast", "download": "0.5 GB", "vram_mb": 700,
+    "fast":     {"model": "small", "name": "Fast", "download": "0.5 GB", "vram_mb": 700, "speed": 4, "accuracy": 2,
+                 "ram_mb": {"cpu": 2300, "cuda": 1800},
                  "about": "quick, decent accuracy"},
-    "balanced": {"model": "medium", "name": "Balanced", "download": "1.5 GB", "vram_mb": 1300,
+    "balanced": {"model": "medium", "name": "Balanced", "download": "1.5 GB", "vram_mb": 1300, "speed": 2, "accuracy": 3,
+                 "ram_mb": {"cpu": 4400, "cuda": 2700},
                  "about": "good accuracy, slower on CPU"},
-    "high":     {"model": "large-v3-turbo", "name": "High", "download": "1.6 GB", "vram_mb": 1400,
+    "high":     {"model": "large-v3-turbo", "name": "High", "download": "1.6 GB", "vram_mb": 1400, "speed": 4, "accuracy": 4,
+                 "ram_mb": {"cpu": 4400, "cuda": 2700},
                  "about": "best accuracy for its speed"},
-    "max":      {"model": "large-v3", "name": "Maximum", "download": "3.1 GB", "vram_mb": 2400,
+    "max":      {"model": "large-v3", "name": "Maximum", "download": "3.1 GB", "vram_mb": 2400, "speed": 1, "accuracy": 5,
+                 "ram_mb": {"cpu": 7400, "cuda": 4000},
                  "about": "most accurate, slowest, needs a 3 GB+ GPU or lots of patience"},
 }
+# Speaker detection adds a process of its own (measured 600 MB) and the voice model in the worker
+SPEAKERS_RAM_MB = 800
+# The video's sound in memory (the worker's copy, the speaker step's, and decoding), per minute
+AUDIO_RAM_MB_PER_MINUTE = 12
 
 # High (large-v3-turbo) measured as fast as small and more accurate on a GTX 1050, so it is the default
 # output_dir None = save each .srt next to its video
@@ -64,8 +79,16 @@ DEFAULT_SETTINGS = {
     "remember_voices": True,
     # Things appear and go without moving (Windows' own "Show animations" setting counts too)
     "less_motion": False,
+    # Coming back to a tab puts you where you'd scrolled to (off: every tab opens at its top)
+    "remember_scroll": True,
     # Subtitles in English whatever language is spoken (Whisper translates as it goes)
     "translate": False,
+    # Settings > Hardware (see hardware.py): how much of the processor it may use (100 = no limit),
+    # letting other apps go first, a memory limit in GB (0 = none), and the graphics card's smaller
+    # number format. These are the Share nicely preset: no caps, and other apps get the processor first.
+    # Measured against 0.3.0's normal priority (Full speed): the same speed transcribing alone, about
+    # 6% slower with speaker names on a PC with other apps open (they went first, as intended).
+    "cpu_percent": 100, "low_priority": True, "memory_limit_gb": 0, "gpu_low_memory": False,
 }
 # large-v3-turbo was only trained to transcribe: asked to translate, it writes the original
 # language anyway (OpenAI's Whisper README says so). The level with it translates with this one.
@@ -90,7 +113,10 @@ SETTING_CHOICES = {
     "done_sound": (True, False), "multi": (True, False), "people": (0, 2, 3, 4, 5, 6),
     "open_folder": (True, False), "theme": ("system", "light", "dark"), "auto_update": (True, False),
     "notify": (True, False), "remember_voices": (True, False), "less_motion": (True, False),
+    "remember_scroll": (True, False),
     "channel": ("main", "experimental"), "translate": (True, False),
+    "cpu_percent": (25, 50, 75, 100), "low_priority": (True, False),
+    "memory_limit_gb": (0, 2, 3, 4, 6, 8, 12, 16, 24, 32), "gpu_low_memory": (True, False),
 }
 
 
@@ -123,6 +149,23 @@ def clean_fixes(fixes):
                 pairs.pop(heard.lower(), None)
                 pairs[heard.lower()] = [heard, meant]
     return list(pairs.values())[-MAX_FIXES:]
+
+
+def dark_mode():
+    """Will the window be dark? Then it starts dark too, instead of flashing white."""
+    theme = load_settings()["theme"]
+    if theme != "system":
+        return theme == "dark"
+    if sys.platform != "win32":
+        return False
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
+            return winreg.QueryValueEx(key, "AppsUseLightTheme")[0] == 0
+    except OSError:
+        return False
 
 
 def save_settings(settings):

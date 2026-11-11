@@ -7,7 +7,7 @@
 ; Uninstalling stays the app's own (Settings > Apps > Subtitle Maker, made by windows-app.ps1).
 ;
 ; The Release workflow builds it, with the files of the commit it releases in build\app:
-;     ISCC /DVersion=0.2.3 /DSha=<40-character commit> installer\SubtitleMaker.iss
+;     ISCC /DVersion=1.0.0 /DSha=<40-character commit> installer\SubtitleMaker.iss
 
 #ifndef Version
   #define Version "0.0.0"
