@@ -1155,19 +1155,33 @@ def own_title_bar(window, api):
     FRAME["custom"] = True
     TIMINGS.mark("title bar: the page's own")
 
-    # The strip is dragged the way a title bar is (Snap, double-click to maximize, right-click for
-    # the window menu): the web view hands what's marked app-region: drag to Windows
+    def without_strip(e):
+        # No strip to move the window by: Windows' title bar comes back. This happens before the
+        # page asks api().init() whose title bar it is, so the page leaves its own out.
+        FRAME["custom"] = False
+        winextras.native_frame(hwnd)
+        TIMINGS.mark(f"title bar: Windows' own, since the drag strip couldn't be turned on ({e.__class__.__name__}: {e})")
+
     def regions(sender, args):
         try:
-            sender.CoreWebView2.Settings.IsNonClientRegionSupportEnabled = True
+            if not args.IsSuccess:
+                raise RuntimeError("the web view didn't start")
+            drag_strip(sender.CoreWebView2)
             TIMINGS.mark("title bar: drag strip on")
         except Exception as e:
-            TIMINGS.mark(f"title bar: no drag strip ({e.__class__.__name__}: {e})")
+            without_strip(e)
 
     try:
         window.native.browser.webview.CoreWebView2InitializationCompleted += regions
     except Exception as e:
-        TIMINGS.mark(f"title bar: no drag strip ({e.__class__.__name__}: {e})")
+        without_strip(e)
+
+
+def drag_strip(web_view):
+    """The strip is dragged the way a title bar is (Snap, double-click to maximize, right-click for
+    the window menu): the web view hands what's marked app-region: drag to Windows (WebView2 1.0.2420
+    and later; older ones raise, and Windows' title bar stays)."""
+    web_view.Settings.IsNonClientRegionSupportEnabled = True
 
 
 def place_window(window, api=None):

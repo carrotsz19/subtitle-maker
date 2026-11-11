@@ -893,6 +893,9 @@ if winextras.WINDOWS:
     assert framed < client_height(hwnd) < outer.bottom - outer.top, (framed, client_height(hwnd))
     # a bare Alt doesn't send the window into a menu mode nobody can see; Alt+Space still opens the menu
     assert user32.SendMessageW(hwnd, winextras.WM_SYSCOMMAND, winextras.SC_KEYMENU, 0) == 0
+    winextras.native_frame(hwnd)  # (if the drag strip can't be had) Windows' title bar comes back
+    assert client_height(hwnd) == framed, (framed, client_height(hwnd))
+    assert winextras.custom_frame(hwnd) is None and client_height(hwnd) > framed  # and can go again
     user32.DestroyWindow(hwnd)  # takes the subclass off as it goes (WM_NCDESTROY)
     popup = made(0x80000000)  # WS_POPUP: no frame to keep, so it's left alone
     assert winextras.custom_frame(popup), "a window without a frame and caption is left as it is"

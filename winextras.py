@@ -350,6 +350,12 @@ class CustomFrame:
         # (FRAMECHANGED | NOSIZE | NOMOVE | NOZORDER | NOACTIVATE)
         self._user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x20 | 0x1 | 0x2 | 0x4 | 0x10)
 
+    def remove(self):
+        """Windows' own title bar back (on the window's thread). The callback stays held in _frames."""
+        self._comctl32.RemoveWindowSubclass(self.hwnd, self._proc, _SUBCLASS_ID)
+        self.on_state = None
+        self._user32.SetWindowPos(self.hwnd, None, 0, 0, 0, 0, 0x20 | 0x1 | 0x2 | 0x4 | 0x10)
+
     def _window_proc(self, hwnd, msg, wparam, lparam, _id, _data):
         default = self._comctl32.DefSubclassProc
         if msg == WM_NCCALCSIZE and wparam:
@@ -413,6 +419,13 @@ def custom_frame(hwnd, on_state=None):
         return None
     except Exception as e:
         return f"{e.__class__.__name__}: {e}"
+
+
+def native_frame(hwnd):
+    """Undo custom_frame: Windows' own title bar again (on the window's own thread)."""
+    frame = _frames.get(hwnd)
+    if frame:
+        frame.remove()
 
 
 def window_state(hwnd):

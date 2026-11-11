@@ -752,6 +752,7 @@ body.wizard aside.side{ display:none; }
   .switch:active span{ width:18px !important; }
   .switch[aria-checked="true"]:active span{ transform:translateX(18px) !important; }
   .seg-pill{ --press:1 !important; }
+  :root .tb-btn, :root .tb-title, :root .brand{ transition:none; }  /* (:root: it outranks their own, further down) */
 }
 html.reduce-motion{ --spring-snappy-ms:0ms; --spring-default-ms:0ms; --spring-spatial-ms:0ms; --spring-bouncy-ms:0ms; --spring-pop-ms:0ms; }
 html.reduce-motion .screen-visible > *, html.reduce-motion .toast{ animation:fadeIn .12s linear backwards !important; }
@@ -811,7 +812,7 @@ html.frame-custom .tb-edge{ display:block; position:fixed; top:0; height:5px; z-
 .tb-edge.nw{ left:0; width:12px; cursor:nw-resize; }
 .tb-edge.ne{ right:0; width:12px; cursor:ne-resize; }
 html.maximized .tb-edge{ display:none !important; }
-html.reduce-motion .tb-btn, html.reduce-motion .tb-title, html.reduce-motion .brand{ transition:none; }
+html.reduce-motion .tb-btn, html.reduce-motion .tb-title, html.reduce-motion .brand{ transition:none; }  /* (and in the list above) */
 </style>
 </head>
 <body>
