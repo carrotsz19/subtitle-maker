@@ -327,6 +327,8 @@ class Api:
             "hardware": self._probe["hardware"],
             "voices": self.voices(),
             "platform": sys.platform,
+            # The page draws the title bar, or Windows does; and whether the window is maximized and in front
+            "frame": {"custom": FRAME["custom"], **(winextras.window_state(WINDOW_HANDLE[0]) if FRAME["custom"] else {})},
             "version": update.installed(),
             "release": changelog.current(),  # "1.0.0", from CHANGELOG.md
             "folder": str(HERE.resolve()),  # where the program is, for Settings > About
@@ -558,6 +560,20 @@ class Api:
         subprocess.Popen([str(pythonw if pythonw.exists() else exe), str(HERE / "app.py")], cwd=str(HERE),
                          creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
         self._window.destroy()
+
+    # ---- the page's title bar ---------------------------------------------------------------
+
+    def window_button(self, name):
+        """Minimise, maximise (or restore) and close, as Windows' own buttons do them: closing
+        asks first while a video is running, and saves where the window was (_on_closing)."""
+        if FRAME["custom"] and name in ("minimise", "maximise", "close"):
+            winextras.window_command(WINDOW_HANDLE[0], name)
+
+    def window_resize(self, edge):
+        """The pointer went down on the page's top edge: resize from it, as from Windows' own border."""
+        if FRAME["custom"] and edge in winextras.EDGES:
+            hwnd = WINDOW_HANDLE[0]
+            winextras.ui_thread(self._window, lambda: winextras.begin_resize(hwnd, edge))
 
     def open_startup_log(self):
         TIMINGS.save()
@@ -1117,9 +1133,44 @@ class Api:
 
 GEOMETRY = {}  # the window's size and place as it's moved and resized, saved when it closes
 WINDOW_HANDLE = []  # the window's handle on Windows, once it exists
+FRAME = {"custom": False}  # True once the page draws the title bar (see winextras.custom_frame)
+TITLE_BAR = 40  # the page's drag strip, in its pixels (the same as --titlebar in ui/index.html)
+CAPTION_BUTTONS = 3 * 46  # minimise, maximise and close, at its right
 
 
-def place_window(window):
+def own_title_bar(window, api):
+    """Before the window first shows (on its own thread): take Windows' title bar off, so the
+    page's own is the one there. If that fails (or SUBTITLE_MAKER_NATIVE_FRAME is set) the window
+    keeps Windows' title bar, and the page leaves its own buttons out."""
+    if not winextras.WINDOWS:
+        return
+    hwnd = WINDOW_HANDLE[0]
+    if os.environ.get("SUBTITLE_MAKER_NATIVE_FRAME"):
+        TIMINGS.mark("title bar: Windows' own (SUBTITLE_MAKER_NATIVE_FRAME)")
+        return
+    why = winextras.custom_frame(hwnd, on_state=lambda state: api.send({"type": "window", **state}))
+    if why:
+        TIMINGS.mark(f"title bar: Windows' own, since the page's couldn't be used ({why})")
+        return
+    FRAME["custom"] = True
+    TIMINGS.mark("title bar: the page's own")
+
+    # The strip is dragged the way a title bar is (Snap, double-click to maximize, right-click for
+    # the window menu): the web view hands what's marked app-region: drag to Windows
+    def regions(sender, args):
+        try:
+            sender.CoreWebView2.Settings.IsNonClientRegionSupportEnabled = True
+            TIMINGS.mark("title bar: drag strip on")
+        except Exception as e:
+            TIMINGS.mark(f"title bar: no drag strip ({e.__class__.__name__}: {e})")
+
+    try:
+        window.native.browser.webview.CoreWebView2InitializationCompleted += regions
+    except Exception as e:
+        TIMINGS.mark(f"title bar: no drag strip ({e.__class__.__name__}: {e})")
+
+
+def place_window(window, api=None):
     """Before the window first shows (on its own thread): put it back exactly where it was last
     time, maximized if it was, on the same screen. Windows only; elsewhere saved_geometry() does it."""
     if not winextras.WINDOWS:
@@ -1128,8 +1179,20 @@ def place_window(window):
         form = window.native
         hwnd = int(form.Handle.ToInt64())
         WINDOW_HANDLE[:] = [hwnd]
+        try:
+            own_title_bar(window, api)
+        except Exception as e:  # Windows' own title bar is fine too
+            TIMINGS.mark(f"title bar: Windows' own ({e.__class__.__name__}: {e})")
         saved = load_settings().get("placement")
-        if not winextras.set_placement(hwnd, saved):
+        grip = (40, 40, 30)  # the middle of Windows' title bar
+        if FRAME["custom"]:
+            # the page's drag strip: right across, but for the buttons at its right (and Windows'
+            # sizing border, invisible just outside each side)
+            import ctypes
+
+            scale = (ctypes.windll.user32.GetDpiForWindow(hwnd) or 96) / 96
+            grip = (int(48 * scale), int((CAPTION_BUTTONS + 48) * scale), int((TITLE_BAR - 8) * scale))
+        if not winextras.set_placement(hwnd, saved, grip=grip):
             return
         from System.Windows.Forms import FormStartPosition, FormWindowState
 
@@ -1170,7 +1233,7 @@ def main():
         **{"width": 1040, "height": 720, **(saved_geometry() if not (winextras.WINDOWS and load_settings().get("placement")) else {})},
         min_size=(760, 560), background_color="#15140f" if dark_mode() else "#f3f1ec",
     )
-    window.events.before_show += lambda: place_window(window)
+    window.events.before_show += lambda: place_window(window, api)
     window.events.resized += lambda width, height: GEOMETRY.update(width=width, height=height)
     window.events.moved += lambda x, y: GEOMETRY.update(x=x, y=y)
     api._window = window

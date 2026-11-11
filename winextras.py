@@ -246,9 +246,12 @@ def get_placement(hwnd):
     return {"rect": [r.left, r.top, r.right, r.bottom], "maximized": maximized}
 
 
-def set_placement(hwnd, saved, min_size=(200, 150)):
+def set_placement(hwnd, saved, min_size=(200, 150), grip=(40, 40, 30)):
     """Put the window back where get_placement found it, without showing it. Only if that place is
-    still on a screen that's connected now (a monitor may have been unplugged). True if it was."""
+    still on a screen that's connected now (a monitor may have been unplugged). True if it was.
+
+    grip is where the window is held to move it: (from its left, from its right, height) in pixels,
+    the native title bar's by default, or the page's drag strip."""
     if not WINDOWS or not isinstance(saved, dict):
         return False
     import ctypes
@@ -260,8 +263,8 @@ def set_placement(hwnd, saved, min_size=(200, 150)):
         return False
     if right - left < min_size[0] or bottom - top < min_size[1]:
         return False
-    # Enough of the title bar has to be on a connected screen to grab it
-    bar = wintypes.RECT(left + 40, top, right - 40, top + 30)
+    # Enough of the title bar (or the strip the window is dragged by) has to be on a connected screen to grab it
+    bar = wintypes.RECT(left + grip[0], top, max(left + grip[0] + 1, right - grip[1]), top + grip[2])
     try:
         if not ctypes.windll.user32.MonitorFromRect(ctypes.byref(bar), 0):  # MONITOR_DEFAULTTONULL
             return False
@@ -271,6 +274,177 @@ def set_placement(hwnd, saved, min_size=(200, 150)):
         return bool(ctypes.windll.user32.SetWindowPlacement(hwnd, ctypes.byref(wp)))
     except Exception:
         return False
+
+
+# ---- the window's own title bar ----------------------------------------------------------------
+# The page draws the title bar: a strip to drag the window by, and minimise, maximise and close.
+# Only Windows' caption is taken away, not the frame. The window keeps its sizing frame and
+# caption styles, so Windows itself still gives it what a window has: the shadow and rounded
+# corners, Snap (dragging to an edge, Win+arrows), the system menu (Alt+Space), minimising and
+# restoring from the taskbar button, and the animations of all of those. The caption's height is
+# simply handed to the page (WM_NCCALCSIZE). The side and bottom sizing borders stay where Windows
+# keeps them, invisible just outside the window, so resizing from those is Windows' own too; the
+# top edge is inside the page, so the page starts that one (begin_resize). pywebview's own
+# frameless=True takes the whole frame away instead (FormBorderStyle None), and with it resizing,
+# Snap, the animations and minimising from the taskbar.
+
+WM_SIZE, WM_ACTIVATE, WM_NCDESTROY, WM_NCCALCSIZE = 0x5, 0x6, 0x82, 0x83
+WM_NCLBUTTONDOWN, WM_SYSCOMMAND = 0xA1, 0x112
+SIZE_MINIMIZED, SIZE_MAXIMIZED = 1, 2
+SC_MINIMIZE, SC_MAXIMIZE, SC_CLOSE, SC_RESTORE = 0xF020, 0xF030, 0xF060, 0xF120
+WS_CAPTION, WS_THICKFRAME, GWL_STYLE = 0x00C00000, 0x00040000, -16
+# where a drag starting at the page's top edge resizes from (the hit-test codes Windows uses)
+EDGES = {"n": 12, "nw": 13, "ne": 14}  # HTTOP, HTTOPLEFT, HTTOPRIGHT
+DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND = 33, 2
+_SUBCLASS_ID = 0x53554254
+_frames = {}  # hwnd: its CustomFrame, which holds the callback Windows calls, for as long as the window
+
+
+def _api():
+    """user32 and comctl32 with the argument types set (their own copies: setting types on the
+    shared ctypes.windll ones would change them for pywebview's calls too)."""
+    import ctypes
+    from ctypes import wintypes
+
+    user32, comctl32 = ctypes.WinDLL("user32", use_last_error=True), ctypes.WinDLL("comctl32", use_last_error=True)
+    lresult = ctypes.c_ssize_t
+    proc = ctypes.WINFUNCTYPE(lresult, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+                              ctypes.c_size_t, ctypes.c_size_t)
+    comctl32.SetWindowSubclass.argtypes = (wintypes.HWND, proc, ctypes.c_size_t, ctypes.c_size_t)
+    comctl32.RemoveWindowSubclass.argtypes = (wintypes.HWND, proc, ctypes.c_size_t)
+    comctl32.DefSubclassProc.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+    comctl32.DefSubclassProc.restype = lresult
+    user32.PostMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+    user32.SetWindowPos.argtypes = (wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                    ctypes.c_int, wintypes.UINT)
+    user32.GetWindowLongW.argtypes = (wintypes.HWND, ctypes.c_int)
+    for name in ("IsZoomed", "IsIconic"):
+        getattr(user32, name).argtypes = (wintypes.HWND,)
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    return ctypes, wintypes, user32, comctl32, proc
+
+
+class CustomFrame:
+    """Windows' caption taken off one window. on_state({"maximized", "minimized", "active"}) is
+    called on the window's thread whenever one of those changes."""
+
+    def __init__(self, hwnd, on_state=None):
+        ctypes, wintypes, self._user32, self._comctl32, proc = _api()
+        self._rect = wintypes.RECT
+        self.hwnd, self.on_state, self._state = hwnd, on_state, {}
+        style = self._user32.GetWindowLongW(hwnd, GWL_STYLE)
+        if style & (WS_CAPTION | WS_THICKFRAME) != WS_CAPTION | WS_THICKFRAME:
+            raise OSError("the window has no sizing frame and caption to keep")
+        self._proc = proc(self._window_proc)  # held here: Windows calls it for as long as the window is there
+        if not self._comctl32.SetWindowSubclass(hwnd, self._proc, _SUBCLASS_ID, 0):
+            raise ctypes.WinError(ctypes.get_last_error())
+        _frames[hwnd] = self
+        try:
+            # Windows 11 rounds the corners of a window with a frame anyway; this asks for it in so
+            # many words. Earlier Windows say no, and keep square corners.
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(wintypes.HWND(hwnd), DWMWA_WINDOW_CORNER_PREFERENCE,
+                                                       ctypes.byref(ctypes.c_int(DWMWCP_ROUND)), 4)
+        except Exception:
+            pass
+        # Windows works the frame out again now, without the caption
+        # (FRAMECHANGED | NOSIZE | NOMOVE | NOZORDER | NOACTIVATE)
+        self._user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x20 | 0x1 | 0x2 | 0x4 | 0x10)
+
+    def _window_proc(self, hwnd, msg, wparam, lparam, _id, _data):
+        default = self._comctl32.DefSubclassProc
+        if msg == WM_NCCALCSIZE and wparam:
+            try:
+                rect = self._rect.from_address(lparam)  # the first of NCCALCSIZE_PARAMS' rectangles
+                left, top = rect.left, rect.top
+            except Exception:
+                return default(hwnd, msg, wparam, lparam)
+            result = default(hwnd, msg, wparam, lparam)  # takes off the borders and the caption
+            try:
+                # Give the caption (and the top border) back to the page. A maximized window hangs
+                # over the screen's edges by its border, on every side, the way Windows maximizes
+                # every window; so it keeps that much back at the top too, or the page's top would
+                # be off the screen. The sides and bottom are left as Windows made them.
+                rect.top = top + (rect.left - left if self._user32.IsZoomed(hwnd) else 0)
+            except Exception:
+                pass
+            return result
+        if msg == WM_NCDESTROY:
+            try:
+                self._comctl32.RemoveWindowSubclass(hwnd, self._proc, _SUBCLASS_ID)
+            except Exception:
+                pass
+            # (it stays in _frames: Windows may still be on its way out of this very callback)
+        elif msg in (WM_SIZE, WM_ACTIVATE) and self.on_state:
+            try:
+                self._changed(hwnd, msg, wparam)
+            except Exception:
+                pass
+        return default(hwnd, msg, wparam, lparam)
+
+    def _changed(self, hwnd, msg, wparam):
+        state = dict(self._state)
+        if msg == WM_SIZE:
+            minimized = wparam == SIZE_MINIMIZED
+            # minimized from maximized, it still is (it comes back maximized)
+            state.update(maximized=wparam == SIZE_MAXIMIZED or (minimized and state.get("maximized", False)),
+                         minimized=minimized)
+        else:
+            state["active"] = wparam & 0xFFFF != 0  # WA_INACTIVE is 0
+        state.setdefault("maximized", bool(self._user32.IsZoomed(hwnd)))
+        state.setdefault("minimized", bool(self._user32.IsIconic(hwnd)))
+        state.setdefault("active", self._user32.GetForegroundWindow() == hwnd)
+        if state != self._state:
+            self._state = state
+            self.on_state(dict(state))
+
+
+def custom_frame(hwnd, on_state=None):
+    """Take Windows' caption off the window (see above), on the window's own thread, before it
+    shows. Returns None once it's off, or why not: then the window keeps its own title bar."""
+    if not WINDOWS:
+        return "not Windows"
+    try:
+        CustomFrame(hwnd, on_state)
+        return None
+    except Exception as e:
+        return f"{e.__class__.__name__}: {e}"
+
+
+def window_state(hwnd):
+    """{"maximized", "active"} right now."""
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    return {"maximized": bool(user32.IsZoomed(hwnd)), "active": user32.GetForegroundWindow() == hwnd}
+
+
+def window_command(hwnd, command):
+    """What the page's title bar buttons do, exactly as Windows' own would (so closing still asks
+    first while a video is running, and the animations play): "minimise", "maximise" (restore
+    when it's maximized) or "close"."""
+    _, _, user32, _, _ = _api()
+    if command == "maximise":
+        sc = SC_RESTORE if user32.IsZoomed(hwnd) else SC_MAXIMIZE
+    else:
+        sc = {"minimise": SC_MINIMIZE, "close": SC_CLOSE}[command]
+    return bool(user32.PostMessageW(hwnd, WM_SYSCOMMAND, sc, 0))
+
+
+def begin_resize(hwnd, edge):
+    """Resize from the top edge, which is inside the page (so Windows doesn't see an edge there),
+    as if the pointer had gone down on a native border. Run on the window's own thread. Only while
+    the button is still down: the page asks as it goes down, and a quick click is just a click."""
+    ctypes, wintypes, user32, _, _ = _api()
+    if edge not in EDGES or user32.IsZoomed(hwnd):
+        return False
+    button = 0x02 if user32.GetSystemMetrics(23) else 0x01  # SM_SWAPBUTTON: VK_RBUTTON, else VK_LBUTTON
+    if not user32.GetAsyncKeyState(button) & 0x8000:
+        return False
+    point = wintypes.POINT()
+    user32.GetCursorPos(ctypes.byref(point))
+    user32.ReleaseCapture()  # the web view has the mouse; Windows' sizing takes it from here
+    return bool(user32.PostMessageW(hwnd, WM_NCLBUTTONDOWN, EDGES[edge],
+                                    (point.x & 0xFFFF) | (point.y & 0xFFFF) << 16))
 
 
 # ---- limits on the worker (Settings > Hardware) --------------------------------------------------

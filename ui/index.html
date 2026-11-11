@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Subtitle Maker</title>
 <link rel="icon" href="icon.svg">
+<!-- On Windows the page draws the title bar (app.py takes Windows' own off); api().init() says for sure -->
+<script>if (/Windows/.test(navigator.userAgent)) document.documentElement.classList.add("frame-custom");</script>
 <style>
 /* =====================================================================
    SUBTITLE MAKER — WINDOW
@@ -766,6 +768,50 @@ html.reduce-motion .radio::before, html.reduce-motion .radio::after{ transform:n
 html.reduce-motion .switch:active span{ width:18px !important; }
 html.reduce-motion .switch[aria-checked="true"]:active span{ transform:translateX(18px) !important; }
 html.reduce-motion .seg-pill{ --press:1 !important; }
+
+/* ---------- the title bar ----------
+   On Windows the page draws it (winextras.custom_frame takes Windows' caption off, and keeps the
+   rest of the window). A strip across the top drags the window the way a title bar does: the web
+   view hands what's app-region: drag to Windows, so Snap, double-click to maximize and right-click
+   for the window menu are Windows' own. The sidebar's icon and name sit in it. Minimise, maximise
+   and close are at its right, the size and look of Windows 11's; they stay above dialogs and the
+   starting screen, so the window can always be moved and closed (closing asks first while a video
+   runs, as Windows' X does). Its top edge resizes the window (the other edges are Windows' own,
+   just outside it). Out of the window's front, it dims, as Windows' does. Without it (another
+   system, or if Windows' title bar couldn't come off) none of this shows. */
+:root{ --titlebar:40px; }  /* the same as TITLE_BAR in app.py */
+.titlebar, .tb-edge{ display:none; }
+html.frame-custom .titlebar{ display:flex; position:fixed; top:0; left:0; right:0; height:var(--titlebar); z-index:110; align-items:stretch; app-region:drag; }
+html.frame-custom main.main{ margin-top:var(--titlebar); }
+html.frame-custom aside.side{ padding-top:1px; }  /* its icon and name in the strip, centred on it */
+html.frame-custom .brand{ padding-bottom:31px; }  /* the menu stays level with the page beside it */
+html.frame-custom .scrim{ padding-top:calc(var(--titlebar) + 8px); }  /* a dialog never reaches under the strip */
+.tb-title{ display:none; align-items:center; gap:8px; padding-left:14px; margin-right:auto; font-size:12px; color:var(--dim);
+  transition:opacity 130ms var(--ease-standard); }
+.tb-title img{ display:block; border-radius:4px; }
+body.wizard .tb-title{ display:flex; }  /* the setup has no sidebar, so the strip says whose window it is */
+.tb-btns{ display:flex; margin-left:auto; app-region:no-drag; }
+.tb-btn{ all:unset; box-sizing:border-box; width:46px; height:100%; display:flex; align-items:center; justify-content:center;
+  color:var(--ink); font:10px/1 "Segoe Fluent Icons","Segoe MDL2 Assets"; cursor:default;
+  transition:background-color 130ms var(--ease-standard), color 130ms var(--ease-standard); }
+.tb-btn::before{ content:"\E921"; }  /* ChromeMinimize */
+.tb-btn.max::before{ content:"\E922"; }  /* ChromeMaximize */
+html.maximized .tb-btn.max::before{ content:"\E923"; }  /* ChromeRestore */
+.tb-btn.close::before{ content:"\E8BB"; }  /* ChromeClose */
+.tb-btn:hover{ background:var(--fill-tertiary); }
+.tb-btn:active{ background:var(--hairline); color:var(--dim); }
+.tb-btn.close:hover{ background:#c42b1c; color:#fff; }
+.tb-btn.close:active{ background:rgba(196,43,28,.9); color:rgba(255,255,255,.7); }
+html.inactive .tb-btn:not(:hover){ color:var(--faint); }
+html.inactive .tb-title, html.inactive .brand{ opacity:.6; }
+.brand{ transition:opacity 130ms var(--ease-standard); }
+/* the top edge: a thin band to resize from, with the corners; not while maximized */
+html.frame-custom .tb-edge{ display:block; position:fixed; top:0; height:5px; z-index:111; app-region:no-drag; }
+.tb-edge.n{ left:12px; right:12px; cursor:n-resize; }
+.tb-edge.nw{ left:0; width:12px; cursor:nw-resize; }
+.tb-edge.ne{ right:0; width:12px; cursor:ne-resize; }
+html.maximized .tb-edge{ display:none !important; }
+html.reduce-motion .tb-btn, html.reduce-motion .tb-title, html.reduce-motion .brand{ transition:none; }
 </style>
 </head>
 <body>
@@ -814,6 +860,17 @@ html.reduce-motion .seg-pill{ --press:1 !important; }
 </div>
 <div id="dialog-root"></div>
 <div id="toast-root" aria-live="polite"></div>
+<!-- The title bar (see "the title bar" above). Its buttons are out of the Tab order, as Windows'
+     own are: Alt+Space, Alt+F4 and Win+arrows do the same from the keyboard. -->
+<div class="titlebar" id="titlebar">
+  <div class="tb-title"><img src="icon.svg" width="16" height="16" alt="">Subtitle Maker</div>
+  <div class="tb-btns">
+    <button class="tb-btn min" type="button" tabindex="-1" data-window="minimise" aria-label="Minimise" title="Minimise"></button>
+    <button class="tb-btn max" type="button" tabindex="-1" data-window="maximise" aria-label="Maximise" title="Maximise"></button>
+    <button class="tb-btn close" type="button" tabindex="-1" data-window="close" aria-label="Close" title="Close"></button>
+  </div>
+</div>
+<div class="tb-edge nw" data-edge="nw"></div><div class="tb-edge n" data-edge="n"></div><div class="tb-edge ne" data-edge="ne"></div>
 
 <script>
 /* ---------------------------------------------------------------------
@@ -965,6 +1022,31 @@ function toastLeave(t) {
    it is. With less motion asked for, none of the script's animations run.
 --------------------------------------------------------------------- */
 const LESS_MOTION = () => S.info && S.info.settings && S.info.settings.less_motion;
+/* The title bar: whether the page draws it, and the window's state (maximized, in front) */
+function applyFrame(frame) {
+  const root = document.documentElement;
+  root.classList.toggle("frame-custom", !!(frame && frame.custom));
+  if (frame && frame.custom) applyWindowState(frame);
+}
+function applyWindowState(state) {
+  const root = document.documentElement, max = $("#titlebar .max");
+  if ("maximized" in state) {
+    root.classList.toggle("maximized", !!state.maximized);
+    const label = state.maximized ? "Restore" : "Maximise";
+    max.setAttribute("aria-label", label);
+    max.title = label;
+  }
+  if ("active" in state) root.classList.toggle("inactive", !state.active);
+}
+document.querySelectorAll("#titlebar [data-window]").forEach(b => {
+  b.addEventListener("mousedown", e => e.preventDefault());  // the focus stays where it was, as with Windows' buttons
+  b.addEventListener("click", () => { if (window.pywebview && window.pywebview.api) api().window_button(b.dataset.window); });
+});
+document.querySelectorAll(".tb-edge").forEach(edge => edge.addEventListener("mousedown", e => {
+  if (e.button !== 0 || !(window.pywebview && window.pywebview.api)) return;
+  e.preventDefault();
+  api().window_resize(edge.dataset.edge);
+}));
 function applyLessMotion() { document.documentElement.classList.toggle("reduce-motion", !!LESS_MOTION()); }
 function prefersReducedMotion() {
   if (document.documentElement.classList.contains("reduce-motion")) return true;
@@ -3623,6 +3705,7 @@ const app = {
       render();  // no video can be running during an update, so a full redraw is safe
       return;
     }
+    if (ev.type === "window") return applyWindowState(ev);
     const r = S.run;
     if (!r) return;
     switch (ev.type) {
@@ -3818,6 +3901,7 @@ async function boot() {
 }
 
 async function startApp() {
+  applyFrame(S.info.frame);
   applyTheme();
   applyLessMotion();
   if (S.info.unfinished && S.info.unfinished.length && S.info.mode !== "setup") S.unfinished = S.info.unfinished;
