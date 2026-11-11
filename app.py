@@ -24,6 +24,7 @@ from webview.dom import DOMEventHandler  # noqa: E402
 
 import changelog  # noqa: E402
 import configure  # noqa: E402
+import hardware  # noqa: E402
 import known_voices  # noqa: E402
 import models  # noqa: E402
 import srtfile  # noqa: E402
@@ -256,7 +257,9 @@ class Api:
         self._probe.update(
             recommended=configure.recommend(gpu, ram_gb, cores),
             hardware={"gpu": gpu[0] if gpu else None, "vram_mb": gpu[1] if gpu else None,
-                      "ram_gb": round(ram_gb), "cores": cores},
+                      "ram_gb": round(ram_gb), "cores": cores, "threads": os.cpu_count() or cores,
+                      # Settings > Hardware offers "Use less graphics memory" only where it changes something
+                      "gpu_low_memory": configure.gpu_saves_memory() if gpu else False},
             models=self.models_status(),
         )
         TIMINGS.mark("looked at this PC (graphics card, memory, models)")
@@ -332,7 +335,16 @@ class Api:
             "mode": next((m for m in ("setup", "update", "uninstall") if f"--{m}" in sys.argv), None),
             "unfinished": self._unfinished(),
             "required": update.required(),  # an important security update must go in first
+            # Settings > Hardware: its presets, and what the memory estimates add up from
+            "hw": {"presets": hardware.PRESETS, "speakers_mb": hardware.SPEAKERS_RAM_MB,
+                   "audio_mb": hardware.AUDIO_RAM_MB_PER_MINUTE * hardware.ASSUMED_MINUTES,
+                   "minutes": hardware.ASSUMED_MINUTES, "default_threads": hardware.DEFAULT_THREADS},
         }
+
+    def memory_check(self, speakers=False):
+        """Before a queue starts: will a video at this quality fit in the memory limit?"""
+        self._probe_thread.join()
+        return hardware.memory_check(load_settings(), self._probe["hardware"], bool(speakers))
 
     # ---- what's new ------------------------------------------------------------------------
 
@@ -644,6 +656,7 @@ class Api:
         with self._lock:
             if self._busy():
                 return False
+            self._limits_changed()  # before the job is set, so stopping the old worker can't touch it
             self._job = {"cancelled": False, "reported": False, "checking": checking}
             if not self._tell_worker({"type": "job", "argv": argv}):
                 self._job = None
@@ -654,7 +667,17 @@ class Api:
         """Start loading the speech model now (files were just added), so the first video starts sooner."""
         with self._lock:
             if not self._busy() and SETTINGS_FILE.exists():
+                self._limits_changed()
                 self._tell_worker({"type": "warm"})
+
+    def _limits_changed(self):
+        """Settings > Hardware changed since the worker started (or it went over its memory limit):
+        stop it, so the next video starts a fresh one with the new limits. Call with _lock held,
+        between videos."""
+        worker = self._worker
+        if worker and worker.poll() is None and (
+                worker.limits != hardware.limits(load_settings()) or self._memory_hit(worker)):
+            self.stop_worker()
 
     def _busy(self):
         return bool(self._job) or bool(self._process and self._process.poll() is None)
@@ -672,14 +695,35 @@ class Api:
             return False
 
     def _spawn(self, args):
-        env = {**os.environ, "PYTHONUNBUFFERED": "1", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
+        """Start make_subtitles.py under the limits in Settings > Hardware (see hardware.py): its
+        threads by environment, then its priority and a Job Object, which what it starts (speaker
+        detection) inherits."""
+        settings = load_settings()
+        env = {**hardware.worker_env(settings), "PYTHONUNBUFFERED": "1", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
                "PYTHONIOENCODING": "utf-8"}
-        return subprocess.Popen(
+        process = subprocess.Popen(
             [console_python(), str(HERE / "make_subtitles.py"), *args, "--events"],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace", bufsize=1,
             cwd=str(HERE), env=env, creationflags=NO_WINDOW,
         )
+        process.limits = limits = hardware.limits(settings)
+        process.job, problem = winextras.limit_job(process, limits["cpu_percent"], limits["memory_mb"])
+        problem = winextras.lower_priority(process, limits["low_priority"]) or problem
+        if problem:  # it still runs, only without that limit: say so in Details and startup.log
+            TIMINGS.mark(f"hardware limits: {problem}")
+            self.send({"type": "log", "text": f"Couldn't apply every limit in Settings > Hardware ({problem})."})
+        return process
+
+    def _memory_hit(self, process):
+        job = getattr(process, "job", None)
+        return bool(job and job.handle and job.memory_hit())
+
+    def _plain_error(self, process, message, code=None):
+        """The error to show, and whether it was memory running out (see hardware.memory_message)."""
+        hit = self._memory_hit(process)
+        plain = hardware.memory_message(message, process.limits["memory_mb"], hit=hit, code=code)
+        return plain, plain != message or hit
 
     def _follow_worker(self, worker):
         """Pass the worker's events to the page; each job ends with an "exit" event, as a one-off run does."""
@@ -694,22 +738,38 @@ class Api:
             event = json.loads(line[len(EVENT_PREFIX):])
             kind = event["type"]
             if kind == "finished":
+                if worker is not self._worker:
+                    continue
                 self._job = None
                 self._finish_title()
                 self.send({"type": "exit", "code": event["code"], "cancelled": False})
             elif kind in ("warmed", "idle_exit", "model_loaded"):
                 continue
-            elif self._job:
+            elif self._job and worker is self._worker:
                 self._job["reported"] |= kind in ("done", "error")
                 self._beep_if_done(event)
+                if kind == "error":
+                    event["message"], memory = self._plain_error(worker, event["message"])
+                    if memory:
+                        event.update(memory=True, log=None)
                 self.send(event)
         code = worker.wait()
+        try:
+            self._worker_ended(worker, code, errors)
+        finally:
+            if worker.job:
+                worker.job.close()
+
+    def _worker_ended(self, worker, code, errors):
+        if worker is not self._worker:
+            return  # an older worker, stopped between videos: the job running now isn't its
         job, self._job = self._job, None
         if job:  # the worker ended mid-job: cancelled, or it crashed
             if not job["cancelled"] and not job["reported"]:
                 tail = "".join(errors).strip().splitlines()
-                self.send({"type": "error", "message": tail[-1] if tail else f"It stopped unexpectedly (code {code}).",
-                           "log": None})
+                message, memory = self._plain_error(
+                    worker, tail[-1] if tail else f"It stopped unexpectedly (code {code}).", code)
+                self.send({"type": "error", "message": message, "log": None, **({"memory": True} if memory else {})})
             self._finish_title()
             self.send({"type": "exit", "code": code or 1, "cancelled": job["cancelled"]})
 
@@ -763,8 +823,10 @@ class Api:
         stderr_thread.join(timeout=2)
         if code and not reported and not getattr(process, "cancelled", False):
             tail = "".join(errors).strip().splitlines()
-            self.send({"type": "error", "message": tail[-1] if tail else f"It stopped unexpectedly (code {code}).",
-                       "log": None})
+            message, _ = self._plain_error(process, tail[-1] if tail else f"It stopped unexpectedly (code {code}).", code)
+            self.send({"type": "error", "message": message, "log": None})
+        if process.job:
+            process.job.close()
         self._finish_title()
         self.send({"type": "exit", "code": code, "cancelled": getattr(process, "cancelled", False)})
 
@@ -857,11 +919,13 @@ class Api:
     _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
                "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "review", "done_sound",
                "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify", "remember_voices", "less_motion",
-               "translate", "remember_scroll")
+               "translate", "remember_scroll", *hardware.KEYS)
 
     def save_prefs(self, changes):
-        """Save some instant settings; anything not allowed falls back to its default."""
+        """Save some instant settings; anything not allowed falls back to its default.
+        {"hw_preset": "light"} sets everything that preset does (Settings > Hardware)."""
         settings = load_settings()
+        settings.update(hardware.PRESETS.get(changes.get("hw_preset"), {}))
         settings.update({k: v for k, v in changes.items() if k in self._INSTANT})
         save_settings(settings)
         return load_settings()  # the cleaned-up version

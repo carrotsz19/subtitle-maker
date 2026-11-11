@@ -351,6 +351,129 @@ saver.save_prefs({"remember_scroll": False})
 assert saver.reset_prefs()["remember_scroll"] is True
 paths.save_settings(paths.DEFAULT_SETTINGS)
 
+# --- Settings > Hardware ---
+import hardware  # noqa: E402
+import winextras  # noqa: E402
+
+# The default is Balanced: no caps (as fast as 0.3.0 with nothing else running), other apps first
+assert hardware.preset_of(paths.DEFAULT_SETTINGS) == "balanced"
+assert hardware.PRESETS["full"] == {"cpu_percent": 100, "low_priority": False, "memory_limit_gb": 0, "gpu_low_memory": False}
+assert all(set(p) == set(hardware.KEYS) for p in hardware.PRESETS.values())
+assert all(k in app.Api._INSTANT for k in hardware.KEYS)
+# Only the offered values are kept; anything else goes back to the default
+for key, bad in (("cpu_percent", 33), ("cpu_percent", "50"), ("low_priority", "yes"), ("memory_limit_gb", 5),
+                 ("memory_limit_gb", -1), ("gpu_low_memory", 1.5)):
+    assert saver.save_prefs({key: bad})[key] == paths.DEFAULT_SETTINGS[key], (key, bad)
+assert saver.save_prefs({"cpu_percent": 50})["cpu_percent"] == 50
+assert paths.load_settings()["cpu_percent"] == 50, "it's kept on disk"
+assert hardware.preset_of(paths.load_settings()) == "custom"
+# Picking a preset sets all it covers; a setting sent with it wins
+light = saver.save_prefs({"hw_preset": "light"})
+assert hardware.preset_of(light) == "light" and light["cpu_percent"] == 25 and light["gpu_low_memory"] is True
+assert saver.save_prefs({"hw_preset": "nonsense"})["cpu_percent"] == 25, "an unknown preset changes nothing"
+assert saver.save_prefs({"hw_preset": "full", "memory_limit_gb": 8})["memory_limit_gb"] == 8
+assert saver.reset_prefs()["cpu_percent"] == 100 and hardware.preset_of(paths.load_settings()) == "balanced"
+paths.save_settings(paths.DEFAULT_SETTINGS)
+
+# Threads: a share of the processor's threads, at most the 4 the models use anyway, at least 1;
+# none under no limit (each library's own default, as in 0.3.0)
+assert hardware.threads_for(100, 12) is None
+assert hardware.threads_for(25, 12) == 3 and hardware.threads_for(50, 12) == 4 and hardware.threads_for(25, 2) == 1
+assert hardware.threads_for(25, 4) == 1 and hardware.threads_for(75, 4) == 3
+
+# The worker's environment: thread variables only under a processor limit, and nothing left over
+# from the app's own environment
+base = {"PATH": "x", "OMP_NUM_THREADS": "9", hardware.ENV_MEMORY: "1"}
+env = hardware.worker_env(paths.DEFAULT_SETTINGS, base, cores=12)
+assert env == {"PATH": "x", "OMP_NUM_THREADS": "9"}, env
+capped = {**paths.DEFAULT_SETTINGS, "cpu_percent": 25, "memory_limit_gb": 4, "gpu_low_memory": True}
+env = hardware.worker_env(capped, {"PATH": "x"}, cores=12)
+assert all(env[v] == "3" for v in hardware.THREAD_VARS), env
+assert env[hardware.ENV_THREADS] == "3" and env[hardware.ENV_CPU] == "25" and env[hardware.ENV_MEMORY] == "4096"
+assert env[hardware.ENV_GPU_LOW] == "1" and base["PATH"] == "x"
+assert hardware.env_int(hardware.ENV_THREADS, env) == 3 and hardware.env_int(hardware.ENV_THREADS, {}) is None
+assert hardware.env_int(hardware.ENV_CPU, {hardware.ENV_CPU: "lots"}) is None
+assert hardware.limits(capped, cores=12) == {"threads": 3, "cpu_percent": 25, "memory_mb": 4096,
+                                             "low_priority": True, "gpu_low_memory": True}
+assert hardware.limits(paths.DEFAULT_SETTINGS, 12) != hardware.limits(capped, 12), "a change starts a fresh worker"
+# The worker and the speaker step read the limit; WhisperModel gets it, and nothing without one
+_saved_env = dict(app.os.environ)
+app.os.environ.update({hardware.ENV_THREADS: "3"})
+assert ms.cpu_limits() == {"cpu_threads": 3, "num_workers": 1}
+app.os.environ.pop(hardware.ENV_THREADS)
+assert ms.cpu_limits() == {}
+app.os.environ.clear()
+app.os.environ.update(_saved_env)
+# Remembered speeds are kept apart under a processor limit
+assert hardware.speed_suffix({hardware.ENV_CPU: "25"}) == "|cpu25" and hardware.speed_suffix({}) == ""
+
+# The graphics card's format: the fastest, or the smallest that's still fast; the same on a card
+# without float16 (GTX 10-series), where "Use less graphics memory" isn't offered
+assert hardware.compute_type({"float16", "int8_float16", "int8", "float32"}) == "float16"
+assert hardware.compute_type({"float16", "int8_float16", "int8", "float32"}, low_memory=True) == "int8_float16"
+assert hardware.compute_type({"int8", "int8_float32", "float32"}, True) == hardware.compute_type({"int8", "int8_float32", "float32"}) == "int8"
+assert hardware.saves_gpu_memory({"float16", "int8_float16", "int8"}) and not hardware.saves_gpu_memory({"int8", "float32"})
+
+# The memory pre-flight: the level (on the processor or the graphics card), speakers, the sound
+gtx = {"gpu": "GTX 1050", "vram_mb": 3072}
+assert all(set(lv["ram_mb"]) == {"cpu", "cuda"} and lv["ram_mb"]["cpu"] >= lv["ram_mb"]["cuda"] for lv in paths.LEVELS.values())
+assert hardware.device_for(paths.DEFAULT_SETTINGS, gtx, "high") == "cuda"
+assert hardware.device_for(paths.DEFAULT_SETTINGS, {"gpu": "x", "vram_mb": 2048}, "max") == "cpu", "Automatic: too big"
+assert hardware.device_for(paths.DEFAULT_SETTINGS, {"gpu": None}, "fast") == "cpu"
+assert hardware.device_for({**paths.DEFAULT_SETTINGS, "device": "cpu"}, gtx, "fast") == "cpu"
+need = hardware.memory_needed_mb("high", "cpu", speakers=True, minutes=10)
+assert need == paths.LEVELS["high"]["ram_mb"]["cpu"] + paths.SPEAKERS_RAM_MB + 10 * paths.AUDIO_RAM_MB_PER_MINUTE
+assert hardware.memory_needed_mb("potato", "cpu", speakers=True, minutes=0) == paths.LEVELS["potato"]["ram_mb"]["cpu"], \
+    "Potato never detects speakers"
+assert hardware.memory_check(paths.DEFAULT_SETTINGS, gtx)["fits"], "no limit: always fits"
+tight = {**paths.DEFAULT_SETTINGS, "memory_limit_gb": 2}
+check = hardware.memory_check(tight, gtx, speakers=True)
+assert not check["fits"] and check["limit_mb"] == 2048 and check["need_mb"] > 2048
+assert hardware.memory_check({**tight, "level": "potato"}, gtx, minutes=10)["fits"]
+assert hardware.memory_check({**paths.DEFAULT_SETTINGS, "memory_limit_gb": 8}, gtx, speakers=True)["fits"]
+
+# Running out of memory is said plainly: over the limit in Settings, or the whole PC
+assert hardware.is_memory_error(MemoryError())
+assert hardware.is_memory_error("RuntimeError: std::bad_alloc")
+assert hardware.is_memory_error("numpy._core._exceptions._ArrayMemoryError: Unable to allocate 1.2 GiB")
+assert hardware.is_memory_error("Speaker detection stopped (code 1): MemoryError")
+assert hardware.is_memory_error(None, code=0xC0000017) and hardware.is_memory_error(None, code=-1073741801)
+assert not hardware.is_memory_error("RuntimeError: CUDA failed with error out of memory"), "the graphics card's isn't"
+assert not hardware.is_memory_error("FileNotFoundError: x.mp4") and not hardware.is_memory_error(None, code=1)
+assert hardware.memory_message("MemoryError", limit_mb=2048) == hardware.MEMORY_MESSAGE
+assert hardware.memory_message("It stopped unexpectedly (code 3221225477).", 2048, hit=True) == hardware.MEMORY_MESSAGE
+assert "Settings > Hardware" in hardware.MEMORY_MESSAGE
+assert hardware.memory_message("MemoryError") == hardware.OUT_OF_MEMORY, "no limit set: the PC itself ran out"
+assert hardware.memory_message("Couldn't read the sound", 2048) == "Couldn't read the sound"
+assert hardware.memory_message("Couldn't read the sound", 2048, code=1) == "Couldn't read the sound"
+
+# The app's side: a worker's error over its limit becomes the plain message, flagged as memory
+class _FakeJob:
+    handle = 1
+    def memory_hit(self):  # noqa: E301
+        return True
+class _FakeWorker:  # noqa: E302
+    limits, job = hardware.limits(tight), _FakeJob()
+assert saver._plain_error(_FakeWorker(), "It stopped unexpectedly (code 1).") == (hardware.MEMORY_MESSAGE, True)
+_FakeWorker.job = None
+assert saver._plain_error(_FakeWorker(), "Couldn't read the sound") == ("Couldn't read the sound", False)
+
+# The Job Object itself (Windows): the cap and the limit read back as set, and going over the
+# limit is noticed
+if winextras.WINDOWS:
+    import subprocess as _sp  # noqa: E402
+
+    child = _sp.Popen([sys.executable, "-c", "import time; time.sleep(0.3); x = bytearray(600 * 2**20)"],
+                      stderr=_sp.PIPE)
+    job, problem = winextras.limit_job(child, cpu_percent=25, memory_mb=200)
+    assert job and not problem, problem
+    assert job.cpu_rate() == 25 and job.memory_limit_mb() == 200
+    child.wait()
+    assert child.returncode != 0 and b"MemoryError" in child.stderr.read()
+    assert job.memory_hit(), "Windows said it went over"
+    job.close()
+    assert winextras.limit_job(child) == (None, None), "nothing to limit: no job"
+
 # The meters in Settings > Quality: every level says how fast and how accurate it is, out of 5
 assert all(1 <= lv[k] <= 5 for lv in paths.LEVELS.values() for k in ("speed", "accuracy"))
 

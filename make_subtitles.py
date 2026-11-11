@@ -43,6 +43,7 @@ import psutil
 from tqdm import tqdm
 
 
+import hardware  # noqa: E402
 import models  # noqa: E402
 from paths import (ERROR_LOG, LEVELS, MODELS_DIR, TRANSLATE_WITH, add_history, data_dir, level_for_model,  # noqa: E402
                    load_settings)
@@ -154,7 +155,8 @@ SPEED_FILE = data_dir() / "speed.json"
 
 
 def speed_key(model_name, device, speakers):
-    return f"{model_name}|{device}|{'speakers' if speakers else 'plain'}"
+    # (kept apart under a processor limit, which is slower: see hardware.speed_suffix)
+    return f"{model_name}|{device}|{'speakers' if speakers else 'plain'}{hardware.speed_suffix()}"
 
 
 def expected_seconds(key, audio_seconds):
@@ -228,13 +230,40 @@ def gpu_stats():
         return None
 
 
+_OWN = {}  # this process and its children, kept so each one's processor use is measured since the last look
+
+
+def own_usage():
+    """(processor % of the whole PC, memory MB) that Subtitle Maker's worker and the processes it
+    started use right now: what Settings > Hardware's limits hold, so the window shows it beside them."""
+    me = _OWN.setdefault(os.getpid(), psutil.Process())
+    try:
+        tree = [me] + me.children(recursive=True)
+    except psutil.Error:
+        tree = [me]
+    cpu = mem = 0.0
+    for proc in tree:
+        proc = _OWN.setdefault(proc.pid, proc)
+        try:
+            cpu += proc.cpu_percent()  # % of one thread since the last look (0 the first time)
+            info = proc.memory_info()
+            mem += getattr(info, "private", 0) or info.rss  # committed memory, as a Job Object counts it
+        except psutil.Error:
+            _OWN.pop(proc.pid, None)
+    return cpu / (psutil.cpu_count() or 1), mem / 2**20
+
+
 def resource_stats(gpu=True):
-    """CPU, RAM and (if there is an NVIDIA GPU) GPU use right now, RAM and VRAM in MB.
+    """CPU, RAM and (if there is an NVIDIA GPU) GPU use right now, RAM and VRAM in MB, plus this
+    worker's own share (app_cpu, app_ram) and its limits from Settings > Hardware.
 
     gpu=False skips asking nvidia-smi, the one slow part (Potato mode).
     """
     ram = psutil.virtual_memory()
     stats = {"cpu": psutil.cpu_percent(), "ram_used": ram.used / 2**20, "ram_total": ram.total / 2**20}
+    stats["app_cpu"], stats["app_ram"] = own_usage()
+    stats["cpu_limit"] = hardware.env_int(hardware.ENV_CPU)
+    stats["ram_limit"] = hardware.env_int(hardware.ENV_MEMORY)
     gpu = gpu_stats() if gpu else None
     if gpu:
         stats.update(gpu=gpu[0], vram_used=gpu[1], vram_total=gpu[2])
@@ -344,16 +373,27 @@ def load_model(name, device):
     if device in ("auto", "cuda"):
         try:
             # Older GPUs (e.g. GTX 10-series) have no fast float16, so pick the best they support
+            # (Settings > Hardware > Use less graphics memory picks int8 weights where that's a change)
             supported = ctranslate2.get_supported_compute_types("cuda")
-            compute = next(t for t in ("float16", "int8_float16", "int8", "float32") if t in supported)
-            model = WhisperModel(name, device="cuda", compute_type=compute)
+            compute = hardware.compute_type(supported, low_memory=bool(os.environ.get(hardware.ENV_GPU_LOW)))
+            model = WhisperModel(name, device="cuda", compute_type=compute, **cpu_limits())
             print(f"Using GPU ({compute}).")
             return model, "cuda"
         except Exception as e:
             if device == "cuda":
                 raise
             print(f"GPU not available ({e.__class__.__name__}), using CPU (slower but fine).")
-    return WhisperModel(name, device="cpu", compute_type="int8"), "cpu"
+    limits = cpu_limits()
+    if limits:
+        print(f"Processor limit: {limits['cpu_threads']} threads, up to {hardware.env_int(hardware.ENV_CPU)}% of the processor.")
+    return WhisperModel(name, device="cpu", compute_type="int8", **limits), "cpu"
+
+
+def cpu_limits():
+    """WhisperModel's thread arguments under a processor limit (Settings > Hardware), else none:
+    its own default then, 4 threads. One worker: the queue sends one video at a time."""
+    threads = hardware.env_int(hardware.ENV_THREADS)
+    return {"cpu_threads": threads, "num_workers": 1} if threads else {}
 
 
 def gpu_failed(error):
@@ -1375,7 +1415,11 @@ def serve():
                 code = e.code if isinstance(e.code, int) else 1
             except Exception as e:  # never take the worker down with one video
                 log_error(e)
-                emit("error", message=f"Something went wrong: {e.__class__.__name__}: {e}", log=str(ERROR_LOG))
+                if hardware.is_memory_error(e):
+                    emit("error", message=hardware.memory_message(e, hardware.env_int(hardware.ENV_MEMORY)),
+                         log=None, memory=True)
+                else:
+                    emit("error", message=f"Something went wrong: {e.__class__.__name__}: {e}", log=str(ERROR_LOG))
                 code = 1
             if "speakers" in sys.modules:
                 sys.modules["speakers"].stop_all()  # a video that failed partway leaves none running
@@ -1475,6 +1519,15 @@ def main(argv=None):
         emit("error", message=str(e), log=None)
         sys.exit(f"\n{e}")
     except Exception as e:
+        if hardware.is_memory_error(e):
+            # Over the memory limit in Settings > Hardware (or the PC's own): said plainly, in the
+            # history too, and the window keeps the video ready to try again
+            log_error(e)
+            message = hardware.memory_message(e, hardware.env_int(hardware.ENV_MEMORY))
+            if args.input and not args.prepare:
+                remember(args, "failed", error=message)
+            emit("error", message=message, log=None, memory=True)
+            sys.exit(f"\n{message}")
         log_error(e)
         if args.input and not args.prepare:
             remember(args, "failed", error=f"{e.__class__.__name__}: {e}")

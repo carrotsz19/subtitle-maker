@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import sherpa_onnx
 
+from hardware import ENV_THREADS, env_int
 from models import EMB_MODEL, SEG_MODEL, SPEAKER_MB, VOICE_MODEL, download_speakers, speakers_ready
 
 SAMPLE_RATE = 16000
@@ -16,7 +17,9 @@ AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".mp4", ".mov"}
 MATCH_THRESHOLD = 0.45      # voice similarity needed to name someone from a Voices clip (a 4 s clip
                             # against a person measured 0.73+ for them, at most 0.21 for anyone else)
 MAX_EMBED_SECONDS = 30      # how much of each speaker's audio to fingerprint
-THREADS = 4
+# Threads for each speaker model; fewer under a processor limit (Settings > Hardware). The process
+# detect_apart() starts gets the same limits, as it inherits the worker's environment and Job Object.
+THREADS = env_int(ENV_THREADS) or 4
 
 
 def ensure_models(progress=None):

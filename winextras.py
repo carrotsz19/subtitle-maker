@@ -271,3 +271,170 @@ def set_placement(hwnd, saved, min_size=(200, 150)):
         return bool(ctypes.windll.user32.SetWindowPlacement(hwnd, ctypes.byref(wp)))
     except Exception:
         return False
+
+
+# ---- limits on the worker (Settings > Hardware) --------------------------------------------------
+# A Job Object holds the worker and everything it starts to a share of the processor (a hard cap)
+# and a memory limit. Windows 8 and later; anywhere else (or if Windows refuses) there's no job, and
+# the thread limit and priority still apply.
+
+JOB_OBJECT_LIMIT_JOB_MEMORY = 0x200
+JOB_OBJECT_CPU_RATE_CONTROL_ENABLE, JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP = 0x1, 0x4
+JOB_OBJECT_MSG_JOB_MEMORY_LIMIT = 10
+JobObjectBasicAccountingInformation, JobObjectAssociateCompletionPortInformation = 1, 7
+JobObjectExtendedLimitInformation, JobObjectCpuRateControlInformation = 9, 15
+
+
+def _job_structs():
+    import ctypes
+    from ctypes import wintypes
+
+    class Basic(ctypes.Structure):
+        _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
+                    ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
+                    ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD),
+                    ("SchedulingClass", wintypes.DWORD)]
+
+    class Extended(ctypes.Structure):
+        _fields_ = [("BasicLimitInformation", Basic), ("IoInfo", ctypes.c_uint64 * 6),
+                    ("ProcessMemoryLimit", ctypes.c_size_t), ("JobMemoryLimit", ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t), ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+    class CpuRate(ctypes.Structure):
+        _fields_ = [("ControlFlags", wintypes.DWORD), ("CpuRate", wintypes.DWORD)]
+
+    class Port(ctypes.Structure):
+        _fields_ = [("CompletionKey", ctypes.c_void_p), ("CompletionPort", wintypes.HANDLE)]
+
+    class Accounting(ctypes.Structure):
+        _fields_ = [("TotalUserTime", ctypes.c_int64), ("TotalKernelTime", ctypes.c_int64),
+                    ("ThisPeriodTotalUserTime", ctypes.c_int64), ("ThisPeriodTotalKernelTime", ctypes.c_int64),
+                    ("TotalPageFaultCount", wintypes.DWORD), ("TotalProcesses", wintypes.DWORD),
+                    ("ActiveProcesses", wintypes.DWORD), ("TotalTerminatedProcesses", wintypes.DWORD)]
+
+    return Basic, Extended, CpuRate, Port, Accounting
+
+
+class Job:
+    """The limits one worker runs under. memory_hit() says whether it went over its memory limit."""
+
+    def __init__(self, cpu_percent=None, memory_mb=None):
+        import ctypes
+        from ctypes import wintypes
+
+        self._k32 = k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateJobObjectW.restype = wintypes.HANDLE
+        k32.CreateIoCompletionPort.restype = wintypes.HANDLE
+        k32.CreateIoCompletionPort.argtypes = (wintypes.HANDLE, wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD)
+        k32.SetInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD)
+        k32.QueryInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
+                                                  ctypes.POINTER(wintypes.DWORD))
+        k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+        k32.GetQueuedCompletionStatus.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD),
+                                                  ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_void_p),
+                                                  wintypes.DWORD)
+        k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        self._ctypes, self._wintypes, self._structs = ctypes, wintypes, _job_structs()
+        self.cpu_percent, self.memory_mb = cpu_percent, memory_mb
+        self._hit = False
+        self.port = None
+        self.handle = k32.CreateJobObjectW(None, None)
+        if not self.handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+        # Windows posts "over the memory limit" to a completion port: that's how memory_hit() knows
+        self.port = k32.CreateIoCompletionPort(wintypes.HANDLE(-1), None, None, 1)
+        if self.port:
+            self._set(JobObjectAssociateCompletionPortInformation, self._structs[3](None, self.port))
+        if memory_mb:
+            info = self._structs[1]()
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_JOB_MEMORY
+            info.JobMemoryLimit = int(memory_mb) * 2**20
+            self._set(JobObjectExtendedLimitInformation, info)
+        if cpu_percent:
+            # CpuRate is in hundredths of a percent of the whole processor (all its threads)
+            self._set(JobObjectCpuRateControlInformation, self._structs[2](
+                JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP, int(cpu_percent * 100)))
+        # Read them back: a limit that didn't take must not look as if it had
+        if memory_mb and self.memory_limit_mb() != int(memory_mb):
+            raise OSError(f"the memory limit reads back as {self.memory_limit_mb()} MB")
+        if cpu_percent and self.cpu_rate() != cpu_percent:
+            raise OSError(f"the processor limit reads back as {self.cpu_rate()}%")
+
+    def _set(self, kind, struct):
+        ctypes = self._ctypes
+        if not self._k32.SetInformationJobObject(self.handle, kind, ctypes.byref(struct), ctypes.sizeof(struct)):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    def _query(self, kind, struct):
+        ctypes = self._ctypes
+        if not self._k32.QueryInformationJobObject(self.handle, kind, ctypes.byref(struct), ctypes.sizeof(struct), None):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return struct
+
+    def assign(self, process):
+        """Put a just-started subprocess.Popen in the job; what it starts afterwards joins it too."""
+        if not self._k32.AssignProcessToJobObject(self.handle, int(process._handle)):
+            raise self._ctypes.WinError(self._ctypes.get_last_error())
+
+    def memory_limit_mb(self):
+        info = self._query(JobObjectExtendedLimitInformation, self._structs[1]())
+        return info.JobMemoryLimit // 2**20 if info.BasicLimitInformation.LimitFlags & JOB_OBJECT_LIMIT_JOB_MEMORY else None
+
+    def peak_memory_mb(self):
+        """The most memory the whole job has had committed at once."""
+        return self._query(JobObjectExtendedLimitInformation, self._structs[1]()).PeakJobMemoryUsed / 2**20
+
+    def cpu_rate(self):
+        info = self._query(JobObjectCpuRateControlInformation, self._structs[2]())
+        return info.CpuRate / 100 if info.ControlFlags & JOB_OBJECT_CPU_RATE_CONTROL_ENABLE else None
+
+    def cpu_seconds(self):
+        """Processor time the whole job has used (all its processes, ended ones too)."""
+        info = self._query(JobObjectBasicAccountingInformation, self._structs[4]())
+        return (info.TotalUserTime + info.TotalKernelTime) / 1e7
+
+    def memory_hit(self):
+        """True once anything in the job has been refused memory for going over the limit."""
+        if self.port and not self._hit:
+            ctypes, wintypes = self._ctypes, self._wintypes
+            message, key, overlapped = wintypes.DWORD(), ctypes.c_void_p(), ctypes.c_void_p()
+            while self._k32.GetQueuedCompletionStatus(self.port, ctypes.byref(message), ctypes.byref(key),
+                                                      ctypes.byref(overlapped), 0):
+                if message.value == JOB_OBJECT_MSG_JOB_MEMORY_LIMIT:
+                    self._hit = True
+        return self._hit
+
+    def close(self):
+        """The job's processes have ended: let go of it."""
+        for handle in (self.port, self.handle):
+            if handle:
+                self._k32.CloseHandle(handle)
+        self.port = self.handle = None
+
+
+def limit_job(process, cpu_percent=None, memory_mb=None):
+    """Hold a just-started process (and what it starts) to a share of the processor and a memory
+    limit. Returns (Job or None, why not). Nothing to limit, or not Windows: (None, None)."""
+    if not (cpu_percent or memory_mb) or not WINDOWS:
+        return None, None
+    try:
+        job = Job(cpu_percent, memory_mb)
+        job.assign(process)
+        return job, None
+    except Exception as e:  # a PC where Windows won't: the video still runs, without this limit
+        return None, f"{e.__class__.__name__}: {e}"
+
+
+def lower_priority(process, low=True):
+    """Let other apps go first: below-normal priority (what it starts inherits it). Returns why
+    not, or None."""
+    if not low:
+        return None
+    try:
+        import psutil
+
+        psutil.Process(process.pid).nice(psutil.BELOW_NORMAL_PRIORITY_CLASS if WINDOWS else 10)
+        return None
+    except Exception as e:
+        return f"{e.__class__.__name__}: {e}"
