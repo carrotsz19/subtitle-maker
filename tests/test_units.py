@@ -375,10 +375,11 @@ assert saver.save_prefs({"hw_preset": "full", "memory_limit_gb": 8})["memory_lim
 assert saver.reset_prefs()["cpu_percent"] == 100 and hardware.preset_of(paths.load_settings()) == "balanced"
 paths.save_settings(paths.DEFAULT_SETTINGS)
 
-# Threads: a share of the processor's threads, at most the 4 the models use anyway, at least 1;
-# none under no limit (each library's own default, as in 0.3.0)
+# Threads: a share of the processor's threads, at least 1, set only when that's fewer than the 4
+# the models use anyway (the cap holds the rest); none under no limit, as in 0.3.0
 assert hardware.threads_for(100, 12) is None
-assert hardware.threads_for(25, 12) == 3 and hardware.threads_for(50, 12) == 4 and hardware.threads_for(25, 2) == 1
+assert hardware.threads_for(25, 12) == 3 and hardware.threads_for(25, 2) == 1
+assert hardware.threads_for(50, 12) is None and hardware.threads_for(75, 12) is None, "the cap alone"
 assert hardware.threads_for(25, 4) == 1 and hardware.threads_for(75, 4) == 3
 
 # The worker's environment: thread variables only under a processor limit, and nothing left over
@@ -396,6 +397,8 @@ assert hardware.env_int(hardware.ENV_CPU, {hardware.ENV_CPU: "lots"}) is None
 assert hardware.limits(capped, cores=12) == {"threads": 3, "cpu_percent": 25, "memory_mb": 4096,
                                              "low_priority": True, "gpu_low_memory": True}
 assert hardware.limits(paths.DEFAULT_SETTINGS, 12) != hardware.limits(capped, 12), "a change starts a fresh worker"
+half = hardware.worker_env({**paths.DEFAULT_SETTINGS, "cpu_percent": 50}, {"PATH": "x"}, cores=12)
+assert half == {"PATH": "x", hardware.ENV_CPU: "50"}, "50% of 12 threads: the cap, threads left alone"
 # The worker and the speaker step read the limit; WhisperModel gets it, and nothing without one
 _saved_env = dict(app.os.environ)
 app.os.environ.update({hardware.ENV_THREADS: "3"})
@@ -767,6 +770,18 @@ if len(listed) > 2:
     assert [v["version"] for v in changelog.news()] == [listed[0]["version"], listed[1]["version"]]
 changelog.mark_seen()
 assert changelog.news() == []
+# 0.x to 1.0.0: compared as numbers, so someone on 0.2.5 (Stable) sees 1.0.0 and 0.3.0, someone
+# on 0.3.0 (Experimental) only 1.0.0, and 0.10 comes after 0.9
+assert changelog.current() == "1.0.0" and listed[1]["version"] == "0.3.0"
+changelog.mark_seen("0.2.5")
+assert [v["version"] for v in changelog.news()] == ["1.0.0", "0.3.0"]
+changelog.mark_seen("0.3.0")
+assert [v["version"] for v in changelog.news()] == ["1.0.0"]
+assert changelog._key("0.10.0") > changelog._key("0.9.9") and changelog._key("1.0.0") > changelog._key("0.99.0")
+changelog.mark_seen()
+# The update notice comes from commit prefixes: a release's Feature: commits say "New features"
+assert update.change("Feature: Hardware limits")["kind"] == "feature"
+assert update.change("Improvement: Clearer grey text")["kind"] == "improvement"
 
 # The page's API must be our own functions only: pywebview walks every public attribute (and
 # theirs) on the window's main thread, and walking into the window froze it for a minute

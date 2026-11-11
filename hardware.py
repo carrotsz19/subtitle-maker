@@ -58,13 +58,16 @@ def preset_of(settings):
 
 
 def threads_for(cpu_percent, cores):
-    """Threads each model gets under a processor limit, or None for no limit (their own defaults).
+    """Threads each model (and numpy) gets under a processor limit, or None to leave them as they are.
 
-    A share of the processor is that share of its threads (logical processors), never more than
-    the models use anyway, and at least one."""
+    A share of the processor is that share of its threads (logical processors), at least one. Only
+    a share smaller than the 4 threads the models use anyway sets a count: setting the thread
+    variables at all, even to 4, made a 3-minute video take 35% longer on a 12-thread PC (numpy's
+    OpenBLAS waits differently), while the Job Object's cap alone cost nothing measurable."""
     if cpu_percent >= 100:
         return None
-    return max(1, min(DEFAULT_THREADS, math.ceil(cores * cpu_percent / 100)))
+    share = max(1, math.ceil(cores * cpu_percent / 100))
+    return share if share < DEFAULT_THREADS else None
 
 
 def limits(settings, cores=None):
@@ -82,8 +85,8 @@ def limits(settings, cores=None):
 
 
 def worker_env(settings, base=None, cores=None):
-    """The worker's environment: base (os.environ by default) plus the limits. With no processor
-    limit the thread variables are left as they were, so nothing changes from before."""
+    """The worker's environment: base (os.environ by default) plus the limits. Unless a processor
+    limit means fewer threads, the thread variables are left as they were, as before."""
     env = dict(os.environ if base is None else base)
     lim = limits(settings, cores)
     for key in (ENV_THREADS, ENV_CPU, ENV_MEMORY, ENV_GPU_LOW):
@@ -92,6 +95,7 @@ def worker_env(settings, base=None, cores=None):
         for var in THREAD_VARS:
             env[var] = str(lim["threads"])
         env[ENV_THREADS] = str(lim["threads"])
+    if lim["cpu_percent"]:
         env[ENV_CPU] = str(lim["cpu_percent"])
     if lim["memory_mb"]:
         env[ENV_MEMORY] = str(lim["memory_mb"])

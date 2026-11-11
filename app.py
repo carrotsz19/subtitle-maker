@@ -54,6 +54,8 @@ def media_in(paths):
             found.append(str(p))
     return found
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+BELOW_NORMAL = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
+CREATE_SUSPENDED = 0x4
 STARTUP_LOG = data_dir() / "startup.log"
 QUEUE_FILE = data_dir() / "queue.json"  # what's still waiting, to offer to carry on next time
 
@@ -349,7 +351,7 @@ class Api:
     # ---- what's new ------------------------------------------------------------------------
 
     def all_news(self):
-        """Every version's changes, newest first (Settings > Updates > What's new)."""
+        """Every version's changes, newest first (Settings > Software update > What's new)."""
         return changelog.versions()
 
     def news_seen(self):
@@ -678,6 +680,8 @@ class Api:
         if worker and worker.poll() is None and (
                 worker.limits != hardware.limits(load_settings()) or self._memory_hit(worker)):
             self.stop_worker()
+            # Forgotten straight away: its thread, seeing it end, then knows the next job isn't its own
+            self._worker = None
 
     def _busy(self):
         return bool(self._job) or bool(self._process and self._process.poll() is None)
@@ -699,17 +703,30 @@ class Api:
         threads by environment, then its priority and a Job Object, which what it starts (speaker
         detection) inherits."""
         settings = load_settings()
+        limits = hardware.limits(settings)
         env = {**hardware.worker_env(settings), "PYTHONUNBUFFERED": "1", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
                "PYTHONIOENCODING": "utf-8"}
+        # The venv's python.exe is a launcher that starts the real Python as its child straight away,
+        # so the priority is given at the start (children inherit it), and with a Job Object the
+        # launcher starts suspended until it's in the job, so the real Python can't start outside it
+        flags = NO_WINDOW
+        jobbed = winextras.WINDOWS and bool(limits["cpu_percent"] or limits["memory_mb"])
+        if winextras.WINDOWS and limits["low_priority"]:
+            flags |= BELOW_NORMAL
+        if jobbed:
+            flags |= CREATE_SUSPENDED
         process = subprocess.Popen(
             [console_python(), str(HERE / "make_subtitles.py"), *args, "--events"],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace", bufsize=1,
-            cwd=str(HERE), env=env, creationflags=NO_WINDOW,
+            cwd=str(HERE), env=env, creationflags=flags,
         )
-        process.limits = limits = hardware.limits(settings)
+        process.limits = limits
         process.job, problem = winextras.limit_job(process, limits["cpu_percent"], limits["memory_mb"])
-        problem = winextras.lower_priority(process, limits["low_priority"]) or problem
+        if jobbed:
+            psutil.Process(process.pid).resume()  # in the job (or not, if Windows refused): off it goes
+        if not winextras.WINDOWS:
+            problem = winextras.lower_priority(process, limits["low_priority"]) or problem
         if problem:  # it still runs, only without that limit: say so in Details and startup.log
             TIMINGS.mark(f"hardware limits: {problem}")
             self.send({"type": "log", "text": f"Couldn't apply every limit in Settings > Hardware ({problem})."})

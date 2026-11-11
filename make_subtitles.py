@@ -383,9 +383,10 @@ def load_model(name, device):
             if device == "cuda":
                 raise
             print(f"GPU not available ({e.__class__.__name__}), using CPU (slower but fine).")
-    limits = cpu_limits()
-    if limits:
-        print(f"Processor limit: {limits['cpu_threads']} threads, up to {hardware.env_int(hardware.ENV_CPU)}% of the processor.")
+    limits, share = cpu_limits(), hardware.env_int(hardware.ENV_CPU)
+    if share:
+        print(f"Processor limit: up to {share}% of the processor"
+              + (f", {limits['cpu_threads']} threads." if limits else "."))
     return WhisperModel(name, device="cpu", compute_type="int8", **limits), "cpu"
 
 
