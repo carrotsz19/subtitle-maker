@@ -21,6 +21,9 @@
   --positive:#3f6b4a; --positive-soft:#e0ece2;
   --negative:#b3492b; --negative-soft:#f4ddd4;
   --on-tint:#fff;
+  /* text and marks on --tint-soft (a pill, a banner, the Resolve callout), and the ring of an
+     unpicked radio or an empty meter: 4.5:1 and 3:1 against what they sit on, in both themes */
+  --tint-ink:#9e3e22; --control:#8a8479;
   --seg-thumb:#fff; --seg-thumb-shadow:0 1px 2px rgba(27,26,24,.12), 0 3px 8px rgba(27,26,24,.07);
   --tint-wash:rgba(179,73,43,.06);
   --elev-1:0 1px 2px rgba(27,26,24,.04), 0 4px 12px rgba(27,26,24,.05);
@@ -30,8 +33,8 @@
 
   --bg:var(--bg-grouped); --panel:var(--bg-elevated); --panel-2:var(--fill-secondary);
   --line:var(--separator); --ink:var(--label-primary); --dim:var(--label-secondary); --faint:var(--label-tertiary);
-  --accent:var(--tint); --accent-soft:var(--tint-soft);
-  --ok:var(--positive); --ok-soft:var(--positive-soft); --bad:var(--negative); --bad-soft:var(--negative-soft);
+  --accent:var(--tint); --accent-soft:var(--tint-soft); --accent-ink:var(--tint-ink);
+  --ok:var(--positive); --ok-soft:var(--positive-soft); --bad:var(--negative); --bad-soft:var(--negative-soft); --bad-ink:var(--tint-ink);  /* (--negative is --tint's colour) */
 
   --r-control:10px; --r-card:14px; --r-sheet:20px;
   --sidebar:220px;
@@ -71,6 +74,7 @@
     --positive:#7fae87; --positive-soft:#22302a;
     --negative:#d9633e; --negative-soft:#382720;
     --on-tint:#161310;
+    --tint-ink:#e8835e; --control:#7a7366;
     --seg-thumb:#4a453b; --seg-thumb-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 1px 3px rgba(0,0,0,.4);
     --tint-wash:rgba(217,99,62,.09);
     --elev-1:inset 0 1px 0 rgba(255,255,255,.045), 0 1px 2px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.30);
@@ -88,6 +92,7 @@
     --positive:#7fae87; --positive-soft:#22302a;
     --negative:#d9633e; --negative-soft:#382720;
     --on-tint:#161310;
+    --tint-ink:#e8835e; --control:#7a7366;
     --seg-thumb:#4a453b; --seg-thumb-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 1px 3px rgba(0,0,0,.4);
     --tint-wash:rgba(217,99,62,.09);
     --elev-1:inset 0 1px 0 rgba(255,255,255,.045), 0 1px 2px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.30);
@@ -143,9 +148,9 @@ aside.side{ background:var(--panel); border-right:1px solid var(--line); display
 .sidecard b{ display:block; font-size:13px; margin-bottom:2px; }
 /* the installed version, on every screen; it opens About */
 .verbtn{ all:unset; box-sizing:border-box; display:block; width:100%; margin-top:6px; padding:5px 8px; border-radius:8px; text-align:center;
-  font-size:11.5px; color:var(--faint); cursor:pointer; font-variant-numeric:tabular-nums;
+  font-size:11.5px; color:var(--dim); cursor:pointer; font-variant-numeric:tabular-nums;
   transition:color 130ms var(--ease-standard), background-color 130ms var(--ease-standard); }
-.verbtn:hover{ color:var(--dim); background:var(--fill-tertiary); }
+.verbtn:hover{ color:var(--ink); background:var(--fill-tertiary); }
 .verbtn:active{ color:var(--ink); background:var(--fill-secondary); }
 .verbtn:empty{ display:none; }
 .verbtn:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
@@ -153,6 +158,7 @@ main.main{ overflow-y:auto; scrollbar-gutter:stable; padding:26px 30px 48px; }
 .inner{ max-width:760px; margin:0 auto; }
 /* Quality and the Resolve guide use a big window's width, in columns, instead of one narrow strip */
 .inner:has(> .guide), .inner:has(> .settings-page.wide){ max-width:1120px; }
+@media (min-width:1600px){ .inner:has(> .guide), .inner:has(> .settings-page.wide){ max-width:1280px; } }
 .topbar{ margin-bottom:20px; }
 .topbar p{ color:var(--dim); margin-top:3px; }
 
@@ -169,8 +175,6 @@ main.main{ overflow-y:auto; scrollbar-gutter:stable; padding:26px 30px 48px; }
 .grp-row.tap:hover{ background:var(--fill-tertiary); }
 .grp-row.danger{ color:var(--bad); font-weight:600; justify-content:center; }
 /* Settings, iPhone style */
-.settings-page{ max-width:720px; }
-.settings-page.wide{ max-width:none; }
 .set-row{ min-height:46px; padding-top:7px; padding-bottom:7px; }
 .set-row .row-title{ font-weight:500; }
 .set-row .ico{ width:29px; height:29px; border-radius:7px; display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; }
@@ -178,7 +182,7 @@ main.main{ overflow-y:auto; scrollbar-gutter:stable; padding:26px 30px 48px; }
 .ico.i-green{ background:#3f7a4f; } .ico.i-teal{ background:#2f7d7a; } .ico.i-slate{ background:#4d5866; } .ico.i-gray{ background:#857f75; }
 .set-row .val{ color:var(--dim); font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:46%; }
 .grp-row .chev{ color:var(--faint); flex-shrink:0; margin-left:-2px; }
-.badge{ min-width:20px; height:20px; border-radius:10px; background:var(--bad); color:#fff; font-size:12px; font-weight:700;
+.badge{ min-width:20px; height:20px; border-radius:10px; background:var(--bad); color:var(--on-tint); font-size:12px; font-weight:700;
   display:inline-flex; align-items:center; justify-content:center; padding:0 6px; }
 .set-card{ gap:14px; padding-top:12px; padding-bottom:12px; }
 .set-card .app-tile{ border-radius:13px; box-shadow:0 0 0 1px var(--hairline); flex-shrink:0; }
@@ -200,11 +204,12 @@ main.main{ overflow-y:auto; scrollbar-gutter:stable; padding:26px 30px 48px; }
 .tile-icon.t-ok{ background:var(--ok-soft); color:var(--ok); }
 .tile-icon.t-bad{ background:var(--bad-soft); color:var(--bad); }
 .pill{ font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:99px; background:var(--panel-2); color:var(--dim); white-space:nowrap; letter-spacing:.02em; }
-.pill.accent{ background:var(--accent-soft); color:var(--accent); }
+.pill.accent{ background:var(--accent-soft); color:var(--accent-ink); }
 .pill.ok{ background:var(--ok-soft); color:var(--ok); }
-.pill.bad{ background:var(--bad-soft); color:var(--bad); }
-.banner{ background:var(--accent-soft); color:var(--accent); border-radius:var(--r-control); padding:11px 14px; font-size:13px; font-weight:600; }
-.banner.bad{ background:var(--bad-soft); color:var(--bad); font-weight:500; }
+.pill.bad{ background:var(--bad-soft); color:var(--bad-ink); }
+.banner{ background:var(--accent-soft); color:var(--accent-ink); border-radius:var(--r-control); padding:11px 14px; font-size:13px; font-weight:600; }
+.banner.bad{ background:var(--bad-soft); color:var(--bad-ink); font-weight:500; }
+.banner .linkbtn{ color:inherit; text-decoration:underline; }
 
 /* ---------- controls ---------- */
 button{ font:inherit; cursor:pointer; }
@@ -224,22 +229,24 @@ button{ font:inherit; cursor:pointer; }
 input[type=text]{ font:inherit; font-size:14px; width:100%; padding:8px 11px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--ink); transition:border-color .16s var(--ease-standard), box-shadow .16s var(--ease-standard); }
 input[type=text]:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
 :where(button, [tabindex], input):focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.grp > .grp-row:focus-visible{ outline-offset:-2px; border-radius:var(--r-card); }
 .seg{ display:inline-flex; gap:3px; background:var(--panel-2); padding:3px; border-radius:var(--r-control); }
 .seg button{ border:0; background:transparent; color:var(--dim); font-weight:600; padding:6px 14px; min-height:32px; border-radius:7px; font-size:13px; }
-.seg button[aria-selected="true"]{ background:var(--seg-thumb); color:var(--ink); box-shadow:var(--seg-thumb-shadow); }
-.seg button:not([aria-selected="true"]):not(:disabled):hover{ color:var(--ink); }
+.seg button[aria-checked="true"]{ background:var(--seg-thumb); color:var(--ink); box-shadow:var(--seg-thumb-shadow); }
+.seg button:not([aria-checked="true"]):not(:disabled):hover{ color:var(--ink); }
 .seg button:disabled{ opacity:.5; cursor:default; }
 /* A radio: a ring that fills with the accent, and a dot that pops in with a bounce you can see
-   (the dot is 8 px, so it's on the liveliest spring: it swells to 9 px and settles).
+   (the dot is 8 px, so it's on the liveliest spring: it swells to 9 px and settles). The fill
+   grows to the ring on a plain ease-out: on a spring it would swell past the ring.
    Unpicking is quick and plain; only the one being picked springs. */
-.radio{ position:relative; width:20px; height:20px; border-radius:99px; box-shadow:inset 0 0 0 2px var(--line); flex-shrink:0;
+.radio{ position:relative; width:20px; height:20px; border-radius:99px; box-shadow:inset 0 0 0 2px var(--control); flex-shrink:0;
   transition:box-shadow 160ms var(--ease-standard), transform var(--spring-snappy-ms) var(--spring-snappy); }
 .radio::before, .radio::after{ content:""; position:absolute; border-radius:inherit; opacity:0; }
 .radio::before{ inset:0; background:var(--accent); transform:scale(.5); transition:opacity 140ms var(--ease-standard), transform 140ms var(--ease-standard); }
 .radio::after{ inset:6px; background:var(--on-tint); transform:scale(0); transition:opacity 100ms var(--ease-standard), transform 140ms var(--ease-standard); }
 [aria-checked="true"] > .radio{ box-shadow:inset 0 0 0 2px var(--accent); }
 [aria-checked="true"] > .radio::before{ opacity:1; transform:none;
-  transition:opacity 120ms var(--ease-out), transform var(--spring-pop-ms) var(--spring-pop); }
+  transition:opacity 120ms var(--ease-out), transform 220ms var(--ease-out); }
 [aria-checked="true"] > .radio::after{ opacity:1; transform:none;
   transition:opacity 120ms var(--ease-out), transform var(--spring-pop-ms) var(--spring-pop); }
 [role="radio"]:active > .radio{ transform:scale(.9); transition:transform 110ms var(--ease-out); }
@@ -329,11 +336,11 @@ details[open] summary::before{ transform:rotate(90deg); }
 .quote .t{ color:var(--faint); font-variant-numeric:tabular-nums; font-size:12.5px; padding-top:1px; min-width:38px; }
 .chips{ display:flex; flex-wrap:wrap; gap:6px; }
 .chip{ border:0; background:var(--panel-2); color:var(--ink); border-radius:99px; padding:5px 12px; font-size:12.5px; font-weight:600; }
-.chip:hover{ background:var(--accent-soft); color:var(--accent); }
+.chip:hover{ background:var(--accent-soft); color:var(--accent-ink); }
 
 #toast-root{ position:fixed; right:20px; bottom:20px; z-index:80; display:flex; flex-direction:column; align-items:flex-end; gap:8px; pointer-events:none; }
 .toast{ background:var(--ink); color:var(--bg); font-size:13px; font-weight:600; max-width:360px; }
-.toast.bad{ background:var(--bad); color:#fff; }
+.toast.bad{ background:var(--bad); color:var(--on-tint); }
 
 kbd{ font:inherit; font-weight:600; background:var(--panel-2); border-radius:6px; padding:1px 6px; font-size:12.5px; }
 
@@ -436,7 +443,7 @@ body.wizard aside.side{ display:none; }
 .steplist{ display:flex; flex-direction:column; gap:12px; }
 .step{ display:flex; gap:12px; align-items:flex-start; }
 .step .dot{ width:24px; height:24px; border-radius:99px; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--panel-2); color:var(--faint); font-size:12px; font-weight:800; }
-.step.active .dot{ background:var(--accent-soft); color:var(--accent); }
+.step.active .dot{ background:var(--accent-soft); color:var(--accent-ink); }
 .step.done .dot{ background:var(--ok-soft); color:var(--ok); }
 .step .grow > b{ font-weight:600; }
 .step:not(.active):not(.done) .grow > b{ color:var(--dim); font-weight:500; }
@@ -446,17 +453,21 @@ body.wizard aside.side{ display:none; }
 .q-side{ display:contents; }   /* one column: This PC goes above the levels and Save below them */
 .q-pc{ order:-1; }
 .q-levels{ container-type:inline-size; display:flex; flex-direction:column; gap:10px; }
-.q-save .block{ margin-top:10px; }
-.q-hint{ font-size:12.5px; color:var(--dim); margin:0 4px; }
+.q-save > .block{ margin-top:0; }
+/* what saving will do, under Save, so Save stays put as the words change */
+.q-hint{ font-size:12.5px; color:var(--dim); margin:10px 4px 0; }
 .q-hint b{ color:var(--ink); font-weight:600; }
 /* the downloads, in the narrow side column: the amount stays on one line beside the name */
 .q-save #downloads .between{ gap:10px; align-items:baseline; }
 .q-save #downloads .between > .mono{ white-space:nowrap; flex-shrink:0; }
-@media (min-width:1240px){
-  .q{ grid-template-columns:minmax(0,1fr) 340px; gap:24px; align-items:start; }
+/* two columns once the levels still have room beside a narrow side column (a 1100 px window has
+   about 810 px for the page), and a wider side column in a big window */
+@media (min-width:1060px){
+  .q{ grid-template-columns:minmax(0,1fr) 288px; gap:20px; align-items:start; }
   .q-side{ display:flex; flex-direction:column; gap:16px; position:sticky; top:0; }
   .q-pc{ order:0; }
 }
+@media (min-width:1600px){ .q{ grid-template-columns:minmax(0,1fr) 340px; gap:24px; } }
 .lv{ position:relative; display:grid; grid-template-columns:20px minmax(0,1fr); grid-template-areas:"radio main" ". extra"; gap:10px 14px; align-items:center;
   padding:14px 18px 14px 16px; border-radius:var(--r-card); background:var(--panel); box-shadow:var(--elev-1); cursor:pointer;
   transition:background-color 180ms var(--ease-standard), box-shadow 180ms var(--ease-standard), transform var(--spring-snappy-ms) var(--spring-snappy); }
@@ -474,25 +485,40 @@ body.wizard aside.side{ display:none; }
 .lv:active{ transform:scale(.992); transition:background-color 180ms var(--ease-standard), box-shadow 180ms var(--ease-standard), transform 110ms var(--ease-out); }
 .lv[aria-checked="true"]{ background:color-mix(in srgb, var(--accent) 6%, var(--panel)); }
 .lv[aria-checked="true"]::after{ opacity:1; }
+.lv:focus-visible{ outline-offset:0; }   /* against the card's edge: with the chosen ring inside, one thicker ring */
 .lv-head{ display:flex; align-items:center; flex-wrap:wrap; gap:5px 8px; }
 .lv-name{ font-size:15px; font-weight:700; letter-spacing:-.01em; }
+.lv-tags{ display:contents; }
 .lv-head .pill{ display:inline-flex; align-items:center; gap:4px; }
 .lv-head .pill svg{ width:10px; height:10px; }
 /* how fast and how accurate, as five small bars each */
 .lv-meters{ display:grid; grid-template-columns:auto auto; align-items:center; gap:6px 10px; font-size:11.5px; font-weight:600; color:var(--dim); }
 .dots{ display:flex; gap:3px; }
-.dots i{ width:13px; height:5px; border-radius:3px; background:var(--line); transition:background-color 180ms var(--ease-standard); }
-.dots i.on{ background:var(--dim); }
+.dots i{ width:13px; height:5px; border-radius:3px; box-shadow:inset 0 0 0 1px var(--control); transition:background-color 180ms var(--ease-standard), box-shadow 180ms var(--ease-standard); }
+.dots i.on{ background:var(--dim); box-shadow:none; }
 .lv[aria-checked="true"] .dots i.on{ background:var(--accent); }
 .lv-stats{ display:grid; grid-template-columns:auto auto; gap:4px 12px; min-width:146px; font-size:11.5px; color:var(--dim); }
 .lv-stats b{ font-weight:600; color:var(--ink); text-align:right; font-variant-numeric:tabular-nums; }
-/* This PC: what it has, in a few labelled facts */
-.pc{ display:flex; flex-wrap:wrap; align-items:center; gap:14px 28px; padding:14px 16px; }
+/* only the download (no graphics card): the size under its label, in a column of the same width on every card */
+.lv-stats.one{ grid-template-columns:auto; gap:1px; min-width:64px; text-align:right; }
+/* This PC: what it has, in a few labelled facts. Beside its heading when the card is wide; under
+   it, past a line, when it isn't; and in the side column, one fact a row with its value at the end. */
+.q-pc{ container-type:inline-size; }
+.pc{ display:flex; flex-wrap:wrap; align-items:center; gap:12px 28px; padding:14px 16px; }
 .pc-head{ display:flex; align-items:center; gap:12px; }
 .pc-facts{ flex:1; min-width:260px; display:grid; grid-template-columns:repeat(auto-fit, minmax(104px, 1fr)); gap:12px 18px; }
 .pc-fact span{ display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); }
 .pc-fact b{ display:block; font-size:13.5px; font-weight:600; margin-top:1px; }
-@media (min-width:1240px), (max-width:900px){ .pc-facts{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@container (max-width:599px){
+  .pc-facts{ flex-basis:100%; min-width:0; grid-template-columns:repeat(2, minmax(0,1fr)); border-top:1px solid var(--hairline); padding-top:12px; }
+}
+@container (max-width:360px){
+  .pc-facts{ grid-template-columns:minmax(0,1fr); gap:0; padding-top:2px; }
+  .pc-fact{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:8px 0; }
+  .pc-fact + .pc-fact{ border-top:1px solid var(--hairline); }
+  .pc-fact:last-child{ padding-bottom:0; }
+  .pc-fact b{ margin-top:0; text-align:right; }
+}
 
 /* ---------- Settings > About ---------- */
 .about-hero{ display:flex; align-items:center; gap:22px; padding:22px 24px; }
@@ -502,6 +528,7 @@ body.wizard aside.side{ display:none; }
 .about-ver span{ font-size:13px; font-weight:600; color:var(--dim); }
 .about-ver b{ font-size:38px; font-weight:800; letter-spacing:-.03em; line-height:1.15; font-variant-numeric:tabular-nums; }
 .about-meta{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-top:6px; font-size:12.5px; color:var(--dim); }
+.about-unknown{ font-size:14px; font-weight:600; color:var(--dim); margin-top:2px; }
 .about-path{ font-size:13px; color:var(--dim); overflow-wrap:anywhere; }
 @media (max-width:820px){ .about-hero{ gap:16px; padding:18px; } .about-hero img{ width:72px; height:72px; border-radius:17px; } .about-ver b{ font-size:32px; } }
 
@@ -511,7 +538,7 @@ body.wizard aside.side{ display:none; }
 .g-step{ display:grid; grid-template-columns:30px minmax(0,1fr); gap:14px; align-items:start; align-content:start; padding:16px 18px 16px 16px; }
 .g-num{ width:30px; height:30px; border-radius:99px; background:var(--accent); color:var(--on-tint); font-size:14px; font-weight:800;
   display:flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums; }
-.g-step h3{ font-size:15px; line-height:30px; }
+.g-step h3{ font-size:15px; line-height:1.35; padding-top:5px; }  /* centred on the 30 px number, and still when it wraps */
 .g-step p{ font-size:13px; line-height:1.55; color:var(--dim); margin-top:2px; }
 .g-step p + p{ margin-top:8px; }
 .path{ display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px 0; vertical-align:middle; }
@@ -524,17 +551,20 @@ body.wizard aside.side{ display:none; }
 .g-callout{ background:var(--accent-soft); border-radius:var(--r-card); padding:18px; }
 .g-callout-head{ display:flex; align-items:flex-start; gap:12px; }
 .g-callout-head .tile-icon{ background:var(--accent); color:var(--on-tint); }
+.g-callout .linkbtn{ color:var(--accent-ink); }
 .g-callout-head b{ display:block; font-size:15px; letter-spacing:-.01em; }
 .g-callout-head p{ font-size:13px; line-height:1.5; margin-top:1px; }
 .g-mini{ list-style:none; margin:14px 0 0; padding:0; counter-reset:mini; display:flex; flex-direction:column; gap:8px; }
 .g-mini li{ counter-increment:mini; display:grid; grid-template-columns:22px minmax(0,1fr); gap:10px; font-size:13.5px; line-height:1.55;
   background:var(--panel); border-radius:var(--r-control); padding:9px 12px 9px 10px; }
-.g-mini li::before{ content:counter(mini); width:22px; height:22px; border-radius:99px; background:var(--accent-soft); color:var(--accent);
+.g-mini li::before{ content:counter(mini); width:22px; height:22px; border-radius:99px; background:var(--accent-soft); color:var(--accent-ink);
   font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; }
 .g-note{ display:flex; align-items:flex-start; gap:8px; font-size:12.5px; line-height:1.5; margin-top:12px; }
 .g-note svg{ flex-shrink:0; margin-top:1px; color:var(--accent); }
 @media (min-width:900px){ .g-steps{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
-@media (min-width:1240px){ .g-two{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (min-width:1060px){ .g-two{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+/* a big window: the four steps in one row (each is a line or two) */
+@media (min-width:1600px){ .g-steps{ grid-template-columns:repeat(4, minmax(0,1fr)); } }
 
 /* =================================================================
    MOTION. Things that move are on springs (the tokens at the top), and a
@@ -586,7 +616,8 @@ body.wizard aside.side{ display:none; }
 .seg button{ transition:background-color 130ms var(--ease-standard), filter 130ms var(--ease-standard), color 200ms var(--ease-standard),
              box-shadow 130ms var(--ease-standard), opacity 130ms var(--ease-standard), transform var(--spring-snappy-ms) var(--spring-snappy); }
 .seg button:active{ filter:brightness(.95); }
-.seg button:not([aria-selected="true"]):active{ transform:scale(.96); }
+/* a segment dips while pressed; the chosen one's pill dips with its words, by as much and as quickly */
+.seg button:active:not(:disabled){ transform:scale(.96); }
 .chip:active{ filter:brightness(.95); transform:scale(.97); }
 .iconbtn:active, .playbtn:active, .dlg-x:active{ transform:scale(.94); }
 .toast-dismiss:active{ transform:scale(.92); }
@@ -653,19 +684,19 @@ body.wizard aside.side{ display:none; }
 @keyframes toastIn{ from{ transform:translateY(14px) scale(.96) } }
 
 /* --- segmented controls: the selection is a pill that slides to the new choice on a spring (only
-   when the choice changes), and dips a little while it's pressed. Its place is `translate` and
+   when the choice changes), and dips with its words while it's pressed. Its place is `translate` and
    its width changes with it (never stretched, which would squash its corners): it's out of the
    flow, so its width lays out nothing else. syncSegs() sets --x and the width, and runs the slide
    itself (an animation the pill keeps when a redraw moves it to the new control, so a redraw
    part-way doesn't stop it). The press is `scale`, a transition of its own beside the slide. --- */
 .seg.has-pill{ position:relative; }
 .seg.has-pill button{ position:relative; z-index:1; }
-.seg.has-pill button[aria-selected="true"]{ background:transparent; box-shadow:none; }
+.seg.has-pill button[aria-checked="true"]{ background:transparent; box-shadow:none; }
 .seg-pill{ position:absolute; top:3px; left:0; height:calc(100% - 6px); width:0; z-index:0; pointer-events:none;
   border-radius:7px; background:var(--seg-thumb); box-shadow:var(--seg-thumb-shadow);
   translate:var(--x, 0px) 0; scale:var(--press, 1);
   transition:scale var(--spring-snappy-ms) var(--spring-snappy); }
-.seg.has-pill:has(button[aria-selected="true"]:active) .seg-pill{ --press:.95; }
+.seg.has-pill:has(button[aria-checked="true"]:active:not(:disabled)) .seg-pill{ --press:.96; transition:scale 110ms var(--ease-out); }
 /* Carried across a redraw (carryMotion): for one layout the new element is put how the old one
    was, with nothing easing, and then let go, so its own transitions take it from there. */
 .carry, .carry *, .carry::before, .carry::after, .carry *::before, .carry *::after{ transition:none !important; }
@@ -774,7 +805,9 @@ function langKeyOf(language) { return language === null || QUICK_LANGS.includes(
 function langPicker(language, act, id) {
   const key = langKeyOf(language);
   const all = (S.info.languages || []).map(c => [c, langName(c)]).sort((a, b) => a[1].localeCompare(b[1]));
-  return `<div class="seg langs">${LANGS.map(([v, l]) => `<button data-act="${act}" data-v="${v}" aria-selected="${key === v}">${l}</button>`).join("")}</div>
+  // (the arrow keys only move to More…: picking it puts the keyboard in the list of languages)
+  return `<div class="seg langs" role="radiogroup" aria-label="Language">${LANGS.map(([v, l]) =>
+    `<button role="radio" data-act="${act}" data-v="${v}" aria-checked="${key === v}"${v === "other" ? ' data-arrow="move"' : ""}>${l}</button>`).join("")}</div>
     ${key === "other" ? `<select id="${id}" class="lang-list" aria-label="Language">
       <option value="" ${language === "other" ? "selected" : ""} disabled>Pick a language…</option>
       ${all.map(([c, n]) => `<option value="${c}" ${c === language ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}`;
@@ -787,6 +820,7 @@ const S = {
   run: null,                  // the job in progress: {kind, item, done, total, stage, speakers, res, log, started}
   ask: null,                  // the speaker question being shown
   draft: null,                // unsaved settings
+  page: null, pageTrail: [],  // the Settings page open, and the pages it was reached through (for "< Back")
   update: { state: "idle" },
   history: null,              // past runs, loaded when the History page opens
   setup: null,                // the first-run wizard: {step, level, language, output_dir, error}  // idle|checking|ok|available|error|installing|installed
@@ -798,6 +832,14 @@ const baseName = p => String(p).split(/[\\/]/).pop();
 const clock = sec => { sec = Math.max(0, Math.round(sec)); const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, s = sec % 60;
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`; };
 const gb = mb => (mb / 1024).toFixed(1);
+/* What this PC has, said the same way everywhere. A value that isn't known is left out. */
+const NO_GPU = "No NVIDIA graphics card", ON_CPU = "Runs on the processor";
+const gpuName = hw => hw && hw.gpu ? String(hw.gpu).replace(/^NVIDIA\s+/i, "") : "";
+const gbText = mb => mb > 0 ? `${gb(mb)} GB` : "";
+function hwFacts(hw) {
+  return [...(hw.gpu ? [["Graphics card", gpuName(hw)], ["Graphics memory", gbText(hw.vram_mb)]] : [["Graphics card", NO_GPU], ["Runs on", "The processor"]]),
+    ["Memory", hw.ram_gb > 0 ? `${hw.ram_gb} GB` : ""], ["Processor", hw.cores > 0 ? `${hw.cores} cores` : ""]].filter(([, v]) => v);
+}
 const api = () => window.pywebview.api;
 
 const ICON = {
@@ -1004,18 +1046,23 @@ function holdMotion(el) {
   el.querySelectorAll(".seg.has-pill").forEach((seg, i) => {
     const pill = seg.querySelector(".seg-pill");
     if (!pill || pill.style.opacity === "0") return;
-    const a = seg.getBoundingClientRect(), b = pill.getBoundingClientRect();
-    segNow[segKey(seg, i)] = { x: b.left - a.left - seg.clientLeft, w: b.width, pill,
+    // where it is and how wide, part-way through a slide included, but not shrunk by a press
+    // (its `scale` is separate from these two, so they're its own size and place)
+    const look = getComputedStyle(pill);
+    segNow[segKey(seg, i)] = { x: parseFloat(look.translate) || 0, w: parseFloat(look.width) || 0, pill,
       inks: [...seg.querySelectorAll("button")].map(n => getComputedStyle(n).color) };
   });
   // (and which radio was picked: its dot and ring still fade in, though nothing springs)
   const calm = prefersReducedMotion(), held = { calm, radios: {} };
-  el.querySelectorAll('[role="radio"]').forEach(r => { const key = pressKey(r); if (key) held.radios[key] = r.getAttribute("aria-checked"); });
+  // (a segmented control's own pill and words show its change, so not those)
+  el.querySelectorAll('[role="radio"]').forEach(r => { const key = pressKey(r); if (key && !r.closest(".seg")) held.radios[key] = r.getAttribute("aria-checked"); });
   if (calm) return held;
   held.rows = rvPlaces(el); held.bars = barsNow(el);
   if (pressed && el.contains(pressed)) {
     const look = getComputedStyle(pressed), scale = new DOMMatrix(look.transform).a, key = pressKey(pressed);
-    if (key && scale < .995) held.press = { key, scale, fill: look.backgroundColor };
+    // a radio's ring dips inside its row too
+    const ring = pressed.querySelector(":scope > .radio"), ringScale = ring ? new DOMMatrix(getComputedStyle(ring).transform).a : 1;
+    if (key && (scale < .995 || ringScale < .995)) held.press = { key, scale, fill: look.backgroundColor, ring: ringScale };
   }
   return held;
 }
@@ -1030,11 +1077,13 @@ function carryMotion(el, held) {
     if (again) pressed = again;  // (so a second redraw before it's back up carries it on again)
     if (again) jobs.push([again, () => { again.style.transform = `scale(${held.press.scale})`; again.style.backgroundColor = held.press.fill; },
       () => { again.style.transform = ""; again.style.backgroundColor = ""; }]);
+    const ring = again && held.press.ring < .995 && again.querySelector(":scope > .radio");
+    if (ring) jobs.push([ring, () => { ring.style.transform = `scale(${held.press.ring})`; }, () => { ring.style.transform = ""; }]);
   }
   // a radio that changed is shown as it was for one layout, then as it is: the dot springs in
   // on the one just picked and goes from the one it left
   el.querySelectorAll('[role="radio"]').forEach(r => {
-    const was = held.radios[pressKey(r)], now = r.getAttribute("aria-checked");
+    const was = r.closest(".seg") ? null : held.radios[pressKey(r)], now = r.getAttribute("aria-checked");
     if (was != null && was !== now) jobs.push([r, () => r.setAttribute("aria-checked", was), () => r.setAttribute("aria-checked", now)]);
   });
   // all of them in one go (an element may be in two jobs: the row that was pressed is the radio that changed)
@@ -1170,24 +1219,25 @@ new MutationObserver(() => {
   if (open) bindSheet(open);
 }).observe(document.getElementById("dialog-root"), { childList: true, subtree: true });
 
-/* Segmented controls get a pill that slides to the selection, and only when it changes:
-   a redraw with the same selection leaves it where it is. It starts from where the old pill was
-   on screen (segNow, noted just before a redraw: it may have been part-way to somewhere else, or
-   still pressed in), else from the last place it was sent: --x places it and its width goes
-   from the old choice's to the new one's (it's out of the flow, so that lays out nothing else).
+/* Segmented controls get a pill that slides to the selection, and only when it changes in place:
+   a redraw with the same selection leaves it where it is, and arriving on a screen puts it
+   straight on the choice (nothing to slide from). It starts from where the old pill was
+   (segNow, noted just before a redraw: it may have been part-way to somewhere else): --x places
+   it and its width goes from the old choice's to the new one's (it's out of the flow, so that
+   lays out nothing else). CSS transitions would retarget no more smoothly (both start a turn
+   from standing still) and are dropped when the redraw takes the pill out of the page.
    The slide is an animation on the pill itself, and a redraw hands the same pill on to the new
    control (an animation started by the script keeps its time while its element is out of the
    page), so a redraw part-way through a slide, with the same choice, doesn't stop it and set it
    off again: it is simply still sliding. The words change colour with it: each fades from the
    colour the old one had (the redraw would otherwise switch them in one frame while the pill is
    still on its way). */
-const segLast = {};
 function syncSegs(root) {
   const calm = prefersReducedMotion();
   const same = (a, b) => Math.abs(a.x - b.x) <= .5 && Math.abs(a.w - b.w) <= .5;
   root.querySelectorAll(".seg").forEach((seg, i) => {
     const key = segKey(seg, i), was = segNow[key];
-    const on = seg.querySelector('button[aria-selected="true"]');
+    const on = seg.querySelector('button[aria-checked="true"]');
     let pill = seg.querySelector(".seg-pill");
     if (!pill) {
       pill = was && was.pill && !was.pill.isConnected ? was.pill : null;  // the old control's pill, slide and all
@@ -1200,18 +1250,18 @@ function syncSegs(root) {
       if (was.inks[j] && was.inks[j] !== ink) b.animate([{ color: was.inks[j] }, { color: ink }], { duration: 200, easing: EASE });
     });
     delete segNow[key];
-    if (!on) { pill.style.opacity = "0"; if (pill.glide) pill.glide.cancel(); return; }
-    const to = { x: on.offsetLeft, w: on.offsetWidth }, last = segLast[key];
+    const stop = () => { if (pill.glide) pill.glide.cancel(); pill.glide = null; };
+    if (!on) { pill.style.opacity = "0"; pill.to = null; stop(); return; }
+    const to = { x: on.offsetLeft, w: on.offsetWidth }, heading = pill.to;
     pill.style.opacity = "1";
     pill.style.setProperty("--x", `${to.x}px`);
     pill.style.width = `${to.w}px`;
-    segLast[key] = to;
-    if (calm) { if (pill.glide) pill.glide.cancel(); return; }
-    if (last && same(last, to)) return;  // the same choice: if it's on its way there, it carries on
-    const from = was || last;
-    if (pill.glide) pill.glide.cancel();
-    if (from && !same(from, to))
-      pill.glide = pill.animate({ translate: [`${from.x}px 0`, `${to.x}px 0`], width: [`${from.w}px`, `${to.w}px`] }, spring("snappy"));
+    pill.to = to;
+    if (calm || !was) { stop(); return; }  // arriving (or less motion): it's simply there
+    if (heading && same(heading, to) && pill === was.pill) return;  // the same choice: if it's on its way there, it carries on
+    stop();
+    if (!same(was, to))
+      pill.glide = pill.animate({ translate: [`${was.x}px 0`, `${to.x}px 0`], width: [`${was.w}px`, `${to.w}px`] }, spring("snappy"));
   });
 }
 
@@ -1219,21 +1269,21 @@ function syncSegs(root) {
    A screen arrives with its data, as IronLog's do: drawing it and then redrawing it a moment
    later (when its list came in) restarted the arrival halfway through. */
 let goSeq = 0;
-async function go(view, dir = "tab", page) {
+/* `trail` is the pages a Settings page is reached through (see pageTrailTo), when it's asked for */
+async function go(view, dir = "tab", page, trail) {
   const again = view === S.view && !S.setup;  // the tab you're already on
-  if (S.view === "settings" && view !== "settings") S.draft = null;
-  if (view === "settings") {
-    // Asked for by name, a page opens. From the sidebar, Settings comes back on the page it was
-    // left on (when places are remembered); clicked while already in Settings, it goes up to the list.
-    const to = page !== undefined ? page : again || !REMEMBERS() ? null : S.page || null;
-    if (again && S.page && !to && dir === "tab") dir = "back";
-    if (to !== S.page) S.pageBack = null;
-    S.page = to;
-  }
+  // Asked for by name, a page opens. From the sidebar, Settings comes back on the page it was
+  // left on (when places are remembered); clicked while already in Settings, it goes up to the list.
+  const to = view !== "settings" ? S.page : page !== undefined ? page : again || !REMEMBERS() ? null : S.page || null;
+  const through = trail || (to === S.page ? S.pageTrail : []);
+  if (view === "settings" && again && S.page && !to && dir === "tab") dir = "back";
+  // The sidebar answers the click at once (only how it looks: nothing drawn reads it), and how far
+  // down the screen being left was is kept now, before anything can redraw it meanwhile
   document.querySelectorAll(".navbtn").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
   const btn = $(`.navbtn[data-view="${view}"]`);
   const pill = $("#nav-pill"), put = () => { pill.style.transform = `translateY(${btn.offsetTop}px)`; };
   if (pill.style.transform) put(); else flip(pill, put, () => {});
+  keepPlace();
   const seq = ++goSeq;
   try {
     if (view === "history") S.history = await api().history();
@@ -1244,9 +1294,18 @@ async function go(view, dir = "tab", page) {
     }
   } catch (e) { /* drawn without it; it loads in afterwards */ }
   if (seq !== goSeq) return;  // another page was picked meanwhile
+  if (S.view === "settings" && view !== "settings") S.draft = null;
+  if (view === "settings") { S.page = to; S.pageTrail = through; }
   S.view = view;
   // a page asked for by name starts at its top, and so does the tab you're already looking at
-  render(dir, page != null || (again && !!shown && shown.key === placeKey()));
+  render(dir, page != null || (again && !!shown && shown.key === placeKey()), true);
+}
+/* The pages a Settings page opened from where Settings is now is reached through. Opening one
+   that's already among them (About, from the sidebar, on a page About led to) goes back to it. */
+function pageTrailTo(page) {
+  const trail = S.view === "settings" && S.page ? [...S.pageTrail, S.page] : [];
+  const i = trail.indexOf(page);
+  return i >= 0 ? trail.slice(0, i) : trail;
 }
 document.querySelectorAll(".navbtn").forEach(b => b.onclick = () => go(b.dataset.view));
 $("#pc-card").onclick = () => go("settings", "tab", "quality");
@@ -1254,12 +1313,47 @@ $("#ver").onclick = () => ACTIONS.about();
 
 /* Where each screen was scrolled to, so coming back to a tab (or back out of a Settings page)
    puts you where you were. Going into a page starts at its top. Settings > Appearance >
-   "Remember where you scrolled" turns it off: then every screen opens at its top, and the
-   Settings tab on its list. A place is a tab, or a page of Settings; the lines being checked are
-   their own place, and only for the same lines (`of`). */
+   "Remember where you scrolled" is about tabs: off, every tab opens at its top, and the Settings
+   tab on its list; going back out of a Settings page still puts the list where it was. A place
+   is a tab, or a page of Settings; the lines being checked are their own place, and only for
+   the same lines (`of`).
+   A place whose content isn't all there yet (a list still loading) can't be scrolled as far as it
+   was. Then it's still owed (`owed`): each redraw of that place puts it there, until it gets
+   there or you scroll or click in the page yourself. Leaving meanwhile keeps the place it was
+   going to, not the top it was held at. */
 const scrolled = {};   // place: { top, of }
 let shown = null;      // the place on screen now: { key, of }
+let owed = null;       // { key, of, top }: where the place on screen should be once it can
 const REMEMBERS = () => !S.info || S.info.settings.remember_scroll !== false;
+function keepPlace() {
+  if (!shown) return;
+  const main = $("main.main"), due = owed && owed.key === shown.key && owed.of === shown.of;
+  scrolled[shown.key] = { top: due ? Math.max(owed.top, main.scrollTop) : main.scrollTop, of: shown.of };
+}
+/* Turned off: forget where the tabs were. Only the way back out of the Settings page you're on is kept. */
+function forgetPlaces() {
+  const keep = ["settings", ...S.pageTrail.map(p => `settings/${p}`)];
+  Object.keys(scrolled).forEach(k => { if (!keep.includes(k)) delete scrolled[k]; });
+  owed = null;
+}
+{
+  const main = $("main.main"), dropOwed = () => { owed = null; };
+  main.addEventListener("wheel", dropOwed, { passive: true });
+  main.addEventListener("pointerdown", dropOwed);   // (its scrollbar too)
+  document.addEventListener("keydown", e => {
+    if (["PageDown", "PageUp", "End", "Home", "ArrowDown", "ArrowUp", " "].includes(e.key) && !e.target.closest("input, textarea, select")) owed = null;
+  });
+  // scrolled some other way: anything but where it was put, or held at the end (the content was short)
+  main.addEventListener("scroll", () => {
+    if (owed && Math.abs(main.scrollTop - owed.put) > 1 && main.scrollTop < main.scrollHeight - main.clientHeight - 1) owed = null;
+  }, { passive: true });
+}
+/* Scroll the page to `top`, as far as it goes; still owed if it can't get there yet */
+function scrollPlace(key, of, top) {
+  const main = $("main.main");
+  main.scrollTop = top;
+  owed = main.scrollTop < top - 1 ? { key, of, top, put: main.scrollTop } : null;
+}
 function placeKey() {
   if (S.setup) return "setup";
   if (S.view === "settings") return S.page && SETTINGS_PAGES[S.page] ? `settings/${S.page}` : "settings";
@@ -1267,13 +1361,13 @@ function placeKey() {
 }
 const placeOf = () => (S.view === "make" && !S.setup && S.review) || null;
 
-function render(animate, top) {
+function render(animate, top, kept) {
   const el = $("#view"), main = $("main.main");
   // arriving somewhere: the old screen fades out over the new. A redraw: what was moving carries on.
   const ghost = animate ? viewGhost(el) : null, held = animate ? null : holdMotion(el);
   const here = placeKey(), of = placeOf();
-  // how far down the screen being left was, for when it's come back to (its copy above was taken there)
-  if (animate && shown) scrolled[shown.key] = { top: main.scrollTop, of: shown.of };
+  // how far down the screen being left was, for when it's come back to (go() has already kept it)
+  if (animate && !kept) keepPlace();
   // a redraw keeps the keyboard where it was (the button or row that had the focus is a new element now)
   const active = document.activeElement, focused = !animate && active && el.contains(active) ? pressKey(active) : null;
   document.body.classList.toggle("wizard", !!S.setup);
@@ -1284,12 +1378,15 @@ function render(animate, top) {
     // to scroll) and before its arrival plays: the old screen's copy is fixed in the window, so
     // nothing is seen to jump. Back to where it was: between tabs, and back out of a Settings page.
     const was = scrolled[here];
-    const back = !top && !S.setup && REMEMBERS() && was && was.of === of && (animate === "tab" || (animate === "back" && S.view === "settings"));
-    main.scrollTop = back ? was.top : 0;
+    const back = !top && !S.setup && was && was.of === of && ((animate === "tab" && REMEMBERS()) || (animate === "back" && S.view === "settings"));
+    scrollPlace(here, of, back ? was.top : 0);
     arrive(el, animate === true ? "in" : animate, ghost);
   } else {
     el.classList.remove("screen-visible", "nav-back", "nav-tab");
     carryMotion(el, held);
+    // more of it came in: on to where it was going
+    if (owed && (owed.key !== here || owed.of !== of)) owed = null;
+    if (owed) scrollPlace(here, of, owed.top);
     if (focused && !el.contains(document.activeElement)) { const again = el.querySelector(focused); if (again) again.focus({ preventScroll: true }); }
   }
   shown = { key: here, of };
@@ -1315,7 +1412,7 @@ function renderSide() {
   $("#ver").textContent = S.info.release ? `Version ${S.info.release}` : "About";
   const lang = langName(settings.language);
   $("#pc-level").textContent = `${levels[settings.level].name} quality · ${lang}${settings.translate && settings.language !== "en" ? " → English" : ""}`;
-  $("#pc-detail").textContent = hw.gpu ? `${hw.gpu} · ${gb(hw.vram_mb)} GB` : `No NVIDIA GPU · runs on the CPU`;
+  $("#pc-detail").textContent = hw.gpu ? [gpuName(hw), gbText(hw.vram_mb)].filter(Boolean).join(" · ") : `${NO_GPU} · ${ON_CPU.toLowerCase()}`;
 }
 
 /* ---------------------------------------------------------------------
@@ -1399,16 +1496,16 @@ function talkCard() {
   return `<div>
     <h2>Who's talking</h2>
     <div class="card stack">
-      <div class="between"><div><div class="row-title">People in the video</div>
+      <div class="between"><div><div class="row-title" id="talk-who">People in the video</div>
           <div class="row-sub">${S.multi ? "Each line gets the speaker's name." : "Plain subtitles, no names."}</div></div>
-        <div class="seg" role="tablist">
-          <button data-act="multi" data-v="0" aria-selected="${!S.multi}">One person</button>
-          <button data-act="multi" data-v="1" aria-selected="${S.multi}">Several people</button></div></div>
+        <div class="seg" role="radiogroup" aria-labelledby="talk-who">
+          <button role="radio" data-act="multi" data-v="0" aria-checked="${!S.multi}">One person</button>
+          <button role="radio" data-act="multi" data-v="1" aria-checked="${S.multi}">Several people</button></div></div>
       ${S.multi ? (potato
         ? `<div class="banner">Potato quality doesn't detect speakers. <button class="linkbtn" data-act="goto-settings">Pick Fast or higher in Settings</button> to label who's talking.</div>`
-        : `<div class="between"><div><div class="row-title">How many</div>
+        : `<div class="between"><div><div class="row-title" id="talk-many">How many</div>
               <div class="row-sub">${voices.length ? `Guess uses your ${voices.length} voice clips.` : "Not sure? It can guess."}</div></div>
-            <div class="seg">${people.map(([v, l]) => `<button data-act="people" data-v="${v}" aria-selected="${S.people === v}">${l}</button>`).join("")}</div></div>
+            <div class="seg" role="radiogroup" aria-labelledby="talk-many">${people.map(([v, l]) => `<button role="radio" data-act="people" data-v="${v}" aria-checked="${S.people === v}">${l}</button>`).join("")}</div></div>
           <div class="between"><div class="grow"><div class="row-title">Voice clips</div>
               <div class="row-sub trunc">${voices.length ? "Names filled in automatically: " + voices.map(esc).join(", ")
                 : "Add 10–20 s of each person talking alone (Alex.wav) and names fill in by themselves."}</div></div>
@@ -1419,13 +1516,13 @@ function talkCard() {
 function whereCard() {
   const dir = S.info && S.info.settings.output_dir;
   return `<div>
-    <h2>Save subtitles to</h2>
+    <h2 id="where-h">Save subtitles to</h2>
     <div class="card stack">
       <div class="between"><div class="grow"><div class="row-title">${dir ? "A folder you picked" : "Next to each video"}</div>
           <div class="row-sub trunc selectable">${dir ? esc(dir) : "Same folder and name as the video, ending in .srt."}</div></div>
-        <div class="seg">
-          <button data-act="out-here" aria-selected="${!dir}">Next to the video</button>
-          <button data-act="out-folder" aria-selected="${!!dir}">A folder…</button></div></div>
+        <div class="seg" role="radiogroup" aria-labelledby="where-h">
+          <button role="radio" data-act="out-here" aria-checked="${!dir}">Next to the video</button>
+          <button role="radio" data-act="out-folder" aria-checked="${!!dir}">A folder…</button></div></div>
       ${dir ? `<div class="row"><button class="btn sec sm" data-act="out-folder">${ICON.folder} Change folder</button>
           <button class="btn ghost sm" data-act="reveal-dir" data-path="${esc(dir)}">Open it</button></div>` : ""}
     </div></div>`;
@@ -1924,7 +2021,10 @@ function viewResults(items) {
    History
 --------------------------------------------------------------------- */
 async function loadHistory() {
-  S.history = await api().history();
+  if (S.historyLoading) return;
+  S.historyLoading = true;
+  try { S.history = await api().history(); S.historyFailed = false; } catch (e) { S.historyFailed = !S.history; }
+  S.historyLoading = false;
   if (S.view === "history") render();
 }
 
@@ -1943,7 +2043,9 @@ function viewHistory() {
   const top = `<div class="topbar between" style="align-items:flex-start"><div><h1>History</h1>
       <p>Everything you've made subtitles for on this PC, newest first.</p></div>
       ${items && items.length ? `<button class="btn ghost sm" data-act="clear-history">Clear history</button>` : ""}</div>`;
-  if (!items) return top + `<div class="card"><div class="bar indeterminate"><i></i></div></div>`;
+  if (!items && S.historyFailed) return top + `<div class="card between"><span class="dim">Couldn't load the history.</span>
+      <button class="btn sec sm" data-act="history-retry">Try again</button></div>`;
+  if (!items) { loadHistory(); return top + `<div class="card"><div class="bar indeterminate"><i></i></div></div>`; }
   if (!items.length) return top + `<div class="card empty" style="text-align:center;padding:42px 20px">
       <div class="big-icon" style="margin:0 auto 12px;width:52px;height:52px;border-radius:14px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center">${ICON.srt}</div>
       <b>Nothing yet</b><div class="sm dim" style="margin-top:4px">Subtitles you make will show up here.</div>
@@ -2015,16 +2117,21 @@ const SETTINGS_PAGES = {
   storage: { title: "Storage", icon: "storage", tone: "i-gray", body: pageStorage,
     value: () => !S.models ? "" : S.models.length ? `${S.models.reduce((a, m) => a + m.gb, 0).toFixed(1)} GB` : "None" },
   updates: { title: "Software update", icon: "updates", tone: "i-blue", body: pageUpdates,
-    value: () => S.info.release || "", badge: () => S.update.state === "available" },
+    value: () => updateValue(), badge: () => S.update.state === "available" },
   // not in the list: the card at the top of Settings and the version in the sidebar open it
   about: { title: "About", body: pageAbout },
 };
+/* The Software update row's value: how the last check went, else the version this PC has */
+function updateValue() {
+  return { available: "Update ready", ok: "Up to date", checking: "Checking…", installing: "Updating…", installed: "Restart to finish", error: "Couldn't check" }[S.update.state]
+    || S.info.release || "Check now";
+}
 const SETTINGS_GROUPS = [["quality", "language"], ["style", "speakers", "accuracy", "done"], ["appearance", "storage", "updates"]];
 
 function viewSettings() {
   if (!S.info) return "";
   const page = S.page && SETTINGS_PAGES[S.page];
-  const from = S.pageBack && SETTINGS_PAGES[S.pageBack];  // a page reached from another one (About) goes back to it
+  const from = SETTINGS_PAGES[S.pageTrail[S.pageTrail.length - 1]];  // a page reached from another one (About) goes back to it
   if (page) return `
     <button class="back" data-act="settings-back">${BACK}<span>${from ? from.title : "Settings"}</span></button>
     <div class="topbar"><h1>${page.title}</h1>${page.lede ? `<p>${page.lede}</p>` : ""}</div>
@@ -2042,7 +2149,7 @@ function viewSettings() {
       <div class="block"><div class="grp"><div class="grp-row tap set-card" role="button" tabindex="0" data-act="settings-page" data-page="about" title="About Subtitle Maker">
         <img class="app-tile" src="icon.svg" width="58" height="58" alt="">
         <div class="grow"><div class="set-name">Subtitle Maker</div>
-          <div class="row-sub">${esc(S.info.release ? "Version " + S.info.release : "Version unknown")} · ${hw.gpu ? esc(hw.gpu) : "runs on the processor"}</div></div>
+          <div class="row-sub">${esc(S.info.release ? "Version " + S.info.release : "Version not known")} · ${esc(hw.gpu ? gpuName(hw) : NO_GPU)}</div></div>
         ${CHEVRON}</div></div></div>
       ${SETTINGS_GROUPS.map(g => `<div class="block"><div class="grp">${g.map(row).join("")}</div></div>`).join("")}
       <div class="block"><div class="grp">
@@ -2076,10 +2183,7 @@ function meter(label, n) {
 }
 /* What this PC has: the graphics card and its memory, the memory and the processor */
 function pcFacts() {
-  const hw = S.info.hardware, fact = (k, v) => `<div class="pc-fact"><span>${k}</span><b>${v}</b></div>`;
-  return (hw.gpu ? fact("Graphics card", esc(hw.gpu.replace(/^NVIDIA /, ""))) + fact("Graphics memory", `${gb(hw.vram_mb)} GB`)
-      : fact("Graphics card", "No NVIDIA card") + fact("Runs on", "The processor"))
-    + fact("Memory", `${hw.ram_gb} GB`) + fact("Processor", `${hw.cores} cores`);
+  return hwFacts(S.info.hardware).map(([k, v]) => `<div class="pc-fact"><span>${k}</span><b>${esc(v)}</b></div>`).join("");
 }
 
 /* A card per level: what it's like, how fast and how accurate, and what it takes. Beside them
@@ -2087,19 +2191,23 @@ function pcFacts() {
 function pageQuality() {
   const { levels, recommended, hardware: hw } = S.info;
   const { d } = settingsDraft();
-  const cards = Object.entries(levels).map(([key, lv]) => `
-    <div class="lv" role="radio" tabindex="0" aria-checked="${d.level === key}" data-act="level" data-v="${key}">
+  // Two tags at most: Recommended, and In use (which is on this PC too) or Downloaded. A screen
+  // reader hears the name, then the tags and what it's like (not all of it run together).
+  const cards = Object.entries(levels).map(([key, lv]) => {
+    const inUse = key === S.info.settings.level && S.info.configured;
+    return `
+    <div class="lv" role="radio" aria-checked="${d.level === key}" data-act="level" data-v="${key}"
+        aria-labelledby="lv-${key}" aria-describedby="lv-${key}-tags lv-${key}-about">
       <span class="radio"></span>
-      <div class="lv-main"><div class="lv-head"><span class="lv-name">${esc(lv.name)}</span>
-          ${key === recommended ? '<span class="pill accent">Recommended</span>' : ""}
-          ${key === S.info.settings.level && S.info.configured ? '<span class="pill">Current</span>' : ""}
-          ${S.info.models.whisper[key] ? `<span class="pill ok">${ICON.tick}Downloaded</span>` : ""}</div>
-        <div class="row-sub">${esc(lv.about[0].toUpperCase() + lv.about.slice(1))}</div></div>
+      <div class="lv-main"><div class="lv-head"><span class="lv-name" id="lv-${key}">${esc(lv.name)}</span>
+          <span class="lv-tags" id="lv-${key}-tags">${key === recommended ? '<span class="pill accent">Recommended</span>' : ""}
+          ${inUse ? `<span class="pill ok">${ICON.tick}In use</span>` : S.info.models.whisper[key] ? `<span class="pill ok">${ICON.tick}Downloaded</span>` : ""}</span></div>
+        <div class="row-sub" id="lv-${key}-about">${esc(lv.about[0].toUpperCase() + lv.about.slice(1))}</div></div>
       <div class="lv-extra">
         ${lv.speed && lv.accuracy ? `<div class="lv-meters">${meter("Speed", lv.speed)}${meter("Accuracy", lv.accuracy)}</div>` : ""}
-        <div class="lv-stats"><span>Download</span><b>${lv.download}</b>${hw.gpu ? `<span>GPU memory</span><b>~${gb(lv.vram_mb)} GB</b>` : ""}</div>
+        <div class="lv-stats${hw.gpu ? "" : " one"}"><span>Download</span><b>${lv.download}</b>${hw.gpu ? `<span>GPU memory</span><b>~${gb(lv.vram_mb)} GB</b>` : ""}</div>
       </div>
-    </div>`).join("");
+    </div>`; }).join("");
   // what Save will do with the level that's picked
   const name = `<b>${esc(levels[d.level].name)}</b>`, missing = neededFor(d.level).filter(i => !i.have);
   const hint = S.run ? "" : (d.level === S.info.settings.level && S.info.configured && !missing.length ? `${name} is what you use now.`
@@ -2109,12 +2217,12 @@ function pageQuality() {
   return `
     <div class="q">
       <div class="q-main"><div class="q-levels" role="radiogroup" aria-label="Quality">${cards}</div>
-        <p class="foot">Switching to one marked Downloaded needs no download.</p></div>
+        <p class="foot">Switching to one that's In use or Downloaded needs no download.</p></div>
       <div class="q-side">
         <div class="card pc q-pc"><div class="pc-head"><span class="tile-icon t-accent">${ICON.chip}</span>
             <div><div class="row-title">This PC</div><div class="row-sub">Best with ${esc(levels[recommended] ? levels[recommended].name : "High")} quality</div></div></div>
           <div class="pc-facts">${pcFacts()}</div></div>
-        <div class="q-save">${hint ? `<p class="q-hint">${hint}</p>` : ""}${saveBlock()}</div>
+        <div class="q-save">${saveBlock()}${hint ? `<p class="q-hint">${hint}</p>` : ""}</div>
       </div>
     </div>`;
 }
@@ -2133,7 +2241,7 @@ function pageLanguage() {
             : "For videos in another language. Pick the language they're in above (or Auto-detect) first.")
           : `Translates as it goes, for videos in another language.${st.level === "high"
             ? ` High can't translate, so this uses Balanced's model${S.info.models.whisper.balanced ? "" : " (a 1.5 GB download the first time)"}.` : ""}`,
-        switchPref("translate"))}</div></div>`;
+        switchPref("translate"), "translate")}</div></div>`;
 }
 
 function pageStyle() {
@@ -2143,22 +2251,22 @@ function pageStyle() {
     <div class="block"><div class="card stack"><div class="frames" aria-label="Preview">${frames}</div>
         <p class="xs dim">How a sentence splits with these settings. Fonts and colours are set in Resolve.</p></div></div>
     <div class="block"><h2>Lines</h2><div class="grp">
-        ${prefRow("Characters per line", "42 is the film and TV standard; fewer suits phones.", segPref("max_chars"))}
-        ${prefRow("Lines per subtitle", "One line covers less of the picture.", segPref("max_lines"))}
+        ${prefRow("Characters per line", "42 is the film and TV standard; fewer suits phones.", segPref("max_chars"), "max_chars")}
+        ${prefRow("Lines per subtitle", "One line covers less of the picture.", segPref("max_lines"), "max_lines")}
       </div></div>
     <div class="block"><h2>Timing</h2><div class="grp">
-        ${prefRow("Shortest time on screen", "So quick lines can still be read.", segPref("min_seconds"))}
-        ${prefRow("Longest time on screen", "Longer lines are split.", segPref("max_seconds"))}
-        ${prefRow("New subtitle after a pause", "How long a gap in speech starts a new one.", segPref("pause_split"))}
+        ${prefRow("Shortest time on screen", "So quick lines can still be read.", segPref("min_seconds"), "min_seconds")}
+        ${prefRow("Longest time on screen", "Longer lines are split.", segPref("max_seconds"), "max_seconds")}
+        ${prefRow("New subtitle after a pause", "How long a gap in speech starts a new one.", segPref("pause_split"), "pause_split")}
       </div></div>`;
 }
 
 function pageSpeakers() {
   return `
     <div class="block"><div class="grp">
-        ${prefRow("Name labels", "How each line shows who's talking (with Several people).", segPref("speaker_labels"))}
-        ${prefRow("Also save one file per person", "Handy for Resolve's subtitle regions.", switchPref("speaker_files"))}
-        ${prefRow("Remember people I name", "Next time they're in a video, they're named by themselves. Their voice stays on this PC.", switchPref("remember_voices"))}
+        ${prefRow("Name labels", "How each line shows who's talking (with Several people).", segPref("speaker_labels"), "speaker_labels")}
+        ${prefRow("Also save one file per person", "Handy for Resolve's subtitle regions.", switchPref("speaker_files"), "speaker_files")}
+        ${prefRow("Remember people I name", "Next time they're in a video, they're named by themselves. Their voice stays on this PC.", switchPref("remember_voices"), "remember_voices")}
       </div></div>
     ${voicesBlock()}`;
 }
@@ -2171,9 +2279,9 @@ function pageAccuracy() {
             <div class="row-sub">Names, places and brands it might mishear, separated by commas.</div></div>
           <input type="text" id="hotwords" class="prefs-input" style="flex:1;min-width:240px" maxlength="500"
             placeholder="e.g. Jamie, Singapore Polytechnic, DaVinci" value="${esc(st.hotwords)}"></div>
-        ${prefRow("Remove filler words", "Leaves out um, uh, er and hmm.", switchPref("remove_fillers"))}
-        ${prefRow("Skip music and silence", "Turn off if quiet speech gets missed.", switchPref("vad"))}
-        ${prefRow("Run on", S.info.hardware.gpu ? "Automatic uses the graphics card when it has room." : "This PC has no NVIDIA graphics card, so it uses the processor.", segPref("device"))}
+        ${prefRow("Remove filler words", "Leaves out um, uh, er and hmm.", switchPref("remove_fillers"), "remove_fillers")}
+        ${prefRow("Skip music and silence", "Turn off if quiet speech gets missed.", switchPref("vad"), "vad")}
+        ${prefRow("Run on", S.info.hardware.gpu ? "Automatic uses the graphics card when it has room." : "This PC has no NVIDIA graphics card, so it uses the processor.", segPref("device"), "device")}
       </div></div>
     ${fixesBlock()}`;
 }
@@ -2181,25 +2289,25 @@ function pageAccuracy() {
 function pageDone() {
   return `
     <div class="block"><div class="grp">
-        ${prefRow("Check the lines before saving", "Fix words and names, then save. Off: saves straight away.", switchPref("review"))}
+        ${prefRow("Check the lines before saving", "Fix words and names, then save. Off: saves straight away.", switchPref("review"), "review")}
       </div></div>
     <div class="block"><h2>Let me know</h2><div class="grp">
-        ${prefRow("Play a sound", "", switchPref("done_sound"))}
-        ${prefRow("Open the folder", "Shows the subtitles once everything in the queue is done.", switchPref("open_folder"))}
-        ${S.info.platform === "win32" ? prefRow("Notify me", "If you're in another window when the queue finishes, Windows shows a notification.", switchPref("notify")) : ""}
+        ${prefRow("Play a sound", "", switchPref("done_sound"), "done_sound")}
+        ${prefRow("Open the folder", "Shows the subtitles once everything in the queue is done.", switchPref("open_folder"), "open_folder")}
+        ${S.info.platform === "win32" ? prefRow("Notify me", "If you're in another window when the queue finishes, Windows shows a notification.", switchPref("notify"), "notify") : ""}
       </div></div>
     <div class="block"><h2>Also save</h2><div class="grp">
-        ${prefRow("A transcript", "A plain .txt of everything said, next to the .srt.", switchPref("transcript"))}
-        ${prefRow("A .vtt file", "The same subtitles for YouTube and web players.", switchPref("vtt"))}
+        ${prefRow("A transcript", "A plain .txt of everything said, next to the .srt.", switchPref("transcript"), "transcript")}
+        ${prefRow("A .vtt file", "The same subtitles for YouTube and web players.", switchPref("vtt"), "vtt")}
       </div></div>`;
 }
 
 function pageAppearance() {
   return `
     <div class="block"><div class="grp">
-        ${prefRow("Colours", "", segPref("theme"))}
-        ${prefRow("Less animations", "Things appear and go without moving. Also follows Windows' own setting.", switchPref("less_motion"))}
-        ${prefRow("Remember where you scrolled", "Coming back to a tab puts you where you were. Off: every tab opens at the top.", switchPref("remember_scroll"))}
+        ${prefRow("Colours", "", segPref("theme"), "theme")}
+        ${prefRow("Less animations", "Things appear and go without moving. Also follows Windows' own setting.", switchPref("less_motion"), "less_motion")}
+        ${prefRow("Remember where you scrolled", "Coming back to a tab puts you where you were, on the same Settings page. Off: every tab opens at its top.", switchPref("remember_scroll"), "remember_scroll")}
       </div></div>`;
 }
 
@@ -2210,7 +2318,6 @@ function pageAbout() {
   const experimental = S.info.settings.channel === "experimental";
   const built = v && v.sha ? `Build ${esc(v.sha.slice(0, 7))}${v.date ? " · " + new Date(v.date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : ""}` : "";
   const folder = S.info.folder || (v && v.folder) || "";
-  const state = { available: "Update ready", ok: "Up to date", checking: "Checking…", installing: "Updating…", installed: "Restart to finish" }[S.update.state] || "";
   const fact = (k, val) => `<div class="grp-row set-row"><span class="grow row-title">${k}</span><span class="val selectable">${val}</span></div>`;
   const link = (act, icon, tone, title, val, badge) => `<div class="grp-row tap has-icon set-row" role="button" tabindex="0" ${act}>
       <span class="ico ${tone}">${setIcon(icon)}</span><span class="grow row-title">${title}</span>
@@ -2219,18 +2326,16 @@ function pageAbout() {
     <div class="block"><div class="card about-hero">
         <img src="icon.svg" width="92" height="92" alt="">
         <div class="grow"><div class="about-name">Subtitle Maker</div>
-          <div class="about-ver"><span>Version</span><b class="selectable">${esc(S.info.release || "unknown")}</b></div>
+          ${S.info.release ? `<div class="about-ver"><span>Version</span><b class="selectable">${esc(S.info.release)}</b></div>`
+            : `<div class="about-unknown">Version not known</div>`}
           <div class="about-meta"><span class="pill ${experimental ? "accent" : "ok"}" title="The version this PC follows. Change it in Software update.">${experimental ? "Experimental" : "Stable"}</span>
             ${built ? `<span class="mono selectable">${built}</span>` : ""}</div></div></div></div>
     <div class="block"><div class="grp">
-        ${link('data-act="settings-page" data-page="updates"', "updates", "i-blue", "Software update", state, S.update.state === "available")}
+        ${link('data-act="settings-page" data-page="updates"', "updates", "i-blue", "Software update", esc(updateValue()), S.update.state === "available")}
         ${link('data-act="news"', "news", "i-gold", "What's new", "", false)}
       </div></div>
     <div class="block"><h2>This PC</h2><div class="grp">
-        ${hw.gpu ? fact("Graphics card", esc(hw.gpu)) + fact("Graphics memory", `${gb(hw.vram_mb)} GB`)
-          : fact("Graphics card", "No NVIDIA card") + fact("Runs on", "The processor")}
-        ${fact("Memory", `${hw.ram_gb} GB`)}
-        ${fact("Processor", `${hw.cores} cores`)}
+        ${hwFacts(hw).map(([k, val]) => fact(k, esc(val))).join("")}
       </div></div>
     ${folder ? `<div class="block"><h2>Installed in</h2><div class="grp"><div class="grp-row">
           <div class="grow about-path selectable">${esc(folder)}</div>
@@ -2245,7 +2350,7 @@ function pageStorage() {
 function pageUpdates() {
   return `${updatesBlock()}
     <div class="block"><div class="grp">
-        ${prefRow("Check for updates automatically", "Security updates are always shown.", switchPref("auto_update"))}
+        ${prefRow("Check for updates automatically", "Security updates are always shown.", switchPref("auto_update"), "auto_update")}
       </div></div>`;
 }
 
@@ -2319,17 +2424,19 @@ const PREF_OPTIONS = {
 };
 const PREVIEW_TEXT = "So today I wanted to slow down and actually look at the street I walk every day, the one I never notice.";
 
+/* A setting's control is named by its row's title and described by the line under it */
 function segPref(key) {
   const now = S.info.settings[key];
-  return `<div class="seg">${PREF_OPTIONS[key].map(([v, l]) =>
-    `<button data-act="pref" data-k="${key}" data-v='${JSON.stringify(v)}' aria-selected="${now === v}">${esc(l)}</button>`).join("")}</div>`;
+  return `<div class="seg" role="radiogroup" aria-labelledby="pt-${key}">${PREF_OPTIONS[key].map(([v, l]) =>
+    `<button role="radio" data-act="pref" data-k="${key}" data-v='${JSON.stringify(v)}' aria-checked="${now === v}">${esc(l)}</button>`).join("")}</div>`;
 }
 function switchPref(key) {
   const on = !!S.info.settings[key];
-  return `<button class="switch" role="switch" aria-checked="${on}" aria-label="${key}" data-act="pref" data-k="${key}" data-v='${!on}'><span></span></button>`;
+  return `<button class="switch" role="switch" aria-checked="${on}" aria-labelledby="pt-${key}" aria-describedby="ps-${key}" data-act="pref" data-k="${key}" data-v='${!on}'><span></span></button>`;
 }
-function prefRow(title, sub, control) {
-  return `<div class="grp-row"><div class="grow"><div class="row-title">${title}</div>${sub ? `<div class="row-sub">${sub}</div>` : ""}</div>${control}</div>`;
+function prefRow(title, sub, control, key) {
+  const id = k => key ? ` id="${k}-${key}"` : "";
+  return `<div class="grp-row"><div class="grow"><div class="row-title"${id("pt")}>${title}</div>${sub ? `<div class="row-sub"${id("ps")}>${sub}</div>` : ""}</div>${control}</div>`;
 }
 
 /* The same line-breaking as make_subtitles.py (greedy wrap, then as even as possible), to preview it */
@@ -2468,9 +2575,10 @@ function updatesBlock() {
       <div class="between"><div><div class="row-title">What's new</div>
           <div class="row-sub">What changed in each version.</div></div>
         <button class="btn sec sm" data-act="news">See what's new</button></div>
-      <div class="between"><div><div class="row-title">Version to follow</div>
+      <div class="between"><div><div class="row-title" id="channel-t">Version to follow</div>
           <div class="row-sub">Experimental gets new features first, before they're fully tested.</div></div>
-        <div class="seg">${CHANNELS.map(([v, l]) => `<button data-act="channel" data-v="${v}" aria-selected="${ch === v}" ${locked ? "disabled" : ""}>${l}</button>`).join("")}</div></div>
+        <div class="seg" role="radiogroup" aria-labelledby="channel-t">${CHANNELS.map(([v, l]) =>
+          `<button role="radio" data-act="channel" data-v="${v}" data-arrow="move" aria-checked="${ch === v}" ${locked ? "disabled" : ""}>${l}</button>`).join("")}</div></div>
       ${body}</div></div>`;
 }
 
@@ -2565,16 +2673,16 @@ function viewSetup() {
           <h1>Welcome to Subtitle Maker</h1>
           <p class="lede">Movie-style subtitles for DaVinci Resolve, made on this PC. Three quick questions, one download, and you're set.</p>
           <div class="facts">
-            <div class="fact"><span>Graphics</span><b class="trunc">${hw.gpu ? esc(hw.gpu.replace(/^NVIDIA (GeForce )?/, "")) : "No NVIDIA GPU"}</b><div class="xs dim">${hw.gpu ? gb(hw.vram_mb) + " GB" : "Runs on the CPU"}</div></div>
-            <div class="fact"><span>Memory</span><b>${hw.ram_gb} GB</b><div class="xs dim">RAM</div></div>
-            <div class="fact"><span>Processor</span><b>${hw.cores} cores</b><div class="xs dim">CPU</div></div>
+            <div class="fact"><span>Graphics</span><b${hw.gpu ? ' class="trunc"' : ""}>${esc(hw.gpu ? gpuName(hw) : NO_GPU)}</b><div class="xs dim">${hw.gpu ? gbText(hw.vram_mb) : ON_CPU}</div></div>
+            <div class="fact"><span>Memory</span><b>${hw.ram_gb > 0 ? `${hw.ram_gb} GB` : "Not known"}</b><div class="xs dim">RAM</div></div>
+            <div class="fact"><span>Processor</span><b>${hw.cores > 0 ? `${hw.cores} cores` : "Not known"}</b><div class="xs dim">CPU</div></div>
           </div></div>${nav("wiz-next", "Get started", false)}`;
       break;
     case 1:
       body = `<div class="wiz-body"><h1>How good should they be?</h1>
           <p class="lede">Better quality takes longer and downloads more. You can change this any time in Settings.</p>
-          <div class="grp" role="radiogroup">${Object.entries(levels).map(([key, lv]) => `
-            <div class="grp-row tap" role="radio" tabindex="0" aria-checked="${w.level === key}" data-act="wiz-level" data-v="${key}">
+          <div class="grp" role="radiogroup" aria-label="Quality">${Object.entries(levels).map(([key, lv]) => `
+            <div class="grp-row tap" role="radio" aria-checked="${w.level === key}" data-act="wiz-level" data-v="${key}">
               <span class="radio"></span>
               <div class="grow"><div class="row"><span class="row-title">${esc(lv.name)}</span>
                   ${key === recommended ? '<span class="pill accent">Best for this PC</span>' : ""}
@@ -2591,10 +2699,10 @@ function viewSetup() {
     case 3:
       body = `<div class="wiz-body"><h1>Where should subtitles go?</h1>
           <p class="lede">Each video's .srt can sit right next to it, or all of them can go in one folder.</p>
-          <div class="grp" role="radiogroup">
-            <div class="grp-row tap" role="radio" tabindex="0" aria-checked="${!w.output_dir}" data-act="wiz-out-here"><span class="radio"></span>
+          <div class="grp" role="radiogroup" aria-label="Where subtitles go">
+            <div class="grp-row tap" role="radio" aria-checked="${!w.output_dir}" data-act="wiz-out-here"><span class="radio"></span>
               <div class="grow"><div class="row-title">Next to each video</div><div class="row-sub">Same folder and name as the video.</div></div></div>
-            <div class="grp-row tap" role="radio" tabindex="0" aria-checked="${!!w.output_dir}" data-act="wiz-out-folder"><span class="radio"></span>
+            <div class="grp-row tap" role="radio" aria-checked="${!!w.output_dir}" data-act="wiz-out-folder"><span class="radio"></span>
               <div class="grow"><div class="row-title">In one folder</div><div class="row-sub trunc selectable">${w.output_dir ? esc(w.output_dir) : "Choose the folder…"}</div></div>
               ${w.output_dir ? `<span class="btn sec sm">Change…</span>` : ""}</div>
           </div></div>${nav("wiz-download", "Download and finish")}`;
@@ -2882,19 +2990,23 @@ function bind(root) {
     el.onclick = e => { e.stopPropagation(); handler(el); };
     const role = el.getAttribute("role");
     if (role === "button" || role === "radio") el.onkeydown = e => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handler(el); return; }
-      // The arrow keys walk a list of radios, picking as they go, as radio buttons do (one that
-      // opens something, like "In one folder", is only moved to)
+      // (a real button clicks itself on Enter and Space)
+      if ((e.key === "Enter" || e.key === " ") && el.tagName !== "BUTTON") { e.preventDefault(); handler(el); return; }
+      // The arrow keys walk a group of radios (a list, or a segmented control), picking as they
+      // go, as radio buttons do. One that opens something or changes much (In one folder, More…,
+      // the version to follow) is only moved to: Enter or Space picks it.
       const step = role === "radio" && !e.ctrlKey && !e.altKey && !e.metaKey && { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
       if (!step) return;
-      const all = [...(el.closest('[role="radiogroup"]') || root).querySelectorAll('[role="radio"]')];
+      const all = [...(el.closest('[role="radiogroup"]') || root).querySelectorAll('[role="radio"]')].filter(r => !r.disabled);
       const to = all[(all.indexOf(el) + step + all.length) % all.length];
       if (!to || to === el) return;
       e.preventDefault();
+      all.forEach(r => { r.tabIndex = r === to ? 0 : -1; });
       to.focus();
-      if (to.dataset.v != null && ACTIONS[to.dataset.act]) ACTIONS[to.dataset.act](to);
+      if (to.dataset.v != null && to.dataset.arrow !== "move" && ACTIONS[to.dataset.act]) ACTIONS[to.dataset.act](to);
     };
   });
+  roving(root);
   syncSegs(root);
   if (S.review) bindReview(root);
   const hot = $("#hotwords", root);
@@ -2903,6 +3015,16 @@ function bind(root) {
   if (wizCode) wizCode.onchange = () => { S.setup.language = wizCode.value || "other"; };
   const code = $("#lang-code", root);
   if (code) code.onchange = () => { S.draft.language = code.value || "other"; updateSave(); };
+}
+
+/* A group of radios is one stop for Tab: the chosen one (or the first, when none is), and the
+   arrow keys move within it */
+function roving(root) {
+  root.querySelectorAll('[role="radiogroup"]').forEach(group => {
+    const items = [...group.querySelectorAll('[role="radio"]')], usable = items.filter(r => !r.disabled);
+    const stop = usable.find(r => r.getAttribute("aria-checked") === "true") || usable[0];
+    items.forEach(r => { r.tabIndex = r === stop ? 0 : -1; });
+  });
 }
 
 function updateSave() {
@@ -3026,6 +3148,8 @@ const ACTIONS = {
     const key = el.dataset.k;
     if (el.classList.contains("switch")) {
       const on = el.getAttribute("aria-checked") !== "true";
+      // Less animations takes effect on the click, so its own switch doesn't spring across
+      if (key === "less_motion") document.documentElement.classList.toggle("reduce-motion", on);
       el.setAttribute("aria-checked", String(on));
       // Saving runs while the knob springs across; the redraw waits for both. 260 ms is when the
       // knob is within a fraction of a pixel of its place (the spring's last settling is too small
@@ -3036,6 +3160,7 @@ const ACTIONS = {
         new Promise(done => setTimeout(done, prefersReducedMotion() ? 0 : 260))]);
       if (turn !== el.turn) return;
       S.info.settings = saved;
+      if (key === "remember_scroll" && !saved.remember_scroll) forgetPlaces();
     } else {
       const value = JSON.parse(el.dataset.v);
       if (S.info.settings[key] === value) return;  // already the choice
@@ -3044,9 +3169,10 @@ const ACTIONS = {
       S.info.settings = { ...S.info.settings, [key]: value };
       if (key === "theme") applyTheme();
       render();
-      const turn = S.prefTurn = (S.prefTurn || 0) + 1;
+      // (each setting has its own count, so a quick click on another one doesn't stand in its way)
+      const turns = S.prefTurn || (S.prefTurn = {}), turn = turns[key] = (turns[key] || 0) + 1;
       const saved = await api().save_prefs({ [key]: value });
-      if (turn !== S.prefTurn || JSON.stringify(saved) === JSON.stringify(S.info.settings)) return;
+      if (turn !== turns[key] || JSON.stringify(saved) === JSON.stringify(S.info.settings)) return;
       S.info.settings = saved;
     }
     if (key === "theme") applyTheme();
@@ -3069,6 +3195,7 @@ const ACTIONS = {
   "goto-make": () => go("make"),
   again: el => app.addFiles([el.dataset.path]),
   retry: el => { app.addFiles([el.dataset.path]); next(); },
+  "history-retry": () => { S.historyFailed = false; render(); },
   forget: async el => { S.history = await api().remove_history(el.dataset.id); render(); },
   "clear-history": () => confirmBox("Clear the whole history?", "Only the list is cleared. Your subtitle files stay where they are.",
     "Clear history", async () => { S.history = await api().clear_history(); render(); }),
@@ -3144,11 +3271,16 @@ const ACTIONS = {
   voices: async () => { S.info.voices = await api().open_voices(); },
   "goto-settings": () => go("settings", "tab", "quality"),
   "goto-speakers": () => go("settings", "tab", "speakers"),
-  about: () => { if (!S.info || S.setup || (S.view === "settings" && S.page === "about")) return; go("settings", S.view === "settings" ? "in" : "tab", "about"); },
+  // from a Settings page, About goes back to that page
+  about: () => {
+    if (!S.info || S.setup || (S.view === "settings" && S.page === "about")) return;
+    const inSettings = S.view === "settings", backwards = inSettings && S.pageTrail.includes("about");
+    go("settings", !inSettings ? "tab" : backwards ? "back" : "in", "about", pageTrailTo("about"));
+  },
   "open-program-folder": () => api().open_program_folder(),
   // a page opened from another page (Software update from About) goes back to it
-  "settings-page": el => { S.pageBack = S.page || null; S.page = el.dataset.page; render("in"); },
-  "settings-back": () => { S.page = S.pageBack || null; S.pageBack = null; render("back"); },
+  "settings-page": el => { S.pageTrail = pageTrailTo(el.dataset.page); S.page = el.dataset.page; render("in"); },
+  "settings-back": () => { S.pageTrail = S.pageTrail.slice(); S.page = S.pageTrail.pop() || null; render("back"); },
   start: () => next(),
   cancel: () => { S.cancelAll = true; api().cancel(); },
   reveal: el => api().reveal(el.dataset.path),
@@ -3326,7 +3458,8 @@ const app = {
           api().models_status().then(m => { S.info.models = m; if (r.after) r.after(!ev.code, r.error); else render(); });
           return;
         }
-        if (r.kind === "make") { S.history = null; S.voicesKnown = null; if (S.view === "history") loadHistory(); }
+        // (History on screen keeps its list until the new one is in, so it doesn't empty and jump to the top)
+        if (r.kind === "make") { S.voicesKnown = null; if (S.view === "history") loadHistory(); else S.history = null; }
         S.run = null;
         S.review = null;
         closeDialogs();
@@ -3383,7 +3516,9 @@ document.addEventListener("click", e => {
   const summary = e.target.closest ? e.target.closest("summary") : null, box = summary && summary.parentElement;
   if (!box || box.tagName !== "DETAILS") return;
   requestAnimationFrame(() => {
-    if (box.open) [...box.children].forEach(n => { if (n !== summary) n.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: "cubic-bezier(.16,1,.3,1)" }); });
+    // (with less motion, the same short plain fade as everything else that appears)
+    const calm = prefersReducedMotion();
+    if (box.open) [...box.children].forEach(n => { if (n !== summary) n.animate([{ opacity: 0 }, { opacity: 1 }], calm ? { duration: 120, easing: "linear" } : { duration: 160, easing: "cubic-bezier(.16,1,.3,1)" }); });
   });
 }, true);
 
