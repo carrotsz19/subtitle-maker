@@ -793,12 +793,12 @@ html.frame-custom .scrim{ padding-top:calc(var(--titlebar) + 8px); }  /* a dialo
 body.wizard .tb-title{ display:flex; }  /* the setup has no sidebar, so the strip says whose window it is */
 .tb-btns{ display:flex; margin-left:auto; app-region:no-drag; }
 .tb-btn{ all:unset; box-sizing:border-box; width:46px; height:100%; display:flex; align-items:center; justify-content:center;
-  color:var(--ink); font:10px/1 "Segoe Fluent Icons","Segoe MDL2 Assets"; cursor:default;
+  color:var(--ink); cursor:default;
   transition:background-color 130ms var(--ease-standard), color 130ms var(--ease-standard); }
-.tb-btn::before{ content:"\E921"; }  /* ChromeMinimize */
-.tb-btn.max::before{ content:"\E922"; }  /* ChromeMaximize */
-html.maximized .tb-btn.max::before{ content:"\E923"; }  /* ChromeRestore */
-.tb-btn.close::before{ content:"\E8BB"; }  /* ChromeClose */
+/* Windows 11's glyphs, drawn here (no font needed): 10 by 10, one pixel lines */
+.tb-btn svg{ display:block; width:10px; height:10px; fill:none; stroke:currentColor; stroke-width:1; overflow:visible; }
+.tb-btn .g-restore, html.maximized .tb-btn .g-max{ display:none; }
+html.maximized .tb-btn .g-restore{ display:block; }
 .tb-btn:hover{ background:var(--fill-tertiary); }
 .tb-btn:active{ background:var(--hairline); color:var(--dim); }
 .tb-btn.close:hover{ background:#c42b1c; color:#fff; }
@@ -866,9 +866,13 @@ html.reduce-motion .tb-btn, html.reduce-motion .tb-title, html.reduce-motion .br
 <div class="titlebar" id="titlebar">
   <div class="tb-title"><img src="icon.svg" width="16" height="16" alt="">Subtitle Maker</div>
   <div class="tb-btns">
-    <button class="tb-btn min" type="button" tabindex="-1" data-window="minimise" aria-label="Minimise" title="Minimise"></button>
-    <button class="tb-btn max" type="button" tabindex="-1" data-window="maximise" aria-label="Maximise" title="Maximise"></button>
-    <button class="tb-btn close" type="button" tabindex="-1" data-window="close" aria-label="Close" title="Close"></button>
+    <button class="tb-btn min" type="button" tabindex="-1" data-window="minimise" aria-label="Minimise" title="Minimise">
+      <svg viewBox="0 0 10 10" aria-hidden="true" shape-rendering="crispEdges"><path d="M0 5.5h10"/></svg></button>
+    <button class="tb-btn max" type="button" tabindex="-1" data-window="maximise" aria-label="Maximise" title="Maximise">
+      <svg class="g-max" viewBox="0 0 10 10" aria-hidden="true"><rect x=".5" y=".5" width="9" height="9" rx="1.5"/></svg>
+      <svg class="g-restore" viewBox="0 0 10 10" aria-hidden="true"><rect x=".5" y="2.5" width="7" height="7" rx="1.5"/><path d="M2.5 2.5V2A1.5 1.5 0 0 1 4 .5h4A1.5 1.5 0 0 1 9.5 2v4A1.5 1.5 0 0 1 8 7.5h-.5"/></svg></button>
+    <button class="tb-btn close" type="button" tabindex="-1" data-window="close" aria-label="Close" title="Close">
+      <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M.5.5l9 9M9.5.5l-9 9"/></svg></button>
   </div>
 </div>
 <div class="tb-edge nw" data-edge="nw"></div><div class="tb-edge n" data-edge="n"></div><div class="tb-edge ne" data-edge="ne"></div>
@@ -1031,6 +1035,7 @@ function applyFrame(frame) {
 }
 function applyWindowState(state) {
   const root = document.documentElement, max = $("#titlebar .max");
+  if ("custom" in state) root.classList.toggle("frame-custom", !!state.custom);  // Windows' title bar came back
   if ("maximized" in state) {
     root.classList.toggle("maximized", !!state.maximized);
     const label = state.maximized ? "Restore" : "Maximise";
@@ -1043,10 +1048,13 @@ document.querySelectorAll("#titlebar [data-window]").forEach(b => {
   b.addEventListener("mousedown", e => e.preventDefault());  // the focus stays where it was, as with Windows' buttons
   b.addEventListener("click", () => { if (window.pywebview && window.pywebview.api) api().window_button(b.dataset.window); });
 });
+/* The top edge: where the pointer went down (on the screen, in pixels), so Windows' sizing starts
+   from there however long the message takes; a second press is a double-click on the border. */
 document.querySelectorAll(".tb-edge").forEach(edge => edge.addEventListener("mousedown", e => {
   if (e.button !== 0 || !(window.pywebview && window.pywebview.api)) return;
   e.preventDefault();
-  api().window_resize(edge.dataset.edge);
+  const dpr = window.devicePixelRatio || 1;
+  api().window_resize(edge.dataset.edge, Math.round(e.screenX * dpr), Math.round(e.screenY * dpr), e.detail === 2);
 }));
 function applyLessMotion() { document.documentElement.classList.toggle("reduce-motion", !!LESS_MOTION()); }
 function prefersReducedMotion() {

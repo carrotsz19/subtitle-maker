@@ -896,19 +896,30 @@ if winextras.WINDOWS:
     winextras.native_frame(hwnd)  # (if the drag strip can't be had) Windows' title bar comes back
     assert client_height(hwnd) == framed, (framed, client_height(hwnd))
     assert winextras.custom_frame(hwnd) is None and client_height(hwnd) > framed  # and can go again
-    user32.DestroyWindow(hwnd)  # takes the subclass off as it goes (WM_NCDESTROY)
+    frame = winextras._frames[hwnd]
+    # Alt and a letter, or F10, don't either; Alt+Space is left to Windows
+    assert user32.SendMessageW(hwnd, winextras.WM_SYSCOMMAND, winextras.SC_KEYMENU, ord("f")) == 0
+    user32.DestroyWindow(hwnd)  # takes the subclass off as it goes (WM_NCDESTROY), and lets go of it
+    assert hwnd not in winextras._frames and frame.on_state is None and frame in winextras._retired
     popup = made(0x80000000)  # WS_POPUP: no frame to keep, so it's left alone
     assert winextras.custom_frame(popup), "a window without a frame and caption is left as it is"
     user32.DestroyWindow(popup)
 
-    # Placement only comes back if the strip the window is dragged by is on a screen: the page's
-    # strip is narrower (its buttons are at the right), so a window almost off the left edge whose
-    # native title bar would still show a little is put somewhere sensible instead
+    # Placement comes back where it was if the strip the window is dragged by is on a screen. The
+    # page's strip is narrower (its buttons are at the right), so a window almost off the left
+    # edge whose native title bar would still show a little is moved onto the screen instead; so
+    # is one whose screen has gone (it keeps its size, and opens maximized if it was)
     probe = made(0x00CF0000)
     nearly_off = {"rect": [-1000, 100, 60, 700], "maximized": False}
     assert winextras.set_placement(probe, nearly_off)
-    assert not winextras.set_placement(probe, nearly_off, grip=(48, 186, 32))
-    assert not winextras.set_placement(probe, {"rect": [-30000, -30000, -29000, -29300], "maximized": False})
+    assert winextras.get_placement(probe)["rect"] == [-1000, 100, 60, 700]
+    assert winextras.set_placement(probe, nearly_off, grip=(48, 186, 32))
+    moved = winextras.get_placement(probe)["rect"]
+    assert moved[0] >= -8 and moved[2] - moved[0] == 1060 and moved[3] - moved[1] == 600, moved
+    assert winextras.set_placement(probe, {"rect": [-30000, -30000, -29000, -29300], "maximized": False})
+    gone = winextras.get_placement(probe)["rect"]
+    assert gone[0] > -1000 and gone[1] > -1000 and gone[2] - gone[0] == 1000 and gone[3] - gone[1] == 700, gone
+    assert not winextras.set_placement(probe, {"rect": [0, 0, 50, 50], "maximized": False})  # too small to be real
     user32.DestroyWindow(probe)
 
 # --- The installer scripts are plain ASCII ---

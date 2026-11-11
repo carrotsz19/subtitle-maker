@@ -569,11 +569,19 @@ class Api:
         if FRAME["custom"] and name in ("minimise", "maximise", "close"):
             winextras.window_command(WINDOW_HANDLE[0], name)
 
-    def window_resize(self, edge):
-        """The pointer went down on the page's top edge: resize from it, as from Windows' own border."""
-        if FRAME["custom"] and edge in winextras.EDGES:
-            hwnd = WINDOW_HANDLE[0]
-            winextras.ui_thread(self._window, lambda: winextras.begin_resize(hwnd, edge))
+    def window_resize(self, edge, x=None, y=None, double=False):
+        """The pointer went down on the page's top edge, at (x, y) on the screen in pixels: resize
+        from it, as from Windows' own border (see winextras.begin_resize)."""
+        if not (FRAME["custom"] and edge in winextras.EDGES):
+            return
+        hwnd, form = WINDOW_HANDLE[0], self._window.native
+        at = (x, y) if isinstance(x, (int, float)) and isinstance(y, (int, float)) else None
+
+        def resize():
+            least = form.MinimumSize  # read on the window's thread
+            winextras.begin_resize(hwnd, edge, at, bool(double), (least.Width, least.Height))
+
+        winextras.ui_thread(self._window, resize)
 
     def open_startup_log(self):
         TIMINGS.save()
@@ -1156,23 +1164,32 @@ def own_title_bar(window, api):
     TIMINGS.mark("title bar: the page's own")
 
     def without_strip(e):
-        # No strip to move the window by: Windows' title bar comes back. This happens before the
-        # page asks api().init() whose title bar it is, so the page leaves its own out.
+        # No strip to move the window by: Windows' title bar comes back. This normally happens
+        # before the page asks api().init() whose title bar it is; if the page is up already, it's
+        # told, and takes its own away.
         FRAME["custom"] = False
         winextras.native_frame(hwnd)
+        api.send({"type": "window", "custom": False})
         TIMINGS.mark(f"title bar: Windows' own, since the drag strip couldn't be turned on ({e.__class__.__name__}: {e})")
 
-    def regions(sender, args):
+    def turn_on(core):
         try:
-            if not args.IsSuccess:
-                raise RuntimeError("the web view didn't start")
-            drag_strip(sender.CoreWebView2)
+            drag_strip(core)
             TIMINGS.mark("title bar: drag strip on")
         except Exception as e:
             without_strip(e)
 
+    def regions(sender, args):
+        turn_on(sender.CoreWebView2 if args.IsSuccess else None)
+
     try:
-        window.native.browser.webview.CoreWebView2InitializationCompleted += regions
+        web_view = window.native.browser.webview
+        web_view.CoreWebView2InitializationCompleted += regions
+        # (it can't have started yet: that's finished by this same thread, after this; but if it
+        # ever had, the event above would never come)
+        if web_view.CoreWebView2 is not None:
+            web_view.CoreWebView2InitializationCompleted -= regions
+            turn_on(web_view.CoreWebView2)
     except Exception as e:
         without_strip(e)
 
@@ -1181,6 +1198,8 @@ def drag_strip(web_view):
     """The strip is dragged the way a title bar is (Snap, double-click to maximize, right-click for
     the window menu): the web view hands what's marked app-region: drag to Windows (WebView2 1.0.2420
     and later; older ones raise, and Windows' title bar stays)."""
+    if web_view is None:
+        raise RuntimeError("the web view didn't start")
     web_view.Settings.IsNonClientRegionSupportEnabled = True
 
 
@@ -1202,9 +1221,8 @@ def place_window(window, api=None):
         if FRAME["custom"]:
             # the page's drag strip: right across, but for the buttons at its right (and Windows'
             # sizing border, invisible just outside each side)
-            import ctypes
-
-            scale = (ctypes.windll.user32.GetDpiForWindow(hwnd) or 96) / 96
+            # (stricter than Windows' title bar, so if the strip later can't be had, it's still fine)
+            scale = winextras.dpi_scale(hwnd)
             grip = (int(48 * scale), int((CAPTION_BUTTONS + 48) * scale), int((TITLE_BAR - 8) * scale))
         if not winextras.set_placement(hwnd, saved, grip=grip):
             return
