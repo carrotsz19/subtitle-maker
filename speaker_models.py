@@ -204,9 +204,13 @@ class Embedder:
 def complete_linkage(similarity):
     """The merges of complete-linkage clustering of points with this cosine similarity matrix,
     as [(height, a, b)] in the order they happen (heights rising): a and b are a point of each
-    of the two groups joined. Nearest-neighbour chains, like fastcluster: about n² work in all."""
+    of the two groups joined. Nearest-neighbour chains, like fastcluster: about n² work in all.
+    The matrix is used up (it becomes the distances, in place: an hour of audio has about 6000
+    fingerprints, and a second 6000 x 6000 copy would be another 140 MB)."""
     n = len(similarity)
-    d = np.maximum(1.0 - similarity.astype(np.float32), 0, dtype=np.float32)
+    d = np.asarray(similarity, dtype=np.float32)
+    np.subtract(np.float32(1), d, out=d)
+    np.maximum(d, 0, out=d)
     np.fill_diagonal(d, np.inf)
     alive = np.ones(n, dtype=bool)
     merges, chain = [], []
