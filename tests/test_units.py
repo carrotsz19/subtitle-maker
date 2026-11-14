@@ -113,6 +113,86 @@ before = Counting.calls
 assert [t.speaker for t in speakers.assign(toks, lumped, early, audio, 2)[0]] == [t.speaker for t in direct]
 assert early.ahead_count > 0 and Counting.calls - before <= 2, (early.ahead_count, Counting.calls - before)
 
+# --- The speaker models without sherpa-onnx (speaker_models.py) ---
+# tests/test_speaker_models.py compares them with sherpa-onnx itself; these need no models
+import speaker_models as sm  # noqa: E402
+
+rng = np.random.default_rng(7)
+noise = (rng.standard_normal(16000 * 3) * 0.05).astype(np.float32)
+nemo = sm.Fbank(16000, 80, 25, 10, snip_edges=True, remove_dc_offset=False, window="hann", low_freq=0.0, librosa=True)
+kaldi = sm.Fbank(16000, 80, scale=32768.0)  # WeSpeaker's: sherpa's defaults
+for fb, frames in ((nemo, 1 + (48000 - 400) // 160), (kaldi, (48000 + 80) // 160)):
+    feats = fb(noise)
+    assert feats.shape == (frames, 80) and feats.dtype == np.float32 and np.isfinite(feats).all(), feats.shape
+    assert np.array_equal(feats, fb(noise)), "the same audio must give the same features (no dither)"
+    assert np.isfinite(fb(np.zeros(4000, np.float32))).all()  # silence: the log floor, not -inf
+    assert fb(np.zeros(100, np.float32)).shape[0] == fb.num_frames(100)
+assert nemo.num_frames(399) == 0 and kaldi.num_frames(1) == 0 and kaldi.num_frames(80) == 1
+# Each frame only sees its own samples (snip_edges): frames of a prefix are the first frames
+assert np.allclose(nemo(noise[:16000]), nemo(noise)[:nemo.num_frames(16000)], atol=1e-5)
+# A 1 kHz tone is loudest in the mel band around 1 kHz, on both mel scales
+tone = (0.5 * np.sin(2 * np.pi * 1000 * np.arange(16000) / 16000)).astype(np.float32)
+for fb in (nemo, kaldi):
+    peak = int(np.argmax(fb(tone).mean(axis=0)))
+    centres = np.argmax(fb.banks, axis=0) * 16000 / fb.padded
+    assert abs(centres[peak] - 1000) < 120, (peak, centres[peak])
+# Kaldi's banks leave out the top (Nyquist) bin, librosa's include it; none is empty
+assert not kaldi.banks[-1].any() and (kaldi.banks.sum(axis=0) > 0).all() and (nemo.banks.sum(axis=0) > 0).all()
+assert kaldi.banks.shape == nemo.banks.shape == (257, 80)
+# Long audio goes through in blocks, with the same result
+small = sm.Fbank(16000, 80, scale=32768.0)
+small.BLOCK = 7
+assert np.array_equal(small(noise[:8000]), kaldi(noise[:8000]))
+
+
+def naive_complete(sim):
+    """Complete linkage the slow, obvious way: always join the closest pair of groups."""
+    groups, heights = [[i] for i in range(len(sim))], []
+    dist = np.maximum(1 - sim.astype(np.float32), 0)
+    while len(groups) > 1:
+        h, a, b = min((max(dist[i, j] for i in ga for j in gb), x, y)
+                      for x, ga in enumerate(groups) for y, gb in enumerate(groups) if x < y)
+        heights.append(float(h))
+        groups[a] += groups.pop(b)
+    return heights
+
+
+for trial in range(5):
+    pts = rng.standard_normal((12, 6)).astype(np.float32)
+    pts /= np.linalg.norm(pts, axis=1, keepdims=True)
+    assert np.allclose([m[0] for m in sm.complete_linkage(pts @ pts.T)], naive_complete(pts @ pts.T))
+# Two clear voices, numbered by their first fingerprint; a count wins over the threshold
+a_, b_ = np.array([1.0, 0.1, 0]), np.array([0, 0.1, 1.0])
+two = np.stack([b_, a_, b_ * 1.1, a_ + 0.01, b_ + 0.02]).astype(np.float32)
+assert sm.cluster(two).tolist() == [0, 1, 0, 1, 0]
+assert sm.cluster(two, num_clusters=3).max() == 2
+assert sm.cluster(two, num_clusters=9).tolist() == [0] * 5  # more groups than voices: one group (as sherpa did)
+assert sm.cluster(two, num_clusters=1).tolist() == [0] * 5
+assert sm.cluster(two, threshold=1.5).tolist() == [0] * 5
+assert sm.cluster(two[:1]).tolist() == [0] and len(sm.cluster(two[:0])) == 0
+# The frame's top speakers: Microsoft's partial_sort keeps these among equals
+assert sorted(sm._msvc_partial_sort_set([1, 1, 2], 2)) == [0, 2]
+assert sorted(sm._msvc_partial_sort_set([5, 1, 3, 4], 2)) == [0, 3]
+for trial in range(50):
+    v = rng.permutation(6).tolist()
+    assert sorted(sm._msvc_partial_sort_set(v, 3)) == sorted(np.argsort(v)[-3:].tolist())
+top = sm._top_k(np.array([[0, 3, 3], [2, 0, 1], [1, 1, 1], [0, 0, 0]], dtype=np.int32), np.array([1, 2, 3, 0], dtype=np.int32))
+assert top.tolist() == [[0, 1, 0], [1, 0, 1], [1, 1, 1], [0, 0, 0]], top.tolist()
+# Turns from frame labels: gaps under half a second are joined, turns under 0.3 s dropped
+d = object.__new__(sm.Diarizer)
+d.rf_shift, d.rf_size, d.sample_rate = 270, 991, 16000
+lab = np.zeros((400, 2), dtype=np.int32)
+lab[10:60, 0] = lab[75:120, 0] = 1  # a 0.25 s gap: one turn
+lab[200:210, 0] = 1                 # 0.17 s alone: dropped
+lab[150:399, 1] = lab[399, 1] = 1   # still talking at the end
+turns = d.result(lab)
+assert [(round(s, 3), round(e, 3), k) for s, e, k in turns] == [(0.2, 2.056, 0), (2.562, 6.764, 1)], turns
+assert d.result(np.zeros((50, 3), dtype=np.int32)) == []
+# The windows: 10 s, a second apart, the last one padded; C++'s % for audio shorter than one
+assert sm._cpp_mod(-5, 3) == -2 and sm._cpp_mod(7, 3) == 1
+mapping = sm.Diarizer._powerset(7, 3)
+assert mapping.tolist() == [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, 0, 1], [0, 1, 1]]
+
 # Remembered voices: a confident match names someone; a lookalike or a near-tie doesn't
 import known_voices  # noqa: E402
 
@@ -931,6 +1011,9 @@ assert ms.blocked_by_windows(blocked)
 assert ms.blocked_by_windows(OSError(4551, "x")) or ms.blocked_by_windows(type("E", (OSError,), {"winerror": 4551})())
 assert ms.blocked_by_windows(RuntimeError("Speaker detection stopped (code 1): ImportError: ... An Application Control policy has blocked this file."))
 assert not ms.blocked_by_windows(ImportError("No module named 'sherpa_onnx'"))
+# onnxruntime, which runs the speaker models now, is signed, but strict app rules could refuse it too
+assert ms.blocked_by_windows(ImportError("DLL load failed while importing onnxruntime_pybind11_state: An Application Control policy has blocked this file."))
+assert "sherpa_onnx" not in sys.modules, "nothing should load sherpa-onnx any more"
 assert not ms.blocked_by_windows(MemoryError("bad allocation"))
 _said = io.StringIO()
 with contextlib.redirect_stdout(_said):
