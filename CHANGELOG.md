@@ -4,10 +4,13 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 1.0.2 · 14 November 2026
+
+- Speaker names now work on PCs with Smart App Control turned on: speaker detection no longer uses the library Windows was blocking, and runs on Microsoft's signed onnxruntime instead. It finds the same people at the same times as before, and remembered voices still match.
+
 ## 1.0.1 · 14 November 2026
 
 - Fixed: on PCs where Windows' Smart App Control (or a school's or company's app rules) blocks speaker detection, every video with Several people failed. Now the video is still made, without speaker names, and the window says why.
-- Speaker names now work on PCs with Smart App Control turned on: speaker detection no longer uses the library Windows was blocking, and runs on Microsoft's signed onnxruntime instead. It finds the same people at the same times as before, and remembered voices still match.
 
 ## 1.0.0 · 11 November 2026
 
