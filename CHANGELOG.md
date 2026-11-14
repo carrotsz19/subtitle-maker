@@ -4,6 +4,10 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 1.0.1 · 14 November 2026
+
+- Fixed: on PCs where Windows' Smart App Control (or a school's or company's app rules) blocks speaker detection, every video with Several people failed. Now the video is still made, without speaker names, and the window says why.
+
 ## 1.0.0 · 11 November 2026
 
 - **You decide how much of your PC it uses.** Settings > Hardware has three presets: Share nicely (other apps get the processor first; a little slower while they're busy), Full speed, and Light (a quarter of the processor at most, so it's slower). Or set your own processor share and memory limit, and choose the graphics card or the processor. Windows holds the processor and memory to them, speaker names included. A change applies from the next video.
