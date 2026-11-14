@@ -6,8 +6,8 @@ import threading
 from pathlib import Path
 
 import numpy as np
-import sherpa_onnx
 
+import speaker_models
 from hardware import ENV_THREADS, env_int, is_memory_error
 from models import EMB_MODEL, SEG_MODEL, SPEAKER_MB, VOICE_MODEL, download_speakers, speakers_ready
 
@@ -51,24 +51,17 @@ class SpeakerDetector:
         ensure_models()
         self.num_speakers = num_speakers
         self._diarizer = None  # made when first needed: detect_apart() does without it here
-        # Fingerprints of whole sentences, voice clips and remembered people: the better model
-        self.extractor = sherpa_onnx.SpeakerEmbeddingExtractor(
-            sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(VOICE_MODEL), num_threads=THREADS))
+        # Fingerprints of whole sentences, voice clips and remembered people: the better model.
+        # (The speaker models run with onnxruntime, whose DLLs Microsoft signs: sherpa-onnx's
+        # unsigned ones were refused by Smart App Control. See speaker_models.py.)
+        self.extractor = speaker_models.Embedder(VOICE_MODEL, THREADS)
         self.progress = 0.0
 
     @property
     def diarizer(self):
         if self._diarizer is None:
-            embedding = sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(EMB_MODEL), num_threads=THREADS)
-            config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
-                segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
-                    pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(model=str(SEG_MODEL)),
-                    num_threads=THREADS,
-                ),
-                embedding=embedding,
-                clustering=sherpa_onnx.FastClusteringConfig(num_clusters=self.num_speakers, threshold=0.5),
-            )
-            self._diarizer = sherpa_onnx.OfflineSpeakerDiarization(config)
+            self._diarizer = speaker_models.Diarizer(SEG_MODEL, EMB_MODEL, THREADS,
+                                                     num_clusters=self.num_speakers, threshold=0.5)
         return self._diarizer
 
     def detect(self, audio, report=None):
@@ -80,11 +73,10 @@ class SpeakerDetector:
             self.progress = done / total if total else 1.0
             if report:
                 report(self.progress)
-            return 0
 
-        result = self.diarizer.process(audio, callback=on_progress).sort_by_start_time()
+        result = self.diarizer.process(audio, callback=on_progress)
         self.progress = 1.0
-        return [(seg.start, seg.end, seg.speaker) for seg in result]
+        return result
 
     def detect_apart(self, audio):
         """detect(), run in a process of its own so it can't stall this one.
@@ -133,10 +125,7 @@ class SpeakerDetector:
             shutil.rmtree(folder, ignore_errors=True)
 
     def fingerprint(self, audio):
-        stream = self.extractor.create_stream()
-        stream.accept_waveform(sample_rate=SAMPLE_RATE, waveform=audio)
-        stream.input_finished()
-        vec = np.array(self.extractor.compute(stream))
+        vec = self.extractor.compute(audio)
         return vec / np.linalg.norm(vec)
 
     def speaker_fingerprints(self, audio, turns):

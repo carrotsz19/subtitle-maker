@@ -210,8 +210,10 @@ class FriendlyError(Exception):
 
 
 # Windows 11's Smart App Control (or a school's or company's app rules, WDAC) can refuse to load
-# the speaker detection library (sherpa-onnx, which isn't signed). That only costs the names:
-# the video is still transcribed, without them, and the window says why.
+# the speaker detection library. It did with sherpa-onnx (its DLLs aren't signed); onnxruntime,
+# which runs the speaker models now, is signed by Microsoft, but strict app rules could still
+# refuse it. That only costs the names: the video is still transcribed, without them, and the
+# window says why.
 SPEAKERS_BLOCKED = ("Windows blocked speaker detection on this PC, so this video has no speaker names. "
                     "The subtitles are fine.")
 SPEAKERS_BLOCKED_HOW = ("Windows' Smart App Control (or a school's or company's app rules) stopped the speaker "

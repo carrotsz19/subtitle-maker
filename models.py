@@ -1,7 +1,7 @@
 """Which models are on this PC, and downloading the ones that aren't (with progress).
 
 Whisper models are loaded straight from their folder once they're here, so a run never asks
-the internet again. This module stays light (no faster-whisper or sherpa-onnx imports) so the
+the internet again. This module stays light (no faster-whisper or onnxruntime imports) so the
 app window can ask "is this level downloaded?" instantly.
 """
 

@@ -13,8 +13,10 @@ The sherpa-onnx code it follows (k2-fsa/sherpa-onnx, tag v2.0.1, sherpa-onnx/csr
   offline-speaker-diarization-pyannote-impl.h  who spoke when, with segmentation-3.0 (SEG_MODEL)
   fast-clustering.cc                           grouping the fingerprints into people
 and kaldi-native-fbank v1.22.4 (feature-window.cc, feature-fbank.cc, mel-computations.cc) for
-the filterbank itself. Where sherpa works in 32-bit floats and the rounding decides something
-(a frame index, a sample index), this does the same sum in 32-bit floats.
+the filterbank itself, and hclust-cpp (fastcluster) for the grouping. Where sherpa works in
+32-bit floats and the rounding decides something (a frame index, a sample index), this does the
+same sum in 32-bit floats. tests/test_speaker_models.py checks the results against sherpa-onnx's.
+(sherpa-onnx and kaldi-native-fbank are Apache-2.0 licensed, hclust-cpp BSD-style.)
 """
 
 import numpy as np

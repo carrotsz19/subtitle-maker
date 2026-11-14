@@ -1,7 +1,9 @@
 faster-whisper==1.2.1
 # faster-whisper 1.2.1 breaks with PyAV 16+ (metadata_errors argument)
 av>=14,<16
-sherpa-onnx==2.0.1
+# Runs the speaker models (speaker_models.py); faster-whisper 1.2.1 needs it too (>=1.14,<2).
+# Not sherpa-onnx any more: its DLLs aren't signed, so Smart App Control blocked them
+onnxruntime>=1.14,<2
 numpy
 psutil
 tqdm
