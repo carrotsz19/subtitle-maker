@@ -337,7 +337,8 @@ class Diarizer:
     MIN_DURATION_ON = f32(0.3)   # shorter turns are dropped
     MIN_DURATION_OFF = f32(0.5)  # a speaker's turns closer than this are joined
     WINDOW_SHIFT_RATIO = 0.1     # each 10 s window starts 1 s after the last
-    BATCH = 4                    # segmentation windows run together
+    BATCH = 1                    # windows run at once (4 saved 2 s in 25 but took 80 MB more:
+                                 # the memory limits in Settings > Hardware count on what sherpa used)
 
     def __init__(self, segmentation, embedding, threads=4, num_clusters=-1, threshold=0.5):
         self.seg = session(segmentation, threads)
