@@ -7,6 +7,9 @@ Run on Windows by `.github/workflows/windows.yml` on every push and pull request
   page API surface (the startup freeze), label lengths.
 - `test_pipeline.py`: the real thing. Downloads the Potato model with `--prepare`, transcribes
   a speech clip, detects two speakers, and checks the worker keeps the model loaded.
+- `test_speaker_models.py`: not on CI. Compares `speaker_models.py` (onnxruntime) with
+  sherpa-onnx 2.0.1, which the app used before: the same voice fingerprints and the same turns.
+  It needs sherpa-onnx and the speaker models, and skips without them.
 - `test_window.py`: opens the real window (`app.py --smoke-test`) and fails if it doesn't get
   ready in time, printing `startup.log`.
 
