@@ -39,6 +39,41 @@ named in one check is named by themselves in the next.
 
 The full guide is in [README.txt](README.txt).
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+Only `Subtitle-Maker-Setup.exe`, built from this repository by the Release workflow, is signed. The
+open-source libraries it installs (from PyPI) are their projects' own files, as they publish them.
+
+**Team roles**
+
+- Committers and reviewers: [carrotsz19](https://github.com/carrotsz19)
+- Approvers: [carrotsz19](https://github.com/carrotsz19)
+
+Changes from anyone else (pull requests) are reviewed by a committer before they're merged, and
+every release is approved by hand before it's signed.
+
+**Privacy policy**
+
+This program will not transfer any information to other networked systems unless specifically
+requested by the user or the person installing or operating it. Your videos, subtitles, settings
+and remembered voices stay on your PC. It only downloads things, and sends nothing about you:
+
+- When installing: Python from [python.org](https://www.python.org) and its open-source packages
+  from [PyPI](https://pypi.org) ([PyPI's privacy notice](https://policies.python.org/pypi.org/Privacy-Notice/)).
+- The speech models, the first time a quality level is used, from
+  [Hugging Face](https://huggingface.co) ([privacy policy](https://huggingface.co/privacy)), and the
+  speaker detection models from GitHub.
+- Updates: it checks this repository on GitHub for a newer version, and downloads it when you
+  update ([GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement)).
+
+## License
+
+MIT: see [LICENSE](LICENSE). The speech models (OpenAI Whisper, via faster-whisper) are MIT
+licensed; the speaker models are pyannote segmentation 3.0 (MIT), and WeSpeaker and NVIDIA
+NeMo TitaNet voice models, downloaded from the sherpa-onnx project's releases.
+
 ## Releasing updates
 
 Installed copies follow `main` (or `experimental`, if they chose it). The start of each commit
