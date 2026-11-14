@@ -3745,6 +3745,10 @@ const app = {
         if (/^Loading/.test(ev.text)) Object.assign(r, { stage: "Loading the model", fetch: null });
         if (/^Speaker detection on/.test(ev.text)) Object.assign(r, { stage: "Starting speaker detection", fetch: null });
         break;
+      case "notice":  // something worth knowing that didn't stop the video (said once a session)
+        if (r.item) r.item.notice = ev.text;
+        if (!(S.noticed ||= new Set()).has(ev.key || ev.text)) { S.noticed.add(ev.key || ev.text); toast(ev.text); }
+        break;
       case "ask_speaker": showAsk(ev); return;
       case "review": {
         const names = Object.keys(ev.names).length ? ev.names : null;

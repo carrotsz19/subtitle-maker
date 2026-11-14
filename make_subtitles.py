@@ -209,6 +209,32 @@ class FriendlyError(Exception):
     """An error with a message meant for the user; the traceback still goes to ERROR_LOG."""
 
 
+# Windows 11's Smart App Control (or a school's or company's app rules, WDAC) can refuse to load
+# the speaker detection library (sherpa-onnx, which isn't signed). That only costs the names:
+# the video is still transcribed, without them, and the window says why.
+SPEAKERS_BLOCKED = ("Windows blocked speaker detection on this PC, so this video has no speaker names. "
+                    "The subtitles are fine.")
+SPEAKERS_BLOCKED_HOW = ("Windows' Smart App Control (or a school's or company's app rules) stopped the speaker "
+                        "detection library loading. To get names on this PC, Smart App Control has to be off "
+                        "(Windows Security > App & browser control); on a school or work PC, ask whoever manages it.")
+
+
+def blocked_by_windows(error):
+    """True if Windows' app control refused to load a library (Smart App Control or WDAC)."""
+    # 4551: ERROR_SYSTEM_INTEGRITY_POLICY_VIOLATION; 1260: blocked by group policy
+    if getattr(error, "winerror", None) in (4551, 1260):
+        return True
+    text = str(error).lower()
+    return "application control" in text or "blocked this file" in text or "blocked by group policy" in text
+
+
+def speakers_blocked():
+    """Say (in the log, and in the window) that this video goes on without speaker names."""
+    print(SPEAKERS_BLOCKED)
+    print(SPEAKERS_BLOCKED_HOW)
+    emit("notice", text=SPEAKERS_BLOCKED, key="speakers-blocked")
+
+
 def gpu_mb_needed(model_name):
     """Rough extra GPU memory the model needs (int8), in MB, from the measured LEVELS table."""
     level = level_for_model(model_name)
@@ -889,7 +915,6 @@ def drop_pending(bundle):
 def finish_later(args):
     """--finish BUNDLE: check a video's lines that were set aside, then save them."""
     import known_voices
-    import speakers
 
     bundle = Path(args.finish)
     try:
@@ -908,7 +933,7 @@ def finish_later(args):
     # this queue is still "Speaker 2" here: name them from the voices remembered since
     if names and prints and st["remember_voices"]:
         unnamed = {spk: p for spk, p in prints.items() if spk in names and spk not in real_names(names)}
-        found = known_voices.match(unnamed, speakers.VOICE_MODEL.name, skip=set(real_names(names).values())) if unnamed else {}
+        found = known_voices.match(unnamed, models.VOICE_MODEL.name, skip=set(real_names(names).values())) if unnamed else {}
         for spk, (name, score) in found.items():
             names[spk] = name
             print(f"Speaker {spk + 1} sounds like {name}, named in an earlier video (voice similarity {score:.0%})")
@@ -931,13 +956,15 @@ def finish_later(args):
         detector = None
         if len(audio) and models.speakers_ready():
             try:
+                import speakers
+
                 detector = speakers.SpeakerDetector()
             except Exception as e:
                 print(f"Couldn't load the voice model ({e}), so using the voices from detection.")
         if detector:
             remember_people(detector, audio, cues, names)
         elif prints:
-            known_voices.remember({name: prints[spk] for spk, name in real.items() if spk in prints}, speakers.VOICE_MODEL.name)
+            known_voices.remember({name: prints[spk] for spk, name in real.items() if spk in prints}, models.VOICE_MODEL.name)
             print(f"Remembered for next time: {', '.join(sorted(set(real.values())))}")
     result = save_outputs(args, st, out, cues, names, style, saved["length"], saved["language"])
     drop_pending(bundle)
@@ -1194,7 +1221,14 @@ def make_subtitles(args, level):
     # Speaker detection runs on the CPU in the background while Whisper transcribes
     detector, detection = None, {}
     if args.speakers is not None:
-        import speakers
+        try:
+            import speakers
+        except (ImportError, OSError) as e:
+            if not blocked_by_windows(e):
+                raise
+            speakers_blocked()
+            args.speakers = None
+    if args.speakers is not None:
 
         count = args.speakers or len(speakers.voice_samples(args.voices)) or -1
         print(f"Speaker detection on ({count if count > 0 else 'guessing how many'} people).")
@@ -1250,8 +1284,11 @@ def make_subtitles(args, level):
         remember_speed(speed_key(model_name, loaded_on, detector), took, total)
     print(f"Language: {language}{' (translated to English)' if translate else ''}  Length: {clock(len(audio) / SAMPLE_RATE)}")
     if "error" in detection:
-        raise detection["error"]
-    turns = detection.get("turns", [])
+        if not blocked_by_windows(detection["error"]):  # (the detection's own process can be refused too)
+            raise detection["error"]
+        speakers_blocked()
+        detector = None
+    turns = detection.get("turns", []) if detector else []
 
     if monitor:
         peaks = f"Peak RAM {monitor.peak_ram / 2**30:.1f}GB"

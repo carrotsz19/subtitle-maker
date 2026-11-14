@@ -924,6 +924,21 @@ if winextras.WINDOWS:
     assert not winextras.set_placement(probe, {"rect": [0, 0, 50, 50], "maximized": False})  # too small to be real
     user32.DestroyWindow(probe)
 
+# --- Windows blocking speaker detection costs the names, not the video ---
+# Smart App Control (or a school's or company's app rules) can refuse sherpa-onnx's DLL
+blocked = ImportError("DLL load failed while importing _sherpa_onnx: An Application Control policy has blocked this file.")
+assert ms.blocked_by_windows(blocked)
+assert ms.blocked_by_windows(OSError(4551, "x")) or ms.blocked_by_windows(type("E", (OSError,), {"winerror": 4551})())
+assert ms.blocked_by_windows(RuntimeError("Speaker detection stopped (code 1): ImportError: ... An Application Control policy has blocked this file."))
+assert not ms.blocked_by_windows(ImportError("No module named 'sherpa_onnx'"))
+assert not ms.blocked_by_windows(MemoryError("bad allocation"))
+_said = io.StringIO()
+with contextlib.redirect_stdout(_said):
+    ms.speakers_blocked()
+assert "no speaker names" in _said.getvalue() and "Smart App Control" in _said.getvalue()
+# Checking a queued video later doesn't need speaker detection at all
+assert "import speakers" not in inspect.getsource(ms.finish_later).split("detector = None")[0]
+
 # --- The installer scripts are plain ASCII ---
 # Windows PowerShell 5.1 reads a .ps1 without a byte-order mark as ANSI, so one "…" or "█" in
 # install.ps1 breaks Subtitle-Maker-Setup.exe, which runs it from a file (a paste is fine).
