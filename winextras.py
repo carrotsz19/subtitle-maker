@@ -220,6 +220,10 @@ def _win():
     class MONITORINFO(ctypes.Structure):
         _fields_ = [("cbSize", W.DWORD), ("rcMonitor", W.RECT), ("rcWork", W.RECT), ("dwFlags", W.DWORD)]
 
+    class MARGINS(ctypes.Structure):
+        _fields_ = [("cxLeftWidth", ctypes.c_int), ("cxRightWidth", ctypes.c_int),
+                    ("cyTopHeight", ctypes.c_int), ("cyBottomHeight", ctypes.c_int)]
+
     class FLASHWINFO(ctypes.Structure):
         _fields_ = [("cbSize", W.UINT), ("hwnd", W.HWND), ("dwFlags", W.DWORD), ("uCount", W.UINT), ("dwTimeout", W.DWORD)]
 
@@ -250,8 +254,10 @@ def _win():
     proto(comctl32, "RemoveWindowSubclass", W.BOOL, W.HWND, subclassproc, ctypes.c_size_t)
     proto(comctl32, "DefSubclassProc", lresult, W.HWND, W.UINT, W.WPARAM, W.LPARAM)
     proto(dwmapi, "DwmSetWindowAttribute", ctypes.c_long, W.HWND, W.DWORD, ctypes.c_void_p, W.DWORD)  # an HRESULT
+    proto(dwmapi, "DwmExtendFrameIntoClientArea", ctypes.c_long, W.HWND, ctypes.POINTER(MARGINS))
     _WIN.append(types.SimpleNamespace(ctypes=ctypes, wintypes=W, user32=user32, comctl32=comctl32, dwmapi=dwmapi,
-                                      SUBCLASSPROC=subclassproc, MONITORINFO=MONITORINFO, FLASHWINFO=FLASHWINFO))
+                                      SUBCLASSPROC=subclassproc, MONITORINFO=MONITORINFO, FLASHWINFO=FLASHWINFO,
+                                      MARGINS=MARGINS))
     return _WIN[0]
 
 
@@ -500,6 +506,45 @@ def native_frame(hwnd):
         frame.remove()
         _retired.append(frame)
         del _retired[:-4]
+
+
+# ---- the window's background: Windows 11's see-through materials -----------------------------------
+# Windows 11 2022 Update (build 22621) and later draw a material behind a window when asked
+# (DWMWA_SYSTEMBACKDROP_TYPE): Acrylic blurs whatever is behind the window, Mica tints it with the
+# wallpaper. It shows wherever the window's frame reaches and nothing is painted over it, so the
+# frame is extended over the whole window and the page is drawn on a see-through background.
+DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_SYSTEMBACKDROP_TYPE = 20, 38
+BACKDROPS = {"solid": 1, "mica": 2, "acrylic": 3}  # DWMSBT_NONE (none at all), MAINWINDOW, TRANSIENTWINDOW
+MATERIAL_BUILD = 22621
+
+
+def materials_supported():
+    """Can this Windows draw Acrylic and Mica behind a window?"""
+    if not WINDOWS:
+        return False
+    try:
+        return sys.getwindowsversion().build >= MATERIAL_BUILD
+    except Exception:
+        return False
+
+
+def set_dark_frame(hwnd, dark):
+    """Windows' parts of the window (the material's tint, the frame's edge) in dark or light."""
+    w = _win()
+    return w.dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, w.ctypes.byref(w.ctypes.c_int(int(bool(dark)))), 4) >= 0
+
+
+def set_backdrop(hwnd, material):
+    """"acrylic" or "mica" behind the whole window, or "solid" for none. True if Windows took it."""
+    w = _win()
+    glass = material in ("acrylic", "mica")
+    # The frame reaches in from the left edge right across the window. (The usual "sheet of glass",
+    # every margin -1, would also reach in from the top, and Windows then draws its own minimise,
+    # maximise and close there, under the page's.)
+    margins = w.MARGINS(32767, 0, 0, 0) if glass else w.MARGINS(0, 0, 0, 0)
+    w.dwmapi.DwmExtendFrameIntoClientArea(hwnd, w.ctypes.byref(margins))
+    kind = w.ctypes.c_int(BACKDROPS.get(material, 1))
+    return w.dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, w.ctypes.byref(kind), 4) >= 0
 
 
 def dpi_scale(hwnd):
