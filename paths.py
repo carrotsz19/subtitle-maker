@@ -41,9 +41,6 @@ LEVELS = {
     "fast":     {"model": "small", "name": "Fast", "download": "0.5 GB", "vram_mb": 700, "speed": 4, "accuracy": 2,
                  "ram_mb": {"cpu": 2300, "cuda": 1800},
                  "about": "quick, decent accuracy"},
-    "balanced": {"model": "medium", "name": "Balanced", "download": "1.5 GB", "vram_mb": 1300, "speed": 2, "accuracy": 3,
-                 "ram_mb": {"cpu": 4400, "cuda": 2700},
-                 "about": "good accuracy, slower on CPU"},
     "high":     {"model": "large-v3-turbo", "name": "High", "download": "1.6 GB", "vram_mb": 1400, "speed": 4, "accuracy": 4,
                  "ram_mb": {"cpu": 4400, "cuda": 2700},
                  "about": "best accuracy for its speed"},
@@ -93,6 +90,13 @@ DEFAULT_SETTINGS = {
 # large-v3-turbo was only trained to transcribe: asked to translate, it writes the original
 # language anyway (OpenAI's Whisper README says so). The level with it translates with this one.
 TRANSLATE_WITH = {"large-v3-turbo": "medium"}
+# Models the app uses that aren't a quality level of their own. Medium was the Balanced level until
+# 1.0.3, but High (large-v3-turbo) is faster and more accurate, so it's only kept for translating.
+OTHER_MODELS = {
+    "medium": {"model": "medium", "name": "Translation", "download": "1.5 GB", "vram_mb": 1300, "speed": 2, "accuracy": 3,
+               "ram_mb": {"cpu": 4400, "cuda": 2700},
+               "about": "turns videos in other languages into English subtitles"},
+}
 MAX_FIXES = 200
 # Every language Whisper knows (faster_whisper.tokenizer._LANGUAGE_CODES; a test checks they match).
 # The window lists them by name; anything else in the settings goes back to the default.
@@ -174,8 +178,8 @@ def save_settings(settings):
 
 
 def level_for_model(model):
-    """The LEVELS entry that uses this Whisper model, or None for models not offered in Setup."""
-    return next((lv for lv in LEVELS.values() if lv["model"] == model), None)
+    """The LEVELS (or OTHER_MODELS) entry for this Whisper model, or None for models the app doesn't use."""
+    return next((lv for lv in LEVELS.values() if lv["model"] == model), None) or OTHER_MODELS.get(model)
 
 
 def load_history():

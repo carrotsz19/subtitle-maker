@@ -43,7 +43,7 @@ def recommend(gpu, ram_gb, cores):
     if gpu:
         # Leave ~0.5 GB for Windows and other apps
         usable = gpu[1] - 500
-        for level in ("high", "balanced", "fast"):
+        for level in ("high", "fast"):
             if LEVELS[level]["vram_mb"] <= usable:
                 return level
         return "potato"
