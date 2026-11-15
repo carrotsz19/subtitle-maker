@@ -4,6 +4,13 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 1.1.0 · 15 November 2026
+
+- **A new look, to match Veyra Study.** The title bar runs the whole width of the window, with the app's name in it, and the page sits on the window like a sheet, with a rounded corner.
+- **A sidebar you can shrink.** The button beside the name in the title bar shrinks the sidebar to its icons (point at one to see its name), and back. It stays the way you left it.
+- **Settings at the bottom of the sidebar,** showing the quality and language you're on.
+- **Settings in two panes** when the window is wide enough: the list on the left, the page on the right. Reset settings and Uninstall are now at the bottom of About.
+
 ## 1.0.3 · 15 November 2026
 
 - Quality has four levels instead of five. Balanced is gone: High is faster and more accurate on every PC, so there was never a reason to pick it. If you used Balanced, you're now on High. Its model lives on as Translation, in a For translating section of Settings › Quality: High can't translate, so it hands videos in other languages over to that one.

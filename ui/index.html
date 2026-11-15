@@ -34,6 +34,9 @@
   --elev-2:0 2px 8px rgba(27,26,24,.05), 0 12px 28px rgba(27,26,24,.09);
   --elev-3:0 0 0 1px rgba(27,26,24,.04), 0 8px 16px rgba(27,26,24,.07), 0 24px 64px rgba(27,26,24,.16);
   --hairline:rgba(27,26,24,.09);
+  /* The window's frame (the title bar and the sidebar, one surface, as in Veyra Study) and the edge
+     of the page that sits inset on it */
+  --chrome:#e9e6de; --layer-edge:rgba(0,0,0,.07);
 
   --bg:var(--bg-grouped); --panel:var(--bg-elevated); --panel-2:var(--fill-secondary);
   --line:var(--separator); --ink:var(--label-primary); --dim:var(--label-secondary); --faint:var(--label-tertiary);
@@ -85,6 +88,7 @@
     --elev-2:inset 0 1px 0 rgba(255,255,255,.055), 0 2px 8px rgba(0,0,0,.30), 0 12px 28px rgba(0,0,0,.40);
     --elev-3:inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px rgba(0,0,0,.40), 0 8px 16px rgba(0,0,0,.35), 0 24px 64px rgba(0,0,0,.55);
     --hairline:rgba(255,255,255,.07);
+    --chrome:#0f0e0b; --layer-edge:rgba(255,255,255,.07);
     color-scheme:dark;
   }
 }
@@ -103,6 +107,7 @@
     --elev-2:inset 0 1px 0 rgba(255,255,255,.055), 0 2px 8px rgba(0,0,0,.30), 0 12px 28px rgba(0,0,0,.40);
     --elev-3:inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px rgba(0,0,0,.40), 0 8px 16px rgba(0,0,0,.35), 0 24px 64px rgba(0,0,0,.55);
     --hairline:rgba(255,255,255,.07);
+    --chrome:#0f0e0b; --layer-edge:rgba(255,255,255,.07);
     color-scheme:dark;
 }
 
@@ -132,7 +137,7 @@ p{ margin:0; }
 ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:99px; border:2px solid var(--bg); }
 
 /* ---------- shell ---------- */
-.shell{ display:grid; grid-template-columns:var(--sidebar) 1fr; height:100vh; }
+.shell{ display:grid; grid-template-columns:var(--sidebar) minmax(0,1fr); height:100vh; }
 aside.side{ background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; padding:16px 12px; }
 .brand{ display:flex; align-items:center; gap:9px; padding:4px 8px 18px; }
 .brand .mark{ width:30px; height:30px; border-radius:8px; overflow:hidden; flex-shrink:0; box-shadow:0 0 0 1px var(--hairline); }
@@ -144,12 +149,28 @@ aside.side{ background:var(--panel); border-right:1px solid var(--line); display
 .navbtn[aria-current="true"]{ color:var(--accent); }
 .navbtn[aria-current="true"]:hover{ background:transparent; }
 .navbtn svg{ opacity:.8; flex-shrink:0; }
-.nav-pill{ position:absolute; left:0; right:0; height:40px; border-radius:var(--r-control); background:var(--accent-soft); transition:transform var(--spring-default-ms) var(--spring-default); }
+.nav-pill{ position:absolute; left:0; right:0; height:40px; border-radius:var(--r-control); background:var(--accent-soft); transition:transform var(--spring-default-ms) var(--spring-default), opacity 150ms var(--ease-standard); }
+.nav-pill.off{ opacity:0; }   /* in Settings, whose button is at the foot of the sidebar */
+.nav-label{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .navbtn .count{ margin-left:auto; font-size:11px; font-weight:800; min-width:20px; height:20px; padding:0 6px; border-radius:99px; background:var(--accent); color:var(--on-tint); display:flex; align-items:center; justify-content:center; }
 .side .spacer{ flex:1; }
 .sidecard{ border-radius:var(--r-card); padding:12px; background:var(--panel-2); font-size:12.5px; cursor:pointer; text-align:left; border:0; color:var(--ink); font-family:inherit; width:100%; }
 .sidecard:hover{ background:var(--fill-tertiary); box-shadow:inset 0 0 0 1px var(--line); }
 .sidecard b{ display:block; font-size:13px; margin-bottom:2px; }
+/* Settings, at the foot of the sidebar (Veyra Study's account chip): what quality and language it's on */
+.side-foot{ margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
+.set-chip{ position:relative; display:flex; align-items:center; gap:10px; width:100%; border:0; background:transparent; color:var(--ink);
+  font:inherit; padding:6px 8px; border-radius:var(--r-control); text-align:left; line-height:1.3; cursor:pointer;
+  transition:background-color 130ms var(--ease-standard), transform var(--spring-snappy-ms) var(--spring-snappy); }
+.set-chip:hover{ background:var(--fill-tertiary); }
+.set-chip:active{ background:var(--fill-secondary); transform:scale(.98); }
+.set-chip[aria-current="true"]{ background:var(--accent-soft); }
+.set-chip .avatar{ width:30px; height:30px; border-radius:99px; flex-shrink:0; background:var(--accent-soft); color:var(--accent);
+  display:flex; align-items:center; justify-content:center; }
+.set-chip[aria-current="true"] .avatar{ background:var(--accent); color:var(--on-tint); }
+.set-chip b{ display:block; font-size:13px; font-weight:650; }
+.set-chip .xs{ display:block; }
+.set-chip .badge{ margin-left:auto; flex-shrink:0; }
 /* the installed version, on every screen; it opens About */
 .verbtn{ all:unset; box-sizing:border-box; display:block; width:100%; margin-top:6px; padding:5px 8px; border-radius:8px; text-align:center;
   font-size:11.5px; color:var(--dim); cursor:pointer; font-variant-numeric:tabular-nums;
@@ -158,7 +179,17 @@ aside.side{ background:var(--panel); border-right:1px solid var(--line); display
 .verbtn:active{ color:var(--ink); background:var(--fill-secondary); }
 .verbtn:empty{ display:none; }
 .verbtn:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
-main.main{ overflow-y:auto; scrollbar-gutter:stable; padding:26px 30px 48px; }
+/* The sidebar shrunk to its icons (the button in the title bar): their names show as tooltips */
+.shell{ transition:grid-template-columns var(--spring-spatial-ms) var(--spring-spatial); }
+html.frame-custom.side-icons .shell{ grid-template-columns:64px minmax(0,1fr); }
+html.frame-custom.side-icons aside.side{ padding-left:8px; padding-right:8px; overflow:hidden; }
+html.frame-custom.side-icons .nav-label{ display:none; }
+html.frame-custom.side-icons .navbtn{ justify-content:center; gap:0; padding-left:0; padding-right:0; }
+html.frame-custom.side-icons .navbtn .count{ position:absolute; top:3px; right:5px; min-width:16px; height:16px; padding:0 4px; font-size:10px; }
+html.frame-custom.side-icons .set-chip{ justify-content:center; padding:5px 0; }
+html.frame-custom.side-icons .set-chip .badge{ position:absolute; top:0; right:4px; min-width:16px; height:16px; font-size:10px; padding:0 4px; }
+html.frame-custom.side-icons .verbtn{ padding-left:0; padding-right:0; font-size:10.5px; }
+main.main{ overflow-y:auto; scrollbar-gutter:stable; padding:26px 30px 48px; background:var(--bg); }
 .inner{ max-width:760px; margin:0 auto; }
 /* Quality and the Resolve guide use a big window's width, in columns, instead of one narrow strip */
 .inner:has(> .guide), .inner:has(> .settings-page.wide){ max-width:1120px; }
@@ -178,6 +209,34 @@ main.main{ overflow-y:auto; scrollbar-gutter:stable; padding:26px 30px 48px; }
 .grp-row.tap{ cursor:pointer; }
 .grp-row.tap:hover{ background:var(--fill-tertiary); }
 .grp-row.danger{ color:var(--bad); font-weight:600; justify-content:center; }
+/* Settings in two panes (a wide window), as in Veyra Study: the list stays put while the page scrolls */
+main.main:has(.set-split){ padding:0; }
+.inner:has(> .set-split){ max-width:none; }
+.set-split{ display:grid; grid-template-columns:240px minmax(0,1fr); min-height:100%; }
+.set-nav{ position:sticky; top:0; align-self:start; height:calc(100vh - var(--frame-top, 0px)); overflow-y:auto; padding:26px 12px 20px;
+  border-right:1px solid var(--line); background:color-mix(in srgb, var(--panel) 45%, var(--bg)); }
+html.frame-custom{ --frame-top:var(--titlebar); }
+.set-nav h1{ padding:0 8px; margin-bottom:14px; }
+.set-nav-item{ display:flex; align-items:center; gap:10px; width:100%; border:0; background:transparent; color:var(--ink); font:inherit;
+  padding:7px 8px; border-radius:var(--r-control); font-weight:550; font-size:13.5px; text-align:left; margin-bottom:1px; cursor:pointer;
+  transition:background-color 130ms var(--ease-standard), transform var(--spring-snappy-ms) var(--spring-snappy); }
+.set-nav-item:hover{ background:var(--fill-tertiary); }
+.set-nav-item:active{ background:var(--fill-secondary); transform:scale(.98); }
+.set-nav-item[aria-current="true"]{ background:var(--accent-soft); color:var(--accent-ink); }
+.set-nav-icon{ width:26px; height:26px; border-radius:8px; display:grid; place-items:center; flex-shrink:0; background:var(--panel); color:var(--dim); box-shadow:var(--elev-1); overflow:hidden; }
+.set-nav-icon svg{ width:15px; height:15px; }
+.set-nav-icon img{ display:block; width:26px; height:26px; }
+.set-nav-item[aria-current="true"] .set-nav-icon{ background:var(--accent); color:var(--on-tint); box-shadow:none; }
+.set-nav-sep{ height:1px; background:var(--line); margin:10px 8px; }
+.set-main{ padding:26px 40px 60px; min-width:0; }
+.set-main > *{ max-width:720px; margin-left:auto; margin-right:auto; }
+.set-main.wide > *{ max-width:1120px; }
+@media (min-width:1600px){ .set-main.wide > *{ max-width:1280px; } }
+/* arriving: only the page moves; the list beside it stays where it is */
+.screen-visible > .set-split{ animation:none !important; }
+.screen-visible > .set-split > .set-main > *{ animation:navEnter var(--spring-spatial-ms) var(--spring-spatial) backwards, fadeIn 180ms var(--ease-out) backwards; }
+.screen-visible.nav-back > .set-split > .set-main > *{ animation-name:navEnterBack, fadeIn; }
+.screen-visible.nav-tab > .set-split > .set-main > *{ animation:fadeIn 180ms var(--ease-out) backwards; }
 /* Settings, iPhone style */
 .set-row{ min-height:46px; padding-top:7px; padding-bottom:7px; }
 .set-row .row-title{ font-weight:500; }
@@ -788,15 +847,30 @@ html.reduce-motion .seg-pill{ --press:1 !important; }
    system, or if Windows' title bar couldn't come off) none of this shows. */
 :root{ --titlebar:40px; }  /* the same as TITLE_BAR in app.py */
 .titlebar, .tb-edge{ display:none; }
-html.frame-custom .titlebar{ display:flex; position:fixed; top:0; left:0; right:0; height:var(--titlebar); z-index:110; align-items:stretch; app-region:drag; }
-html.frame-custom main.main{ margin-top:var(--titlebar); }
-html.frame-custom aside.side{ padding-top:1px; }  /* its icon and name in the strip, centred on it */
-html.frame-custom .brand{ padding-bottom:31px; }  /* the menu stays level with the page beside it */
+html.frame-custom .titlebar{ display:flex; position:fixed; top:0; left:0; right:0; height:var(--titlebar); z-index:110; align-items:stretch; app-region:drag;
+  background:var(--chrome); }
+/* As in Veyra Study: the title bar and the sidebar are one surface, the window's frame, and the page
+   sits on it as a layer of its own, with a rounded corner and a hairline edge where they meet */
+html.frame-custom .shell{ padding-top:var(--titlebar); background:var(--chrome); }
+html.frame-custom aside.side{ background:var(--chrome); border-right:0; padding-top:6px; }
+html.frame-custom aside.side .brand{ display:none; }  /* its icon and name are in the title bar */
+html.frame-custom main.main{ border-top-left-radius:12px; box-shadow:inset 1px 1px 0 var(--layer-edge); }
+html.frame-custom body.wizard .shell, html.frame-custom body.wizard .titlebar{ background:var(--bg); }
+html.frame-custom body.wizard main.main{ border-radius:0; box-shadow:none; }
 html.frame-custom .scrim{ padding-top:calc(var(--titlebar) + 8px); }  /* a dialog never reaches under the strip */
-.tb-title{ display:none; align-items:center; gap:8px; padding-left:14px; margin-right:auto; font-size:12px; color:var(--dim);
+.tb-title{ display:flex; align-items:center; gap:8px; padding-left:14px; font-size:13px; font-weight:700; letter-spacing:-.01em; color:var(--ink);
   transition:opacity 130ms var(--ease-standard); }
-.tb-title img{ display:block; border-radius:4px; }
-body.wizard .tb-title{ display:flex; }  /* the setup has no sidebar, so the strip says whose window it is */
+.tb-brand{ display:flex; align-items:center; gap:8px; padding-right:12px; margin-right:4px; position:relative; }
+.tb-brand::after{ content:""; position:absolute; right:0; top:50%; height:16px; margin-top:-8px; width:1px; background:var(--line); }
+.tb-title img{ display:block; border-radius:7px; box-shadow:0 1px 2px rgba(0,0,0,.18); }
+/* Shrinks the sidebar to its icons, and back */
+.tb-side{ width:30px; height:28px; border:0; border-radius:7px; background:transparent; color:var(--dim); display:inline-grid; place-items:center;
+  app-region:no-drag; cursor:default; transition:background-color 130ms var(--ease-standard), color 130ms var(--ease-standard); }
+.tb-side:hover{ background:var(--fill-tertiary); color:var(--ink); }
+.tb-side:active{ background:var(--fill-secondary); }
+.tb-side:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
+body.wizard .tb-side{ display:none; }   /* the setup has no sidebar */
+body.wizard .tb-brand::after{ display:none; }
 .tb-btns{ display:flex; margin-left:auto; app-region:no-drag; }
 .tb-btn{ all:unset; box-sizing:border-box; width:46px; height:100%; display:flex; align-items:center; justify-content:center;
   color:var(--ink); cursor:default;
@@ -811,6 +885,7 @@ html.maximized .tb-btn .g-restore{ display:block; }
 .tb-btn.close:active{ background:rgba(196,43,28,.9); color:rgba(255,255,255,.7); }
 html.inactive .tb-btn:not(:hover){ color:var(--faint); }
 html.inactive .tb-title, html.inactive .brand{ opacity:.6; }
+html.inactive .tb-side:not(:hover){ color:var(--faint); }
 .brand{ transition:opacity 130ms var(--ease-standard); }
 /* the top edge: a thin band to resize from, with the corners; not while maximized */
 html.frame-custom .tb-edge{ display:block; position:fixed; top:0; height:5px; z-index:111; app-region:no-drag; }
@@ -840,27 +915,26 @@ html.reduce-motion .tb-btn, html.reduce-motion .tb-title, html.reduce-motion .br
       <div class="nav-pill" id="nav-pill"></div>
       <button class="navbtn" data-view="make" aria-current="true">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M7 15h4M13 15h4M7 11h10"/></svg>
-        Make subtitles <span class="count hide" id="queue-count"></span>
+        <span class="nav-label">Make subtitles</span> <span class="count hide" id="queue-count"></span>
       </button>
       <button class="navbtn" data-view="history">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 4.5V8H7M12 7.5V12l3 2"/></svg>
-        History
-      </button>
-      <button class="navbtn" data-view="settings">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
-        Settings
+        <span class="nav-label">History</span>
       </button>
       <button class="navbtn" data-view="help">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17.2v.1"/></svg>
-        Using it in Resolve
+        <span class="nav-label">Using it in Resolve</span>
       </button>
     </nav>
     <div class="spacer"></div>
-    <button class="sidecard" id="pc-card" title="Change quality or language">
-      <b id="pc-level">…</b>
-      <span class="dim" id="pc-detail">Checking this PC…</span>
-    </button>
-    <button class="verbtn" id="ver" type="button" title="About Subtitle Maker"></button>
+    <div class="side-foot">
+      <button class="set-chip" id="set-chip" data-view="settings" aria-current="false">
+        <span class="avatar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span>
+        <span class="grow nav-label"><b>Settings</b><span class="xs dim trunc" id="pc-level"></span></span>
+        <span class="badge hide" id="set-badge">1</span>
+      </button>
+      <button class="verbtn" id="ver" type="button" title="About Subtitle Maker"></button>
+    </div>
   </aside>
 
   <main class="main" id="main"><div class="inner" id="view"></div></main>
@@ -870,7 +944,9 @@ html.reduce-motion .tb-btn, html.reduce-motion .tb-title, html.reduce-motion .br
 <!-- The title bar (see "the title bar" above). Its buttons are out of the Tab order, as Windows'
      own are: Alt+Space, Alt+F4 and Win+arrows do the same from the keyboard. -->
 <div class="titlebar" id="titlebar">
-  <div class="tb-title"><img src="icon.svg" width="16" height="16" alt="">Subtitle Maker</div>
+  <div class="tb-title"><span class="tb-brand"><img src="icon.svg" width="22" height="22" alt="">Subtitle Maker</span>
+    <button class="tb-side" id="tb-side" type="button" aria-label="Hide sidebar" title="Hide sidebar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button></div>
   <div class="tb-btns">
     <button class="tb-btn min" type="button" tabindex="-1" data-window="minimise" aria-label="Minimise" title="Minimise">
       <svg viewBox="0 0 10 10" aria-hidden="true" shape-rendering="crispEdges"><path d="M0 5.5h10"/></svg></button>
@@ -1402,10 +1478,11 @@ async function go(view, dir = "tab", page, trail) {
   if (view === "settings" && again && S.page && !to && dir === "tab") dir = "back";
   // The sidebar answers the click at once (only how it looks: nothing drawn reads it), and how far
   // down the screen being left was is kept now, before anything can redraw it meanwhile
-  document.querySelectorAll(".navbtn").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
-  const btn = $(`.navbtn[data-view="${view}"]`);
+  document.querySelectorAll(".navbtn, #set-chip").forEach(b => b.setAttribute("aria-current", b.dataset.view === view));
+  const btn = $(`#nav .navbtn[data-view="${view}"]`);
   const pill = $("#nav-pill"), put = () => { pill.style.transform = `translateY(${btn.offsetTop}px)`; };
-  if (pill.style.transform) put(); else flip(pill, put, () => {});
+  pill.classList.toggle("off", !btn);
+  if (btn) { if (pill.style.transform) put(); else flip(pill, put, () => {}); }
   keepPlace();
   const seq = ++goSeq;
   try {
@@ -1430,8 +1507,31 @@ function pageTrailTo(page) {
   const i = trail.indexOf(page);
   return i >= 0 ? trail.slice(0, i) : trail;
 }
-document.querySelectorAll(".navbtn").forEach(b => b.onclick = () => go(b.dataset.view));
-$("#pc-card").onclick = () => go("settings", "tab", "quality");
+document.querySelectorAll(".navbtn, #set-chip").forEach(b => b.onclick = () => go(b.dataset.view));
+/* The title bar's sidebar button: the sidebar shrinks to its icons, or back (and stays so next time) */
+$("#tb-side").addEventListener("mousedown", e => e.preventDefault());  // the focus stays where it was
+$("#tb-side").onclick = async () => {
+  if (!S.info) return;
+  const on = !S.info.settings.sidebar_icons;
+  S.info.settings = { ...S.info.settings, sidebar_icons: on };
+  applySidebar();
+  try { S.info.settings = await api().save_prefs({ sidebar_icons: on }); } catch (e) { /* kept for this session */ }
+  applySidebar();
+};
+/* Icons only: each button's name shows as its tooltip instead */
+function applySidebar() {
+  const icons = !!(S.info && S.info.settings.sidebar_icons);
+  document.documentElement.classList.toggle("side-icons", icons);
+  const label = icons ? "Show sidebar" : "Hide sidebar", tb = $("#tb-side");
+  tb.setAttribute("aria-label", label); tb.title = label;
+  document.querySelectorAll(".navbtn, #set-chip").forEach(b => {
+    const name = (b.querySelector(".nav-label b") || b.querySelector(".nav-label")).textContent;
+    if (icons) { b.title = name; b.setAttribute("aria-label", name); } else { b.removeAttribute("title"); b.removeAttribute("aria-label"); }
+  });
+  // the selection's highlight follows its button to where it now is
+  const cur = $("#nav .navbtn[aria-current=\"true\"]");
+  if (cur) $("#nav-pill").style.transform = `translateY(${cur.offsetTop}px)`;
+}
 $("#ver").onclick = () => ACTIONS.about();
 
 /* Where each screen was scrolled to, so coming back to a tab (or back out of a Settings page)
@@ -1503,6 +1603,7 @@ function render(animate, top, kept) {
     const was = scrolled[here];
     const back = !top && !S.setup && was && was.of === of && ((animate === "tab" && REMEMBERS()) || (animate === "back" && S.view === "settings"));
     scrollPlace(here, of, back ? was.top : 0);
+    if (ghost && el.querySelector(".set-nav")) ghost.querySelectorAll(".set-nav").forEach(n => { n.style.visibility = "hidden"; });
     arrive(el, animate === true ? "in" : animate, ghost);
   } else {
     el.classList.remove("screen-visible", "nav-back", "nav-tab");
@@ -1531,11 +1632,12 @@ function renderSide() {
   const c = $("#queue-count");
   c.textContent = waiting; c.classList.toggle("hide", !waiting);
   if (!S.info) return;
-  const { settings, levels, hardware: hw } = S.info;
-  $("#ver").textContent = S.info.release ? `Version ${S.info.release}` : "About";
+  const { settings, levels } = S.info;
+  $("#ver").innerHTML = S.info.release ? `<span class="nav-label">Version </span>${esc(S.info.release)}` : "About";
   const lang = langName(settings.language);
   $("#pc-level").textContent = `${levels[settings.level].name} quality · ${lang}${settings.translate && settings.language !== "en" ? " → English" : ""}`;
-  $("#pc-detail").textContent = hw.gpu ? [gpuName(hw), gbText(hw.vram_mb)].filter(Boolean).join(" · ") : `${NO_GPU} · ${ON_CPU.toLowerCase()}`;
+  $("#set-badge").classList.toggle("hide", S.update.state !== "available");
+  if (document.documentElement.classList.contains("side-icons") !== !!settings.sidebar_icons) applySidebar();
 }
 
 /* ---------------------------------------------------------------------
@@ -2270,15 +2372,41 @@ function updateValue() {
 }
 const SETTINGS_GROUPS = [["quality", "hardware", "language"], ["style", "speakers", "accuracy", "done"], ["appearance", "storage", "updates"]];
 
+/* A wide window shows Settings in two panes, as Veyra Study does: the list on the left, the page on
+   the right. A narrow one goes a page at a time, from the list. */
+const SETTINGS_SPLIT_AT = 900;
+const settingsSplit = () => window.innerWidth >= SETTINGS_SPLIT_AT;
+let splitWas = settingsSplit();
+window.addEventListener("resize", () => {
+  const now = settingsSplit();
+  if (now === splitWas) return;
+  splitWas = now;
+  if (S.info && !S.setup && S.view === "settings") render();
+});
 function viewSettings() {
   if (!S.info) return "";
+  const split = settingsSplit();
+  if (split && !(S.page && SETTINGS_PAGES[S.page])) { S.page = "quality"; S.pageTrail = []; }
   const page = S.page && SETTINGS_PAGES[S.page];
   // a page reached from another one (About) goes back to it; "@make": from Make subtitles
   const last = S.pageTrail[S.pageTrail.length - 1], from = last === "@make" ? { title: "Make subtitles" } : SETTINGS_PAGES[last];
-  if (page) return `
-    <button class="back" data-act="settings-back">${BACK}<span>${from ? from.title : "Settings"}</span></button>
+  const pageHtml = page && `
+    ${!split || from ? `<button class="back" data-act="settings-back">${BACK}<span>${from ? from.title : "Settings"}</span></button>` : ""}
     <div class="topbar"><h1>${page.title}</h1>${page.lede ? `<p>${page.lede}</p>` : ""}</div>
     <div class="settings-page${page.wide ? " wide" : ""}">${page.body()}</div>`;
+  if (split) {
+    const item = key => {
+      const p = SETTINGS_PAGES[key], on = key === S.page;
+      return `<button class="set-nav-item" data-act="settings-nav" data-page="${key}" aria-current="${on}">
+        <span class="set-nav-icon">${key === "about" ? '<img src="icon.svg" width="18" height="18" alt="">' : setIcon(p.icon)}</span>
+        <span class="grow trunc">${p.title}</span>${p.badge && p.badge() ? '<span class="badge">1</span>' : ""}</button>`;
+    };
+    return `<div class="set-split">
+      <nav class="set-nav" aria-label="Settings"><h1>Settings</h1>
+        ${[...SETTINGS_GROUPS, ["about"]].map(g => g.map(item).join("")).join('<div class="set-nav-sep"></div>')}</nav>
+      <div class="set-main${page.wide ? " wide" : ""}">${pageHtml}</div></div>`;
+  }
+  if (page) return pageHtml;
   const { hardware: hw } = S.info;
   const row = key => {
     const p = SETTINGS_PAGES[key], value = p.value() || "";
@@ -2295,10 +2423,6 @@ function viewSettings() {
           <div class="row-sub">${esc(S.info.release ? "Version " + S.info.release : "Version not known")} · ${esc(hw.gpu ? gpuName(hw) : NO_GPU)}</div></div>
         ${CHEVRON}</div></div></div>
       ${SETTINGS_GROUPS.map(g => `<div class="block"><div class="grp">${g.map(row).join("")}</div></div>`).join("")}
-      <div class="block"><div class="grp">
-          <div class="grp-row tap center-row" role="button" tabindex="0" data-act="reset-prefs">Reset settings</div>
-          <div class="grp-row tap danger" role="button" tabindex="0" data-act="uninstall">Uninstall Subtitle Maker…</div></div>
-        <p class="foot">Settings are saved on this PC. Uninstalling never touches your videos or subtitles.</p></div>
     </div>`;
 }
 
@@ -2645,7 +2769,11 @@ function pageAbout() {
       </div></div>
     ${folder ? `<div class="block"><h2>Installed in</h2><div class="grp"><div class="grp-row">
           <div class="grow about-path selectable">${esc(folder)}</div>
-          <button class="btn sec sm" data-act="open-program-folder">${ICON.folder} Open folder</button></div></div></div>` : ""}`;
+          <button class="btn sec sm" data-act="open-program-folder">${ICON.folder} Open folder</button></div></div></div>` : ""}
+    <div class="block"><div class="grp">
+        <div class="grp-row tap center-row" role="button" tabindex="0" data-act="reset-prefs">Reset settings</div>
+        <div class="grp-row tap danger" role="button" tabindex="0" data-act="uninstall">Uninstall Subtitle Maker…</div></div>
+      <p class="foot">Settings are saved on this PC. Uninstalling never touches your videos or subtitles.</p></div>`;
 }
 
 function pageStorage() {
@@ -3588,11 +3716,15 @@ const ACTIONS = {
   about: () => {
     if (!S.info || S.setup || (S.view === "settings" && S.page === "about")) return;
     const inSettings = S.view === "settings", backwards = inSettings && S.pageTrail.includes("about");
+    // two panes: About is in the list, so it opens as a page of its own
+    if (settingsSplit()) { go("settings", "tab", "about", []); return; }
     go("settings", !inSettings ? "tab" : backwards ? "back" : "in", "about", pageTrailTo("about"));
   },
   "open-program-folder": () => api().open_program_folder(),
   // a page opened from another page (Software update from About) goes back to it
   "settings-page": el => { S.pageTrail = pageTrailTo(el.dataset.page); S.page = el.dataset.page; render("in"); },
+  // the two-pane list: a page of its own, not one reached through another (so no way back)
+  "settings-nav": el => { if (S.page === el.dataset.page && !S.pageTrail.length) return; S.pageTrail = []; S.page = el.dataset.page; render("tab"); },
   "settings-back": () => {
     S.pageTrail = S.pageTrail.slice();
     const to = S.pageTrail.pop() || null;
