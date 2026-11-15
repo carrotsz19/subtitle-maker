@@ -6,7 +6,12 @@
 <title>Subtitle Maker</title>
 <link rel="icon" href="icon.svg">
 <!-- On Windows the page draws the title bar (app.py takes Windows' own off); api().init() says for sure -->
-<script>if (/Windows/.test(navigator.userAgent)) document.documentElement.classList.add("frame-custom");</script>
+<script>if (/Windows/.test(navigator.userAgent)) document.documentElement.classList.add("frame-custom");
+/* The window's background as it was last time (Windows draws it before the page has asked which it
+   is), so a see-through window doesn't start solid. api().init() says for sure (applyMaterial). */
+try { const m = localStorage.getItem("sm-material");
+  if (/Windows/.test(navigator.userAgent) && (m === "acrylic" || m === "mica")) { document.documentElement.classList.add("material"); document.documentElement.dataset.material = m; }
+} catch (e) { /* solid until the page knows */ }</script>
 <style>
 /* =====================================================================
    SUBTITLE MAKER — WINDOW
@@ -894,6 +899,74 @@ html.frame-custom .tb-edge{ display:block; position:fixed; top:0; height:5px; z-
 .tb-edge.ne{ right:0; width:12px; cursor:ne-resize; }
 html.maximized .tb-edge{ display:none !important; }
 html.reduce-motion .tb-btn, html.reduce-motion .tb-title, html.reduce-motion .brand{ transition:none; }  /* (and in the list above) */
+
+/* ---------- the title bar's menus: File, Edit, View and Help, as in Veyra Study ----------
+   Only with the page's own title bar (Windows' has no room for them), and not in the setup. While one
+   is open, the whole strip is the page's, so a click on it closes the menu instead of dragging. */
+.wb-menus{ display:none; align-items:center; gap:1px; margin-left:2px; }
+html.frame-custom .wb-menus{ display:flex; }
+body.wizard .wb-menus{ display:none !important; }
+.wb-menu-btn{ border:0; background:transparent; color:var(--dim); font:inherit; font-size:12.5px; font-weight:550; padding:0 9px; height:26px;
+  border-radius:7px; cursor:default; app-region:no-drag; transition:background-color 120ms var(--ease-standard), color 120ms var(--ease-standard); }
+.wb-menu-btn:hover, .wb-menu-btn[aria-expanded="true"]{ background:var(--fill-tertiary); color:var(--ink); }
+.wb-menu-btn:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
+html.inactive .wb-menu-btn:not(:hover){ color:var(--faint); }
+html.menu-open .titlebar{ app-region:no-drag; }
+.wb-menu{ position:fixed; z-index:150; min-width:236px; padding:5px; app-region:no-drag;
+  background:color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+  -webkit-backdrop-filter:blur(28px) saturate(1.6); backdrop-filter:blur(28px) saturate(1.6);
+  border:1px solid var(--line); border-radius:12px; box-shadow:var(--elev-3); transform-origin:top left;
+  animation:menuIn var(--spring-snappy-ms) var(--spring-snappy), fadeIn 120ms var(--ease-out); }
+@keyframes menuIn{ from{ transform:translateY(-4px) scale(.97) } }
+.wb-item{ display:flex; align-items:center; gap:6px; width:100%; border:0; background:transparent; color:var(--ink); font:inherit;
+  font-size:13px; padding:6px 10px 6px 4px; border-radius:7px; text-align:left; cursor:default; }
+.wb-item:focus{ outline:none; }
+.wb-item:focus-visible, .wb-item.active{ background:var(--accent); color:var(--on-tint); }
+.wb-item[aria-disabled="true"]{ opacity:.45; }
+.wb-item[aria-disabled="true"].active, .wb-item[aria-disabled="true"]:focus-visible{ background:var(--fill-tertiary); color:var(--ink); }
+.wb-check{ width:18px; display:inline-flex; justify-content:center; color:var(--accent); flex-shrink:0; }
+.wb-item.active .wb-check, .wb-item.active .wb-keys{ color:inherit; }
+.wb-keys{ margin-left:auto; font-size:11.5px; color:var(--faint); font-variant-numeric:tabular-nums; padding-left:18px; }
+.wb-head{ font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); padding:6px 10px 3px 28px; }
+.wb-sep{ height:1px; background:var(--line); margin:5px 8px; }
+html.reduce-motion .wb-menu{ animation:fadeIn 120ms var(--ease-out); }
+html.material .wb-menu{ background:var(--glass-pop); }
+
+/* ---------- the see-through window (Settings › Appearance › Window background) ----------
+   As in Windows 11's own apps and Veyra Study: Windows draws Acrylic (whatever is behind the window,
+   blurred) or Mica (the wallpaper, tinted) behind it (app.py apply_material). The glass shows in the
+   title bar and the sidebar; the page sits on one calm layer with its rounded corner; cards and
+   controls stay solid enough to read. The layers are a little more opaque than Veyra Study's, so
+   dim text keeps 4.5:1 over a bright or a busy desktop as well as a dark one. */
+html.material, html.material body{ background:transparent; }
+:root.material{
+  --chrome:transparent; --layer:rgba(250,249,246,.78); --layer-edge:rgba(0,0,0,.08);
+  --panel:rgba(255,255,255,.9); --panel-2:rgba(0,0,0,.05); --line:rgba(0,0,0,.09); --fill-tertiary:rgba(0,0,0,.045);
+  --hairline:rgba(0,0,0,.08); --glass-pop:rgba(250,249,246,.92);
+}
+@media (prefers-color-scheme:dark){
+  :root.material:not([data-theme="light"]){
+    --layer:rgba(24,22,18,.72); --layer-edge:rgba(255,255,255,.08);
+    --panel:rgba(46,43,38,.82); --panel-2:rgba(255,255,255,.07); --line:rgba(255,255,255,.09); --fill-tertiary:rgba(255,255,255,.06);
+    --hairline:rgba(255,255,255,.08); --glass-pop:rgba(34,32,27,.92);
+  }
+}
+:root.material[data-theme="dark"]{
+  --layer:rgba(24,22,18,.72); --layer-edge:rgba(255,255,255,.08);
+  --panel:rgba(46,43,38,.82); --panel-2:rgba(255,255,255,.07); --line:rgba(255,255,255,.09); --fill-tertiary:rgba(255,255,255,.06);
+  --hairline:rgba(255,255,255,.08); --glass-pop:rgba(34,32,27,.92);
+}
+html.material .titlebar, html.material .shell, html.material aside.side{ background:transparent; }
+html.material main.main{ background:var(--layer); }
+html.material[data-material="mica"] main.main{ background:color-mix(in srgb, var(--layer) 90%, transparent); }
+html.material body.wizard .shell, html.material body.wizard .titlebar{ background:transparent; }
+html.material body.wizard main.main{ background:var(--layer); }
+html.material .set-nav{ background:transparent; }
+html.material .loader{ background:var(--layer); }
+html.material .rv-head{ background:var(--glass-pop); }
+html.material ::-webkit-scrollbar-thumb{ border-color:transparent; background-clip:padding-box; }
+/* Things that float over the page: frosted, so what's under them doesn't show through sharply */
+html.material .dialog{ background:var(--glass-pop); -webkit-backdrop-filter:blur(30px) saturate(1.5); backdrop-filter:blur(30px) saturate(1.5); }
 </style>
 </head>
 <body>
@@ -946,7 +1019,8 @@ html.reduce-motion .tb-btn, html.reduce-motion .tb-title, html.reduce-motion .br
 <div class="titlebar" id="titlebar">
   <div class="tb-title"><span class="tb-brand"><img src="icon.svg" width="22" height="22" alt="">Subtitle Maker</span>
     <button class="tb-side" id="tb-side" type="button" aria-label="Hide sidebar" title="Hide sidebar">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button></div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button>
+    <div class="wb-menus" id="wb-menus" role="menubar" aria-label="Menu"></div></div>
   <div class="tb-btns">
     <button class="tb-btn min" type="button" tabindex="-1" data-window="minimise" aria-label="Minimise" title="Minimise">
       <svg viewBox="0 0 10 10" aria-hidden="true" shape-rendering="crispEdges"><path d="M0 5.5h10"/></svg></button>
@@ -957,6 +1031,8 @@ html.reduce-motion .tb-btn, html.reduce-motion .tb-title, html.reduce-motion .br
       <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M.5.5l9 9M9.5.5l-9 9"/></svg></button>
   </div>
 </div>
+<!-- The title bar's menus (File, Edit, View, Help): one at a time, opened from #wb-menus -->
+<div class="wb-menu hide" id="wb-menu" role="menu"></div>
 <div class="tb-edge nw" data-edge="nw"></div><div class="tb-edge n" data-edge="n"></div><div class="tb-edge ne" data-edge="ne"></div>
 
 <script>
@@ -1117,7 +1193,10 @@ function applyFrame(frame) {
 }
 function applyWindowState(state) {
   const root = document.documentElement, max = $("#titlebar .max");
-  if ("custom" in state) root.classList.toggle("frame-custom", !!state.custom);  // Windows' title bar came back
+  if ("custom" in state) {  // Windows' title bar came back
+    root.classList.toggle("frame-custom", !!state.custom);
+    if (!state.custom && S.info) { S.info.material_supported = false; applyMaterial(); }
+  }
   if ("maximized" in state) {
     root.classList.toggle("maximized", !!state.maximized);
     const label = state.maximized ? "Restore" : "Maximise";
@@ -1533,6 +1612,252 @@ function applySidebar() {
   if (cur) $("#nav-pill").style.transform = `translateY(${cur.offsetTop}px)`;
 }
 $("#ver").onclick = () => ACTIONS.about();
+
+/* ---------------------------------------------------------------------
+   The title bar's menus: File, Edit, View and Help (as in Veyra Study).
+   Each is drawn when it opens, so what's ticked and what can't be done
+   now is always current. Only real commands: each runs what a button
+   elsewhere in the window does. Keyboard: Alt or F10 reaches the bar
+   (as Windows' own menus), Alt+F/E/V/H opens one, arrows move, Enter
+   picks, Esc goes back; Ctrl+O, Ctrl+, and Ctrl+B work without them.
+--------------------------------------------------------------------- */
+const MENU = { open: null, active: -1, items: [], bar: false, focusBefore: null };
+const editableNow = () => {
+  const el = MENU.focusBefore || document.activeElement;
+  return el && el.matches && el.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea') && !el.disabled && !el.readOnly ? el : null;
+};
+const selectedText = () => {
+  const el = editableNow();
+  if (el) { try { return el.value.slice(el.selectionStart, el.selectionEnd); } catch (e) { return ""; } }
+  return String(window.getSelection ? window.getSelection() : "");
+};
+/* Run a text command where the typing was, as Ctrl+X, C, V or A would there */
+function editCommand(kind) {
+  const el = editableNow();
+  if (el) el.focus();
+  if (kind === "paste") {
+    if (!el) return;
+    (navigator.clipboard && navigator.clipboard.readText ? navigator.clipboard.readText() : Promise.reject())
+      .then(text => { el.focus(); document.execCommand("insertText", false, text); })
+      .catch(() => toast("Press Ctrl+V to paste there.", true));
+    return;
+  }
+  if (kind === "selectAll") { if (el) el.select(); return; }
+  if (kind === "copy" && !el) { copyText(selectedText()); return; }
+  document.execCommand(kind);
+}
+/* The check screen's lines have their own undo; a text box has the web view's */
+function canUndo(redo) {
+  if (S.review && !editableNow()) return !!(S.review[redo ? "redo" : "undo"] || []).length;
+  return !!editableNow();
+}
+function menuModel() {
+  const st = S.info ? S.info.settings : {}, busy = !!S.setup || !S.info;
+  const radio = (label, on, run) => ({ label, check: on, run, role: "menuitemradio" });
+  return [
+    ["File", "f", () => [
+      { label: "Add videos…", keys: "Ctrl+O", run: () => ACTIONS.choose(), off: busy },
+      { label: "Add a folder…", run: () => ACTIONS["choose-folder"](), off: busy },
+      { label: "Fix an existing .srt…", run: () => ACTIONS["open-srt"](), off: busy },
+      ...(st.output_dir ? ["sep", { label: "Open the subtitles folder", run: () => api().reveal(st.output_dir) }] : []),
+      "sep",
+      { label: "Exit", keys: "Alt+F4", run: () => api().window_button("close") },
+    ]],
+    ["Edit", "e", () => [
+      { label: "Undo", keys: "Ctrl+Z", off: !canUndo(false), run: () => (S.review && !editableNow() ? rvStep(true) : editCommand("undo")) },
+      { label: "Redo", keys: "Ctrl+Y", off: !canUndo(true), run: () => (S.review && !editableNow() ? rvStep(false) : editCommand("redo")) },
+      "sep",
+      { label: "Cut", keys: "Ctrl+X", off: !(editableNow() && selectedText()), run: () => editCommand("cut") },
+      { label: "Copy", keys: "Ctrl+C", off: !selectedText(), run: () => editCommand("copy") },
+      { label: "Paste", keys: "Ctrl+V", off: !editableNow(), run: () => editCommand("paste") },
+      { label: "Select all", keys: "Ctrl+A", off: !editableNow(), run: () => editCommand("selectAll") },
+      "sep",
+      { label: "Word fixes…", run: () => go("settings", "tab", "accuracy", []), off: busy },
+    ]],
+    ["View", "v", () => [
+      { label: "Make subtitles", run: () => go("make"), off: busy, check: S.view === "make" },
+      { label: "History", run: () => go("history"), off: busy, check: S.view === "history" },
+      { label: "Using it in Resolve", run: () => go("help"), off: busy, check: S.view === "help" },
+      { label: "Settings", keys: "Ctrl+,", run: () => go("settings"), off: busy, check: S.view === "settings" },
+      "sep",
+      { label: st.sidebar_icons ? "Show the sidebar" : "Shrink the sidebar to icons", keys: "Ctrl+B", run: () => $("#tb-side").click(), off: busy },
+      "sep",
+      { head: "Colours" },
+      ...PREF_OPTIONS.theme.map(([v, name]) => radio(name, st.theme === v, () => setPrefFromMenu("theme", v))),
+      ...(S.info && S.info.material_supported && document.documentElement.classList.contains("frame-custom") ? [
+        { head: "Window background" },
+        ...PREF_OPTIONS.window_material.map(([v, name]) => radio(name, (st.window_material || "solid") === v, () => setPrefFromMenu("window_material", v))),
+      ] : []),
+    ]],
+    ["Help", "h", () => [
+      { label: "Using it in Resolve", run: () => go("help"), off: busy },
+      { label: "What's new", run: () => ACTIONS.news(), off: busy },
+      { label: "Open the error log", run: () => ACTIONS["error-log"]() },
+      { label: "Check for updates", run: () => { go("settings", "tab", "updates", []); checkUpdate(false); }, off: busy },
+      "sep",
+      { label: "About Subtitle Maker", run: () => ACTIONS.about(), off: busy },
+    ]],
+  ];
+}
+/* A choice made in a menu is saved as the same choice in Settings would be */
+async function setPrefFromMenu(key, value) {
+  if (!S.info || S.info.settings[key] === value) return;
+  S.info.settings = { ...S.info.settings, [key]: value };
+  applyTheme();
+  render();
+  try { S.info.settings = await api().save_prefs({ [key]: value }); } catch (e) { /* kept for this session */ }
+  applyTheme();
+  render();
+}
+function drawMenuBar() {
+  const bar = $("#wb-menus");
+  bar.innerHTML = menuModel().map(([name], i) =>
+    `<button class="wb-menu-btn" type="button" role="menuitem" aria-haspopup="menu" aria-expanded="false" tabindex="${i ? -1 : 0}" data-menu="${i}">${name}</button>`).join("");
+  bar.querySelectorAll(".wb-menu-btn").forEach(b => {
+    b.addEventListener("mousedown", e => { e.preventDefault(); if (MENU.open === +b.dataset.menu) closeMenu(); else openMenu(+b.dataset.menu, false); });
+    b.addEventListener("mouseenter", () => { if (MENU.open !== null && MENU.open !== +b.dataset.menu) openMenu(+b.dataset.menu, false); });
+  });
+}
+function menuButtons() { return [...document.querySelectorAll("#wb-menus .wb-menu-btn")]; }
+function openMenu(i, fromKeys) {
+  const model = menuModel(), n = model.length;
+  i = (i + n) % n;
+  if (MENU.open === null && !MENU.bar) MENU.focusBefore = document.activeElement;
+  MENU.open = i;
+  MENU.items = model[i][2]();
+  const box = $("#wb-menu"), btn = menuButtons()[i];
+  menuButtons().forEach((b, k) => { b.setAttribute("aria-expanded", String(k === i)); b.tabIndex = k === i ? 0 : -1; });
+  box.setAttribute("aria-label", model[i][0]);
+  box.innerHTML = MENU.items.map((it, k) => it === "sep" ? '<div class="wb-sep" role="separator"></div>'
+    : it.head ? `<div class="wb-head" role="presentation">${esc(it.head)}</div>`
+    : `<button class="wb-item" type="button" tabindex="-1" data-k="${k}" role="${it.role || (it.check !== undefined ? "menuitemcheckbox" : "menuitem")}"
+        ${it.check !== undefined ? `aria-checked="${!!it.check}"` : ""} ${it.off ? 'aria-disabled="true"' : ""}>
+        <span class="wb-check" aria-hidden="true">${it.check ? "✓" : ""}</span><span class="grow">${esc(it.label)}</span>${it.keys ? `<span class="wb-keys">${it.keys}</span>` : ""}</button>`).join("");
+  const r = btn.getBoundingClientRect();
+  box.style.left = `${Math.max(4, Math.min(r.left, window.innerWidth - 250))}px`;
+  box.style.top = `${r.bottom + 6}px`;
+  box.classList.remove("hide");
+  // drawn again (another menu): its opening plays again
+  box.style.animation = "none"; void box.offsetWidth; box.style.animation = "";
+  document.documentElement.classList.add("menu-open");
+  box.querySelectorAll(".wb-item").forEach(el => {
+    el.addEventListener("mouseenter", () => setMenuActive(+el.dataset.k, false));
+    el.addEventListener("mousedown", e => e.preventDefault());
+    el.addEventListener("click", () => pickMenu(+el.dataset.k));
+  });
+  MENU.active = -1;
+  if (fromKeys) moveMenu(1); else btn.focus({ preventScroll: true });
+}
+function setMenuActive(k, focus) {
+  MENU.active = k;
+  $("#wb-menu").querySelectorAll(".wb-item").forEach(el => el.classList.toggle("active", +el.dataset.k === k));
+  const el = $(`#wb-menu .wb-item[data-k="${k}"]`);
+  if (el && focus) el.focus({ preventScroll: true });
+}
+function moveMenu(by) {
+  const ks = MENU.items.map((it, k) => (it !== "sep" && !it.head ? k : -1)).filter(k => k >= 0);
+  if (!ks.length) return;
+  const at = ks.indexOf(MENU.active);
+  setMenuActive(ks[at < 0 ? (by > 0 ? 0 : ks.length - 1) : (at + by + ks.length) % ks.length], true);
+}
+function pickMenu(k) {
+  const it = MENU.items[k];
+  if (!it || it === "sep" || it.head || it.off) return;
+  closeMenu(true);
+  try { it.run(); } catch (e) { console.error(e); }
+}
+/* Closed: the typing goes back where it was (so a picked command runs there) */
+function closeMenu(back) {
+  if (MENU.open === null && !MENU.bar) return;
+  MENU.open = null; MENU.bar = false; MENU.active = -1;
+  $("#wb-menu").classList.add("hide");
+  document.documentElement.classList.remove("menu-open");
+  menuButtons().forEach((b, k) => { b.setAttribute("aria-expanded", "false"); b.tabIndex = k ? -1 : 0; });
+  const before = MENU.focusBefore;
+  MENU.focusBefore = null;
+  if (back !== false && before && before.focus && document.contains(before)) before.focus({ preventScroll: true });
+  else if (document.activeElement && document.activeElement.closest && document.activeElement.closest("#wb-menus, #wb-menu")) document.activeElement.blur();
+}
+/* Alt or F10 on its own: the menu bar, as Windows' own menus are reached */
+function focusMenuBar() {
+  if (!menuAvailable()) return;
+  MENU.focusBefore = document.activeElement;
+  MENU.bar = true;
+  const b = menuButtons()[0];
+  if (b) b.focus({ preventScroll: true });
+}
+function menuAvailable() {
+  return document.documentElement.classList.contains("frame-custom") && !document.body.classList.contains("wizard") && !!S.info
+    && !document.querySelector("#dialog-root .scrim:not(.is-closing)");
+}
+drawMenuBar();
+{
+  let altAlone = false;
+  window.addEventListener("keydown", e => {
+    const inBar = e.target && e.target.closest && e.target.closest("#wb-menus"), inMenu = MENU.open !== null;
+    if (e.key === "Alt") { altAlone = !e.repeat; return; }
+    altAlone = false;
+    if (e.key === "F10" && !e.shiftKey && !e.ctrlKey) {
+      if (!menuAvailable() && MENU.open === null && !MENU.bar) return;
+      e.preventDefault();
+      if (MENU.open !== null || MENU.bar) closeMenu(); else focusMenuBar();
+      return;
+    }
+    // Alt and a menu's letter
+    if (e.altKey && !e.ctrlKey && !e.metaKey && menuAvailable()) {
+      const i = menuModel().findIndex(([, letter]) => letter === e.key.toLowerCase());
+      if (i >= 0) { e.preventDefault(); e.stopPropagation(); openMenu(i, true); return; }
+    }
+    if (inMenu) {
+      const step = { ArrowDown: () => moveMenu(1), ArrowUp: () => moveMenu(-1), Home: () => { MENU.active = -1; moveMenu(1); }, End: () => { MENU.active = -1; moveMenu(-1); },
+        ArrowRight: () => openMenu(MENU.open + 1, true), ArrowLeft: () => openMenu(MENU.open - 1, true),
+        Escape: () => { const i = MENU.open; closeMenu(false); MENU.bar = true; const b = menuButtons()[i]; if (b) b.focus({ preventScroll: true }); },
+        Enter: () => (MENU.active >= 0 ? pickMenu(MENU.active) : moveMenu(1)), " ": () => (MENU.active >= 0 ? pickMenu(MENU.active) : moveMenu(1)),
+        Tab: () => closeMenu() }[e.key];
+      if (step) { e.preventDefault(); e.stopPropagation(); step(); }
+      else if (e.key.length === 1 && !e.ctrlKey) {  // a row's first letter
+        const letter = e.key.toLowerCase(), hit = k => { const it = MENU.items[k]; return it && it.label && !it.off && it.label[0].toLowerCase() === letter; };
+        let k = MENU.items.findIndex((_, j) => j > MENU.active && hit(j));
+        if (k < 0) k = MENU.items.findIndex((_, j) => hit(j));
+        if (k >= 0) { e.preventDefault(); setMenuActive(k, true); }
+      }
+      return;
+    }
+    if (inBar && MENU.bar) {
+      const btns = menuButtons(), at = btns.indexOf(e.target);
+      const step = { ArrowRight: () => btns[(at + 1) % btns.length].focus(), ArrowLeft: () => btns[(at - 1 + btns.length) % btns.length].focus(),
+        ArrowDown: () => openMenu(at, true), Enter: () => openMenu(at, true), " ": () => openMenu(at, true), Escape: () => closeMenu(),
+        Tab: () => closeMenu() }[e.key];
+      if (step) { e.preventDefault(); e.stopPropagation(); step(); }
+      return;
+    }
+    // The shortcuts the menus show (Ctrl+Z, Y, X, C, V and A stay the page's or the text box's own)
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && S.info && !S.setup && !document.querySelector("#dialog-root .scrim:not(.is-closing)")) {
+      const k = e.key.toLowerCase();
+      if (k === "o") { e.preventDefault(); ACTIONS.choose(); }
+      else if (k === ",") { e.preventDefault(); go("settings"); }
+      else if (k === "b" && document.documentElement.classList.contains("frame-custom")) { e.preventDefault(); $("#tb-side").click(); }
+    }
+  }, true);
+  window.addEventListener("keyup", e => {
+    if (e.key === "Alt" && altAlone) {
+      altAlone = false;
+      e.preventDefault();
+      if (MENU.open !== null || MENU.bar) closeMenu(); else focusMenuBar();
+    }
+  }, true);
+  // a click anywhere else closes it (the title bar's strip too: it isn't a drag area while a menu is open)
+  window.addEventListener("pointerdown", e => {
+    if (MENU.open === null && !MENU.bar) return;
+    if (e.target.closest && e.target.closest("#wb-menu, #wb-menus .wb-menu-btn")) return;
+    closeMenu(false);
+  }, true);
+  window.addEventListener("blur", () => closeMenu(false));
+  window.addEventListener("resize", () => { if (MENU.open !== null) closeMenu(false); });
+  $("#wb-menus").addEventListener("focusout", e => {
+    if (MENU.bar && MENU.open === null && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("#wb-menus, #wb-menu"))) { MENU.bar = false; MENU.focusBefore = null; }
+  });
+}
 
 /* Where each screen was scrolled to, so coming back to a tab (or back out of a Settings page)
    puts you where you were. Going into a page starts at its top. Settings > Appearance >
@@ -2736,6 +3061,9 @@ function pageAppearance() {
   return `
     <div class="block"><div class="grp">
         ${prefRow("Colours", "", segPref("theme"), "theme")}
+        ${S.info.material_supported && document.documentElement.classList.contains("frame-custom") ? prefRow("Window background",
+          "See-through glass behind the app, like Windows 11's own apps. Acrylic blurs whatever is behind the window; Mica tints it with your wallpaper.",
+          segPref("window_material"), "window_material") : ""}
         ${prefRow("Less animations", "Things appear and go without moving. Also follows Windows' own setting.", switchPref("less_motion"), "less_motion")}
         ${prefRow("Remember where you scrolled", "Coming back to a tab puts you where you were, on the same Settings page. Off: every tab opens at its top.", switchPref("remember_scroll"), "remember_scroll")}
       </div></div>`;
@@ -2856,6 +3184,7 @@ const PREF_OPTIONS = {
   device: [["auto", "Automatic"], ["cuda", "Graphics card"], ["cpu", "Processor"]],
   cpu_percent: [[25, "25%"], [50, "50%"], [75, "75%"], [100, "No limit"]],
   theme: [["system", "Match Windows"], ["light", "Light"], ["dark", "Dark"]],
+  window_material: [["solid", "Solid"], ["acrylic", "Acrylic"], ["mica", "Mica"]],
 };
 const PREVIEW_TEXT = "So today I wanted to slow down and actually look at the street I walk every day, the one I never notice.";
 
@@ -2912,7 +3241,28 @@ function applyTheme() {
   const t = S.info.settings.theme;
   if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
   else delete document.documentElement.dataset.theme;
+  applyMaterial();
 }
+/* Is the page dark now (Settings' theme, or Windows' when it follows Windows)? */
+function pageIsDark() {
+  const t = S.info && S.info.settings.theme;
+  if (t === "light" || t === "dark") return t === "dark";
+  try { return window.matchMedia("(prefers-color-scheme: dark)").matches; } catch (e) { return false; }
+}
+/* Settings › Appearance › Window background: Windows draws Acrylic or Mica behind the window (only
+   where it can: Windows 11's 2022 Update or later, with the page's own title bar), and the page
+   goes see-through to show it. Windows' tint follows the page's light or dark. */
+function applyMaterial() {
+  if (!S.info) return;
+  const root = document.documentElement;
+  const can = !!S.info.material_supported && root.classList.contains("frame-custom");
+  const m = can ? S.info.settings.window_material || "solid" : "solid";
+  root.classList.toggle("material", m !== "solid");
+  root.dataset.material = m;
+  try { localStorage.setItem("sm-material", m); } catch (e) { /* only the next start's first moment */ }
+  if (can && window.pywebview && window.pywebview.api) api().window_look(m, pageIsDark());
+}
+try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyMaterial()); } catch (e) { /* older web view */ }
 
 function versionText(v) {
   if (!v) return "Unknown (not set up by the installer yet)";
@@ -3602,7 +3952,7 @@ const ACTIONS = {
       // Shown at once: the highlight sets off on the click, not when Python has answered. What
       // Python saved follows, and is only drawn if it isn't what's already showing.
       S.info.settings = { ...S.info.settings, [key]: value };
-      if (key === "theme") applyTheme();
+      if (key === "theme" || key === "window_material") applyTheme();
       render();
       // (each setting has its own count, so a quick click on another one doesn't stand in its way)
       const turns = S.prefTurn || (S.prefTurn = {}), turn = turns[key] = (turns[key] || 0) + 1;
@@ -3610,7 +3960,7 @@ const ACTIONS = {
       if (turn !== turns[key] || JSON.stringify(saved) === JSON.stringify(S.info.settings)) return;
       S.info.settings = saved;
     }
-    if (key === "theme") applyTheme();
+    if (key === "theme" || key === "window_material") applyTheme();
     if (key === "less_motion") applyLessMotion();
     render();
   },

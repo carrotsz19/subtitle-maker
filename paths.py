@@ -80,6 +80,9 @@ DEFAULT_SETTINGS = {
     "remember_scroll": True,
     # The sidebar shrunk to its icons (the button beside the name in the title bar)
     "sidebar_icons": False,
+    # Settings > Appearance > Window background: Windows 11's see-through "acrylic" or "mica"
+    # behind the window, or "solid" (and always solid where Windows can't draw them)
+    "window_material": "acrylic",
     # Subtitles in English whatever language is spoken (Whisper translates as it goes)
     "translate": False,
     # Settings > Hardware (see hardware.py): how much of the processor it may use (100 = no limit),
@@ -120,6 +123,7 @@ SETTING_CHOICES = {
     "open_folder": (True, False), "theme": ("system", "light", "dark"), "auto_update": (True, False),
     "notify": (True, False), "remember_voices": (True, False), "less_motion": (True, False),
     "remember_scroll": (True, False), "sidebar_icons": (True, False),
+    "window_material": ("acrylic", "mica", "solid"),
     "channel": ("main", "experimental"), "translate": (True, False),
     "cpu_percent": (25, 50, 75, 100), "low_priority": (True, False),
     "memory_limit_gb": (0, 2, 3, 4, 6, 8, 12, 16, 24, 32), "gpu_low_memory": (True, False),

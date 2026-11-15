@@ -335,6 +335,8 @@ class Api:
             "platform": sys.platform,
             # The page draws the title bar, or Windows does; and whether the window is maximized and in front
             "frame": {"custom": FRAME["custom"], **(winextras.window_state(WINDOW_HANDLE[0]) if FRAME["custom"] else {})},
+            # Acrylic and Mica can be had (Windows 11 2022 Update or later, with the page's title bar)
+            "material_supported": MATERIAL["supported"],
             "version": update.installed(),
             "release": changelog.current(),  # "1.0.0", from CHANGELOG.md
             "folder": str(HERE.resolve()),  # where the program is, for Settings > About
@@ -588,6 +590,14 @@ class Api:
             winextras.begin_resize(hwnd, edge, at, bool(double), (least.Width, least.Height))
 
         winextras.ui_thread(self._window, resize)
+
+    def window_look(self, material, dark):
+        """The page's theme or Settings > Appearance > Window background changed: Windows' material
+        behind the window (or none) and its tint to match. Returns whether materials can be had."""
+        if MATERIAL["supported"] and WINDOW_HANDLE and getattr(self, "_window", None):
+            look = (material if material in winextras.BACKDROPS else "solid", bool(dark))
+            winextras.ui_thread(self._window, lambda: apply_material(self._window, *look))
+        return MATERIAL["supported"]
 
     def open_startup_log(self):
         TIMINGS.save()
@@ -996,7 +1006,7 @@ class Api:
     _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
                "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "review", "done_sound",
                "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify", "remember_voices", "less_motion",
-               "translate", "remember_scroll", "sidebar_icons", *hardware.KEYS)
+               "translate", "remember_scroll", "sidebar_icons", "window_material", *hardware.KEYS)
 
     def save_prefs(self, changes):
         """Save some instant settings; anything not allowed falls back to its default.
@@ -1149,6 +1159,10 @@ class Api:
 GEOMETRY = {}  # the window's size and place as it's moved and resized, saved when it closes
 WINDOW_HANDLE = []  # the window's handle on Windows, once it exists
 FRAME = {"custom": False}  # True once the page draws the title bar (see winextras.custom_frame)
+# Settings > Appearance > Window background: whether Windows can draw a material behind the window
+# here, and which one it's drawing now ("solid" for none)
+MATERIAL = {"supported": False, "current": "solid"}
+SOLID_COLOURS = {False: (0xF3, 0xF1, 0xEC), True: (0x15, 0x14, 0x0F)}  # --bg, light and dark
 TITLE_BAR = 40  # the page's drag strip, in its pixels (the same as --titlebar in ui/index.html)
 CAPTION_BUTTONS = 3 * 46  # minimise, maximise and close, at its right
 
@@ -1175,6 +1189,9 @@ def own_title_bar(window, api):
         # before the page asks api().init() whose title bar it is; if the page is up already, it's
         # told, and takes its own away.
         FRAME["custom"] = False
+        if MATERIAL["supported"]:
+            apply_material(window, "solid", dark_mode())
+            MATERIAL["supported"] = False
         winextras.native_frame(hwnd)
         api.send({"type": "window", "custom": False})
         TIMINGS.mark(f"title bar: Windows' own, since the drag strip couldn't be turned on ({e.__class__.__name__}: {e})")
@@ -1201,6 +1218,34 @@ def own_title_bar(window, api):
         without_strip(e)
 
 
+def apply_material(window, material, dark):
+    """On the window's thread: "acrylic" or "mica" behind the window, or "solid". With a material,
+    the window and the web view are see-through (the page draws its own layer on the glass), and
+    Windows' material shows wherever the page leaves it; solid, both are the page's background colour
+    again. Anything Windows refuses leaves it solid."""
+    from System.Drawing import Color
+
+    hwnd, form = WINDOW_HANDLE[0], window.native
+    glass = MATERIAL["supported"] and material in ("acrylic", "mica")
+    try:
+        winextras.set_dark_frame(hwnd, dark)
+        if glass and not winextras.set_backdrop(hwnd, material):
+            glass = False
+        if not glass:
+            winextras.set_backdrop(hwnd, "solid")
+    except Exception as e:
+        TIMINGS.mark(f"window background: solid, since Windows' material couldn't be set ({e.__class__.__name__}: {e})")
+        glass = False
+    solid = Color.FromArgb(255, *SOLID_COLOURS[bool(dark)])
+    # Black is see-through where the frame reaches (Windows treats it as the glass)
+    form.BackColor = Color.Black if glass else solid
+    try:
+        form.browser.webview.DefaultBackgroundColor = Color.Transparent if glass else solid
+    except Exception:
+        pass
+    MATERIAL["current"] = material if glass else "solid"
+
+
 def drag_strip(web_view):
     """The strip is dragged the way a title bar is (Snap, double-click to maximize, right-click for
     the window menu): the web view hands what's marked app-region: drag to Windows (WebView2 1.0.2420
@@ -1223,6 +1268,16 @@ def place_window(window, api=None):
             own_title_bar(window, api)
         except Exception as e:  # Windows' own title bar is fine too
             TIMINGS.mark(f"title bar: Windows' own ({e.__class__.__name__}: {e})")
+        # Settings > Appearance > Window background, from the start (no solid window first)
+        MATERIAL["supported"] = (FRAME["custom"] and winextras.materials_supported()
+                                 and not os.environ.get("SUBTITLE_MAKER_SOLID"))
+        if MATERIAL["supported"]:
+            try:
+                apply_material(window, load_settings()["window_material"], dark_mode())
+                TIMINGS.mark(f"window background: {MATERIAL['current']}")
+            except Exception as e:
+                MATERIAL["supported"] = False
+                TIMINGS.mark(f"window background: solid ({e.__class__.__name__}: {e})")
         saved = load_settings().get("placement")
         grip = (40, 40, 30)  # the middle of Windows' title bar
         if FRAME["custom"]:

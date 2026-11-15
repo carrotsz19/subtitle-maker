@@ -443,6 +443,15 @@ assert "sidebar_icons" in app.Api._INSTANT
 assert saver.save_prefs({"sidebar_icons": True})["sidebar_icons"] is True
 assert paths.load_settings()["sidebar_icons"] is True, "it's kept on disk"
 assert saver.save_prefs({"sidebar_icons": "half"})["sidebar_icons"] is False, "anything but true/false goes back to off"
+# Settings > Appearance > Window background: Acrylic by default, only the three it knows, saved at once
+assert paths.DEFAULT_SETTINGS["window_material"] == "acrylic"
+assert "window_material" in app.Api._INSTANT
+assert saver.save_prefs({"window_material": "mica"})["window_material"] == "mica"
+assert paths.load_settings()["window_material"] == "mica", "it's kept on disk"
+assert saver.save_prefs({"window_material": "glass"})["window_material"] == "acrylic", "anything else goes back to Acrylic"
+assert set(app.winextras.BACKDROPS) == {"solid", "acrylic", "mica"}
+# Without a window that can have one, asking for a material does nothing and says it can't be had
+assert saver.window_look("acrylic", True) is False
 paths.save_settings(paths.DEFAULT_SETTINGS)
 
 # --- Settings > Hardware ---

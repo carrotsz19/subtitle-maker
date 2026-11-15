@@ -4,6 +4,11 @@ Each version's changes, newest first. The app reads this file: the first version
 installed version's number, and its list is what the What's new sheet shows after an update.
 A release (see "Releasing a new version" in the README) needs its section here first.
 
+## 1.2.0 · 15 November 2026
+
+- **A see-through window, like Windows 11's own apps.** The title bar and the sidebar are glass: Acrylic blurs whatever is behind the window, Mica tints it with your wallpaper. Pick Acrylic, Mica or Solid in Settings › Appearance › Window background (Acrylic to start with). It needs Windows 11's 2022 Update or later; elsewhere the window stays solid.
+- **File, Edit, View and Help menus in the title bar.** Add videos or a folder, fix an existing .srt, undo and redo on the check screen, switch screens, the theme and the window background, and find What's new, updates and About. Press Alt or F10 to reach them from the keyboard. Ctrl+O adds videos, Ctrl+, opens Settings and Ctrl+B shrinks the sidebar.
+
 ## 1.1.0 · 15 November 2026
 
 - **A new look, to match Veyra Study.** The title bar runs the whole width of the window, with the app's name in it, and the page sits on the window like a sheet, with a rounded corner.
