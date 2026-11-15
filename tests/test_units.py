@@ -437,6 +437,12 @@ assert paths.load_settings()["remember_scroll"] is False, "it's kept on disk"
 assert saver.save_prefs({"remember_scroll": "sometimes"})["remember_scroll"] is True, "anything but true/false goes back to on"
 saver.save_prefs({"remember_scroll": False})
 assert saver.reset_prefs()["remember_scroll"] is True
+# The sidebar shrunk to icons: off by default, kept, only true/false
+assert paths.DEFAULT_SETTINGS["sidebar_icons"] is False
+assert "sidebar_icons" in app.Api._INSTANT
+assert saver.save_prefs({"sidebar_icons": True})["sidebar_icons"] is True
+assert paths.load_settings()["sidebar_icons"] is True, "it's kept on disk"
+assert saver.save_prefs({"sidebar_icons": "half"})["sidebar_icons"] is False, "anything but true/false goes back to off"
 paths.save_settings(paths.DEFAULT_SETTINGS)
 
 # --- Settings > Hardware ---

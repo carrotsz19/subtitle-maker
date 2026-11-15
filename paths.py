@@ -78,6 +78,8 @@ DEFAULT_SETTINGS = {
     "less_motion": False,
     # Coming back to a tab puts you where you'd scrolled to (off: every tab opens at its top)
     "remember_scroll": True,
+    # The sidebar shrunk to its icons (the button beside the name in the title bar)
+    "sidebar_icons": False,
     # Subtitles in English whatever language is spoken (Whisper translates as it goes)
     "translate": False,
     # Settings > Hardware (see hardware.py): how much of the processor it may use (100 = no limit),
@@ -117,7 +119,7 @@ SETTING_CHOICES = {
     "done_sound": (True, False), "multi": (True, False), "people": (0, 2, 3, 4, 5, 6),
     "open_folder": (True, False), "theme": ("system", "light", "dark"), "auto_update": (True, False),
     "notify": (True, False), "remember_voices": (True, False), "less_motion": (True, False),
-    "remember_scroll": (True, False),
+    "remember_scroll": (True, False), "sidebar_icons": (True, False),
     "channel": ("main", "experimental"), "translate": (True, False),
     "cpu_percent": (25, 50, 75, 100), "low_priority": (True, False),
     "memory_limit_gb": (0, 2, 3, 4, 6, 8, 12, 16, 24, 32), "gpu_low_memory": (True, False),

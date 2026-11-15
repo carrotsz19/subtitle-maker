@@ -996,7 +996,7 @@ class Api:
     _INSTANT = ("max_chars", "max_lines", "min_seconds", "max_seconds", "pause_split", "speaker_labels",
                "speaker_files", "hotwords", "remove_fillers", "vad", "device", "transcript", "review", "done_sound",
                "open_folder", "theme", "auto_update", "vtt", "multi", "people", "notify", "remember_voices", "less_motion",
-               "translate", "remember_scroll", *hardware.KEYS)
+               "translate", "remember_scroll", "sidebar_icons", *hardware.KEYS)
 
     def save_prefs(self, changes):
         """Save some instant settings; anything not allowed falls back to its default.
