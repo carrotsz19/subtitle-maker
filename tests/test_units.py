@@ -416,7 +416,15 @@ paths.save_settings(paths.DEFAULT_SETTINGS)
 assert paths.DEFAULT_SETTINGS["translate"] is False
 paths.save_settings({**paths.load_settings(), "translate": "yes"})
 assert paths.load_settings()["translate"] is False, "anything but true/false goes back to off"
-assert paths.TRANSLATE_WITH["large-v3-turbo"] in {lv["model"] for lv in paths.LEVELS.values()}
+assert paths.TRANSLATE_WITH["large-v3-turbo"] in paths.OTHER_MODELS
+assert paths.level_for_model("medium")["name"] == "Translation"
+# Balanced is gone (High beats it): a saved "balanced" goes to the default, High
+assert "balanced" not in paths.LEVELS
+paths.save_settings({**paths.load_settings(), "level": "balanced"})
+assert paths.load_settings()["level"] == "high"
+# Its model can still be listed and deleted under Downloaded models, and it's never a level's
+assert all(lv["model"] != "medium" for lv in paths.LEVELS.values())
+assert models.download_mb("medium") == 1.5 * 1024
 assert "translate" in app.Api._INSTANT
 paths.save_settings(paths.DEFAULT_SETTINGS)
 
@@ -435,7 +443,7 @@ paths.save_settings(paths.DEFAULT_SETTINGS)
 import hardware  # noqa: E402
 import winextras  # noqa: E402
 
-# The default is Balanced: no caps, other apps first
+# The default is Share nicely: no caps, other apps first
 assert hardware.preset_of(paths.DEFAULT_SETTINGS) == "share"
 assert hardware.PRESETS["full"] == {"cpu_percent": 100, "low_priority": False, "memory_limit_gb": 0, "gpu_low_memory": False}
 assert all(set(p) == set(hardware.KEYS) for p in hardware.PRESETS.values())

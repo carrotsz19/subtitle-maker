@@ -13,7 +13,7 @@ import threading
 import urllib.request
 from pathlib import Path
 
-from paths import LEVELS, MODELS_DIR
+from paths import LEVELS, MODELS_DIR, OTHER_MODELS, level_for_model
 
 WHISPER_DIR = MODELS_DIR / "whisper"
 # faster-whisper 1.2.1's own names for these (faster_whisper.utils._MODELS); a test checks they match
@@ -198,14 +198,15 @@ def download_speakers(progress=None):
 
 def download_mb(model):
     """Roughly how big a Whisper model's download is, in MB (from the LEVELS table)."""
-    level = next((lv for lv in LEVELS.values() if lv["model"] == model), None)
+    level = level_for_model(model)
     return float(level["download"].split()[0]) * 1024 if level else 1600
 
 
 def downloaded():
     """Each Whisper model on this PC, with its size: [{"model", "gb"}]."""
     found = []
-    for key, lv in LEVELS.items():
+    for key, lv in [*LEVELS.items(), *OTHER_MODELS.items()]:
         if whisper_path(lv["model"]) and lv["model"] not in [f["model"] for f in found]:
-            found.append({"model": lv["model"], "level": key, "gb": round(folder_bytes(cache_folder(lv["model"])) / 2**30, 2)})
+            found.append({"model": lv["model"], "level": key, "name": lv["name"],
+                          "gb": round(folder_bytes(cache_folder(lv["model"])) / 2**30, 2)})
     return found

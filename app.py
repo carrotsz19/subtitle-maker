@@ -33,7 +33,7 @@ import update  # noqa: E402
 import winapp  # noqa: E402
 import winextras  # noqa: E402
 from paths import dark_mode  # noqa: E402
-from paths import (DEFAULT_SETTINGS, ERROR_LOG, LANGUAGES, LEVELS, SETTINGS_FILE, data_dir, load_history,  # noqa: E402
+from paths import (DEFAULT_SETTINGS, ERROR_LOG, LANGUAGES, LEVELS, OTHER_MODELS, SETTINGS_FILE, data_dir, load_history,  # noqa: E402
                    load_settings, save_history, save_settings)
 
 HERE = Path(__file__).parent
@@ -327,6 +327,7 @@ class Api:
             "settings": load_settings(),
             "configured": SETTINGS_FILE.exists(),
             "levels": LEVELS,
+            "other_models": OTHER_MODELS,
             "languages": LANGUAGES,
             "recommended": self._probe["recommended"],
             "hardware": self._probe["hardware"],
@@ -595,6 +596,7 @@ class Api:
     def models_status(self):
         """Which speech models are downloaded, per quality level, and whether the speaker models are."""
         return {"whisper": {key: bool(models.whisper_path(lv["model"])) for key, lv in LEVELS.items()},
+                "translate": bool(models.whisper_path(OTHER_MODELS["medium"]["model"])),
                 "speakers": models.speakers_ready()}
 
     def voices(self):
@@ -632,7 +634,7 @@ class Api:
     def delete_model(self, model):
         """Free the space a downloaded speech model takes (not the one the current level uses)."""
         # Only a model Setup offers: the name becomes a folder to delete, so nothing else may get through
-        if model not in {lv["model"] for lv in LEVELS.values()}:
+        if model not in {lv["model"] for lv in [*LEVELS.values(), *OTHER_MODELS.values()]}:
             return False
         if model == LEVELS[load_settings()["level"]]["model"] or self._busy():
             return False
